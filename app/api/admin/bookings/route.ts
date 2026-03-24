@@ -1,15 +1,16 @@
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 
-export const runtime = 'nodejs';
-
 // GET /api/admin/bookings - Get all bookings
 export async function GET(request: NextRequest) {
-  const auth = requireAuth(request, ['ADMIN']);
-  if (auth.user === null) return auth.response;
-
   try {
+    const auth = requireAuth(request, ['ADMIN']);
+    if (auth.user === null) return auth.response;
+
     const bookings = await prisma.booking.findMany({
       include: {
         client: {
@@ -32,12 +33,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// DELETE /api/admin/bookings/[id] - Delete booking
+// DELETE /api/admin/bookings - Delete booking
 export async function DELETE(request: NextRequest) {
-  const auth = requireAuth(request, ['ADMIN']);
-  if (auth.user === null) return auth.response;
-
   try {
+    const auth = requireAuth(request, ['ADMIN']);
+    if (auth.user === null) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
