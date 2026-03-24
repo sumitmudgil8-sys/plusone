@@ -1,0 +1,8 @@
+{
+  "name": "Plus One",
+  "short_name": "PlusOne",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000"
+}

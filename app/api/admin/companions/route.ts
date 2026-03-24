@@ -1,0 +1,166 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { requireAuth, hashPassword } from '@/lib/auth';
+import crypto from 'crypto';
+
+export const runtime = 'nodejs';
+
+// GET /api/admin/companions - Get all companions
+export async function GET(request: NextRequest) {
+  const auth = requireAuth(request, ['ADMIN']);
+  if (auth.user === null) return auth.response;
+
+  try {
+    const companions = await prisma.user.findMany({
+      where: { role: 'COMPANION' },
+      include: { companionProfile: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Remove password hashes
+    const companionsWithoutPassword = (companions as any[]).map((user) => {
+      const { passwordHash, ...userWithoutPassword } = user;
+      return userWithoutPassword;
+    });
+
+    return NextResponse.json({ companions: companionsWithoutPassword });
+  } catch (error) {
+    console.error('Error fetching companions:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch companions' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST /api/admin/companions - Create companion account
+export async function POST(request: NextRequest) {
+  const auth = requireAuth(request, ['ADMIN']);
+  if (auth.user === null) return auth.response;
+
+  try {
+    const body = await request.json();
+    const { email, name, hourlyRate = 2000 } = body;
+
+    if (!email || !name) {
+      return NextResponse.json(
+        { error: 'Email and name are required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: 'User already exists with this email' },
+        { status: 409 }
+      );
+    }
+
+    // Generate random password
+    const tempPassword = crypto.randomBytes(6).toString('hex');
+    const passwordHash = await hashPassword(tempPassword);
+
+    const companion = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        role: 'COMPANION',
+        companionProfile: {
+          create: {
+            name,
+            hourlyRate,
+            bio: '',
+            lat: 28.6139,
+            lng: 77.2090,
+            isApproved: false,
+            availability: '[]',
+            images: '[]',
+          },
+        },
+      },
+      include: { companionProfile: true },
+    });
+
+    const { passwordHash: _, ...companionWithoutPassword } = companion;
+
+    return NextResponse.json({
+      success: true,
+      companion: companionWithoutPassword,
+      tempPassword,
+      message: `Companion account created. Temporary password: ${tempPassword}`,
+    }, { status: 201 });
+  } catch (error) {
+    console.error('Error creating companion:', error);
+    return NextResponse.json(
+      { error: 'Failed to create companion' },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/admin/companions - Approve/reject companion
+export async function PATCH(request: NextRequest) {
+  const auth = requireAuth(request, ['ADMIN']);
+  if (auth.user === null) return auth.response;
+
+  try {
+    const body = await request.json();
+    const { id, isApproved } = body;
+
+    if (!id || isApproved === undefined) {
+      return NextResponse.json(
+        { error: 'Companion ID and isApproved status are required' },
+        { status: 400 }
+      );
+    }
+
+    const companion = await prisma.companionProfile.update({
+      where: { userId: id },
+      data: { isApproved },
+    });
+
+    return NextResponse.json({ companion });
+  } catch (error) {
+    console.error('Error updating companion:', error);
+    return NextResponse.json(
+      { error: 'Failed to update companion' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/admin/companions/[id] - Delete companion
+export async function DELETE(request: NextRequest) {
+  const auth = requireAuth(request, ['ADMIN']);
+  if (auth.user === null) return auth.response;
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Companion ID is required' },
+        { status: 400 }
+      );
+    }
+
+    await prisma.user.delete({ where: { id } });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Companion deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting companion:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete companion' },
+      { status: 500 }
+    );
+  }
+}
