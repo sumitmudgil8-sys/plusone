@@ -1,0 +1,20 @@
+# dependencies
+node_modules
+
+# next build
+.next
+out
+
+# env
+.env
+
+# logs
+logs
+*.log
+
+# prisma
+prisma/dev.db
+data/dev.db
+
+# OS
+.DS_Store
