@@ -1,83 +1,104 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-charcoal flex flex-col">
-      {/* Hero Section */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-20">
-        <div className="text-center max-w-2xl">
-          <div className="mb-8">
-            <h1 className="text-5xl md:text-7xl font-serif font-bold text-gold mb-4">
-              Plus One
-            </h1>
-            <p className="text-xl text-white/60">
-              Find your perfect companion for any occasion
-            </p>
-          </div>
+    <main className="relative min-h-screen w-full bg-black flex flex-col overflow-hidden">
 
-          <div className="space-y-4">
-            <p className="text-white/70 max-w-md mx-auto">
-              Connect with sophisticated companions for events, dinners,
-              or just great company. Discreet, safe, and premium.
-            </p>
+      {/* ── Hero Image (top 65%) ── */}
+      <div className="relative w-full" style={{ height: '65svh' }}>
+        <Image
+          src="/hero.jpeg"
+          alt="Plus One hero"
+          fill
+          priority
+          className="object-cover object-center"
+        />
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <Link href="/signup">
-                <Button size="lg" className="w-full sm:w-auto">
-                  Get Started
-                </Button>
-              </Link>
-              <Link href="/login">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                  Sign In
-                </Button>
-              </Link>
-            </div>
-          </div>
+        {/* Multi-stop gradient: transparent top → rich black bottom */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.18) 40%, rgba(0,0,0,0.72) 78%, #000 100%)',
+          }}
+        />
 
-          {/* Features */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-16 text-center">
-            <div className="p-4">
-              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gold/10 flex items-center justify-center">
-                <svg className="w-6 h-6 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <h3 className="text-white font-medium mb-1">Nearby</h3>
-              <p className="text-sm text-white/50">Find companions near you</p>
-            </div>
-
-            <div className="p-4">
-              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gold/10 flex items-center justify-center">
-                <svg className="w-6 h-6 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </div>
-              <h3 className="text-white font-medium mb-1">Verified</h3>
-              <p className="text-sm text-white/50">All companions are vetted</p>
-            </div>
-
-            <div className="p-4">
-              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gold/10 flex items-center justify-center">
-                <svg className="w-6 h-6 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 className="text-white font-medium mb-1">Flexible</h3>
-              <p className="text-sm text-white/50">Book for any duration</p>
-            </div>
-          </div>
+        {/* Logo mark – top-left */}
+        <div className="absolute top-6 left-6 flex items-center gap-2">
+          <span
+            className="text-xs font-semibold tracking-[0.25em] uppercase"
+            style={{ color: '#C9A84C', fontFamily: "'Cormorant Garamond', Georgia, serif" }}
+          >
+            Plus One
+          </span>
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t border-charcoal-border py-6 px-4">
-        <div className="max-w-7xl mx-auto text-center text-sm text-white/40">
-          <p>&copy; 2024 Plus One. All rights reserved.</p>
+      {/* ── Content card – floats over the gradient tail ── */}
+      <div
+        className="relative z-10 flex flex-col flex-1 px-6 pt-8 pb-12"
+        style={{ marginTop: '-3.5rem' }}
+      >
+        {/* Brand + Tagline */}
+        <div className="mb-10">
+          <h1
+            className="text-5xl font-bold leading-[1.08] tracking-tight text-white mb-3"
+            style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontStyle: 'italic' }}
+          >
+            Find your
+            <br />
+            <span style={{ color: '#C9A84C' }}>perfect plus one.</span>
+          </h1>
+          <p
+            className="text-white/50 text-[0.95rem] leading-relaxed max-w-xs"
+            style={{ fontFamily: "'DM Sans', sans-serif" }}
+          >
+            Sophisticated companionship for dinners, events, and every occasion that matters.
+          </p>
         </div>
-      </footer>
-    </div>
+
+        {/* Spacer so buttons pin to bottom on short screens */}
+        <div className="flex-1" />
+
+        {/* ── CTAs ── */}
+        <div className="flex flex-col gap-3 w-full">
+          <Link href="/signup" className="w-full">
+            <button
+              className="w-full py-4 rounded-2xl text-black font-semibold text-[1rem] tracking-wide transition-all duration-200 active:scale-[0.97]"
+              style={{
+                background: 'linear-gradient(135deg, #D4A84B 0%, #C9973A 100%)',
+                fontFamily: "'DM Sans', sans-serif",
+                boxShadow: '0 4px 32px rgba(201,152,58,0.35)',
+              }}
+            >
+              Get Started
+            </button>
+          </Link>
+
+          <Link href="/login" className="w-full">
+            <button
+              className="w-full py-4 rounded-2xl text-white/80 font-medium text-[1rem] tracking-wide transition-all duration-200 active:scale-[0.97] border border-white/12 hover:border-white/20 hover:text-white"
+              style={{
+                background: 'rgba(255,255,255,0.05)',
+                fontFamily: "'DM Sans', sans-serif",
+                backdropFilter: 'blur(12px)',
+              }}
+            >
+              Sign In
+            </button>
+          </Link>
+        </div>
+
+        {/* Footnote */}
+        <p
+          className="text-center text-white/25 text-[0.72rem] tracking-wide mt-6"
+          style={{ fontFamily: "'DM Sans', sans-serif" }}
+        >
+          Verified profiles · Discreet · Premium
+        </p>
+      </div>
+    </main>
   );
 }
