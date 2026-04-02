@@ -15,6 +15,15 @@ type MessageCallback = (data: {
 
 type TypingCallback = (data: { userId: string }) => void;
 
+type IncomingCallCallback = (data: {
+  sessionId: string;
+  clientId: string;
+  callerName: string;
+  callerAvatar: string | null;
+  channelName: string;
+  ratePerMinute: number;
+}) => void;
+
 export function useSocket(userId?: string, _role?: string) {
   const realtimeRef = useRef<Ably.Realtime | null>(null);
   const channelRef = useRef<Ably.RealtimeChannel | null>(null);
@@ -22,6 +31,7 @@ export function useSocket(userId?: string, _role?: string) {
 
   const messageCallbacksRef = useRef<Set<MessageCallback>>(new Set());
   const typingCallbacksRef = useRef<Set<TypingCallback>>(new Set());
+  const incomingCallCallbacksRef = useRef<Set<IncomingCallCallback>>(new Set());
 
   useEffect(() => {
     if (!userId) return;
@@ -48,6 +58,11 @@ export function useSocket(userId?: string, _role?: string) {
     channel.subscribe('typing', (msg) => {
       const data = msg.data as { userId: string };
       typingCallbacksRef.current.forEach((cb) => cb(data));
+    });
+
+    channel.subscribe('call:incoming', (msg) => {
+      const data = msg.data as Parameters<IncomingCallCallback>[0];
+      incomingCallCallbacksRef.current.forEach((cb) => cb(data));
     });
 
     return () => {
@@ -92,6 +107,13 @@ export function useSocket(userId?: string, _role?: string) {
     };
   }, []);
 
+  const onIncomingCall = useCallback((callback: IncomingCallCallback) => {
+    incomingCallCallbacksRef.current.add(callback);
+    return () => {
+      incomingCallCallbacksRef.current.delete(callback);
+    };
+  }, []);
+
   return {
     socket: realtimeRef.current,
     isConnected,
@@ -100,5 +122,6 @@ export function useSocket(userId?: string, _role?: string) {
     sendTyping,
     onMessage,
     onTyping,
+    onIncomingCall,
   };
 }

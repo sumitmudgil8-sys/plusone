@@ -51,7 +51,7 @@ const nextConfig = {
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(self), payment=()',
+            value: 'camera=(), microphone=(self), geolocation=(self), payment=()',
           },
           {
             key: 'X-DNS-Prefetch-Control',
@@ -73,7 +73,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https:",
               "font-src 'self'",
-              "connect-src 'self'",
+              "connect-src 'self' wss://*.agora.io https://*.agora.io wss://*.edge.agora.io https://*.sd-rtn.com wss://*.sd-rtn.com",
               "media-src 'self'",
               "frame-ancestors 'none'",
             ].join('; '),

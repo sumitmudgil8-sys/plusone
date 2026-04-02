@@ -20,6 +20,8 @@
     "@prisma/client": "^5.16.0",
     "@types/nodemailer": "^7.0.11",
     "ably": "^2.21.0",
+    "agora-rtc-sdk-ng": "^4.24.3",
+    "agora-token": "^2.0.5",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",

@@ -24,7 +24,7 @@ and engage in per-minute billed chat and voice calls.
 - ✅ Per-minute billing (start/tick/end, atomic debit+companion credit, anti-double-billing)
 - ✅ Image upload (Cloudinary — avatar, companion gallery, verification docs)
 - ❌ Companion onboarding
-- ❌ Voice calling
+- ✅ Voice calling (Agora RTC — token auth, signaling via Ably, useVoiceCall hook)
 - ❌ Production UI
 
 ## Conventions (Claude MUST follow these)

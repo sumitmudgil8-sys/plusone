@@ -4,6 +4,8 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getOrCreateWallet } from '@/lib/wallet';
 import { getRatePerMinute } from '@/lib/billing';
+import { getAblyClient, getUserChannelName } from '@/lib/ably';
+import { getCallChannelName } from '@/lib/agora';
 import { BILLING_MIN_BALANCE_MINUTES } from '@/lib/constants';
 
 export const runtime = 'nodejs';
@@ -94,6 +96,28 @@ export async function POST(request: NextRequest) {
         status: 'ACTIVE',
       },
     });
+
+    // For voice calls, signal the companion via Ably so they can show incoming call UI
+    if (type === 'VOICE') {
+      try {
+        const callerProfile = await prisma.clientProfile.findUnique({
+          where: { userId: user.id },
+          select: { name: true, avatarUrl: true },
+        });
+        const ably = getAblyClient();
+        const channel = ably.channels.get(getUserChannelName(companionId));
+        await channel.publish('call:incoming', {
+          sessionId: session.id,
+          clientId: user.id,
+          callerName: callerProfile?.name ?? 'Client',
+          callerAvatar: callerProfile?.avatarUrl ?? null,
+          channelName: getCallChannelName(session.id),
+          ratePerMinute,
+        });
+      } catch (ablyErr) {
+        console.error('Ably call signal error (non-fatal):', ablyErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,
