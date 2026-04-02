@@ -20,7 +20,7 @@ and engage in per-minute billed chat and voice calls.
 - ✅ Security: cookie secure flag, JWT secret guard, test creds removed
 - ✅ Schema: MessageThread companion relation fixed
 - ✅ Real-time chat (Ably — token auth, server publish, typing indicators)
-- ❌ Wallet system
+- ✅ Wallet system (balance, recharge via Razorpay, transaction history, atomic credit/debit)
 - ❌ Per-minute billing
 - ❌ Image upload
 - ❌ Companion onboarding

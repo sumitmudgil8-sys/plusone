@@ -36,6 +36,7 @@ model User {
   checkInAlerts    CheckIn[]             @relation("CompanionCheckIns")
   verificationDocs VerificationDocument[]
   payments         Payment[]
+  wallet           Wallet?
 }
 
 model ClientProfile {
@@ -202,6 +203,30 @@ model VerificationDocument {
   adminNotes    String?
   submittedAt   DateTime @default(now())
   reviewedAt    DateTime?
+}
+
+model Wallet {
+  id           String              @id @default(cuid())
+  userId       String              @unique
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance      Float               @default(0)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  transactions WalletTransaction[]
+}
+
+model WalletTransaction {
+  id           String   @id @default(cuid())
+  walletId     String
+  wallet       Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type         String   // RECHARGE | DEBIT | REFUND
+  amount       Float    // always positive; type indicates direction
+  balanceAfter Float
+  description  String
+  metadata     String?  @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@index([walletId, createdAt])
 }
 
 model Payment {

@@ -3,6 +3,7 @@ import { verifyPayment } from '@/lib/payment';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendEmail, emailTemplates } from '@/lib/email';
+import { creditWallet } from '@/lib/wallet';
 
 export const runtime = 'nodejs';
 
@@ -75,6 +76,13 @@ export async function POST(req: NextRequest) {
         where: { id: payment.bookingId },
         data: { paymentStatus: 'PAID' },
       });
+    } else if (payment.type === 'WALLET_RECHARGE') {
+      await creditWallet(
+        payment.userId,
+        payment.amount,
+        `Wallet recharge via Razorpay`,
+        { razorpayPaymentId, razorpayOrderId }
+      );
     }
 
     return NextResponse.json({ success: true, payment });
