@@ -1,72 +1,101 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
+'use client';
 
-export function useSocket(userId?: string, role?: string) {
-  const socketRef = useRef<Socket | null>(null);
+import { useEffect, useRef, useState, useCallback } from 'react';
+import Ably from 'ably';
+
+type MessageCallback = (data: {
+  id: string;
+  threadId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string | null;
+  content: string;
+  createdAt: string;
+}) => void;
+
+type TypingCallback = (data: { userId: string }) => void;
+
+export function useSocket(userId?: string, _role?: string) {
+  const realtimeRef = useRef<Ably.Realtime | null>(null);
+  const channelRef = useRef<Ably.RealtimeChannel | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
+  const messageCallbacksRef = useRef<Set<MessageCallback>>(new Set());
+  const typingCallbacksRef = useRef<Set<TypingCallback>>(new Set());
 
   useEffect(() => {
     if (!userId) return;
 
-    const socket = io({
-      path: '/api/socket',
-      addTrailingSlash: false,
+    const realtime = new Ably.Realtime({
+      authUrl: '/api/ably/token',
+      clientId: userId,
     });
 
-    socketRef.current = socket;
+    realtimeRef.current = realtime;
 
-    socket.on('connect', () => {
-      console.log('Socket connected');
-      setIsConnected(true);
-      socket.emit('join', { userId, role });
+    realtime.connection.on('connected', () => setIsConnected(true));
+    realtime.connection.on('disconnected', () => setIsConnected(false));
+    realtime.connection.on('closed', () => setIsConnected(false));
+
+    const channel = realtime.channels.get(`private:user-${userId}`);
+    channelRef.current = channel;
+
+    channel.subscribe('message', (msg) => {
+      const data = msg.data as MessageCallback extends (d: infer D) => void ? D : never;
+      messageCallbacksRef.current.forEach((cb) => cb(data));
     });
 
-    socket.on('disconnect', () => {
-      console.log('Socket disconnected');
+    channel.subscribe('typing', (msg) => {
+      const data = msg.data as { userId: string };
+      typingCallbacksRef.current.forEach((cb) => cb(data));
+    });
+
+    return () => {
+      channel.unsubscribe();
+      realtime.close();
+      realtimeRef.current = null;
+      channelRef.current = null;
       setIsConnected(false);
-    });
-
-    return () => {
-      socket.disconnect();
     };
-  }, [userId, role]);
+  }, [userId]);
 
-  const sendMessage = useCallback((data: {
-    threadId: string;
-    senderId: string;
-    receiverId: string;
-    content: string;
-  }) => {
-    socketRef.current?.emit('send_message', data);
-  }, []);
+  // No-op: server publishes to receiver after HTTP POST
+  const sendMessage = useCallback(
+    (_data: { threadId: string; senderId: string; receiverId: string; content: string }) => {
+      // Delivery handled server-side via Ably publish in POST /api/messages
+    },
+    []
+  );
 
-  const sendTyping = useCallback((data: {
-    threadId: string;
-    userId: string;
-    receiverId: string;
-  }) => {
-    socketRef.current?.emit('typing', data);
-  }, []);
+  const sendTyping = useCallback(
+    (data: { threadId: string; userId: string; receiverId: string }) => {
+      if (!isConnected) return;
+      const receiverChannel = realtimeRef.current?.channels.get(
+        `private:user-${data.receiverId}`
+      );
+      receiverChannel?.publish('typing', { userId: data.userId });
+    },
+    [isConnected]
+  );
 
-  const onMessage = useCallback((callback: (data: any) => void) => {
-    socketRef.current?.on('receive_message', callback);
+  const onMessage = useCallback((callback: MessageCallback) => {
+    messageCallbacksRef.current.add(callback);
     return () => {
-      socketRef.current?.off('receive_message', callback);
+      messageCallbacksRef.current.delete(callback);
     };
   }, []);
 
-  const onTyping = useCallback((callback: (data: any) => void) => {
-    socketRef.current?.on('user_typing', callback);
+  const onTyping = useCallback((callback: TypingCallback) => {
+    typingCallbacksRef.current.add(callback);
     return () => {
-      socketRef.current?.off('user_typing', callback);
+      typingCallbacksRef.current.delete(callback);
     };
   }, []);
 
   return {
-    socket: socketRef.current,
+    socket: realtimeRef.current,
     isConnected,
-    onlineUsers,
+    onlineUsers: new Set<string>(),
     sendMessage,
     sendTyping,
     onMessage,
