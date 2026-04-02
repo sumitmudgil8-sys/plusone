@@ -35,8 +35,10 @@ model User {
   checkIns         CheckIn[]             @relation("UserCheckIns")
   checkInAlerts    CheckIn[]             @relation("CompanionCheckIns")
   verificationDocs VerificationDocument[]
-  payments         Payment[]
-  wallet           Wallet?
+  payments                 Payment[]
+  wallet                   Wallet?
+  clientBillingSessions    BillingSession[]  @relation("ClientBillingSessions")
+  companionBillingSessions BillingSession[]  @relation("CompanionBillingSessions")
 }
 
 model ClientProfile {
@@ -203,6 +205,27 @@ model VerificationDocument {
   adminNotes    String?
   submittedAt   DateTime @default(now())
   reviewedAt    DateTime?
+}
+
+model BillingSession {
+  id            String    @id @default(cuid())
+  clientId      String
+  companionId   String
+  client        User      @relation("ClientBillingSessions", fields: [clientId], references: [id])
+  companion     User      @relation("CompanionBillingSessions", fields: [companionId], references: [id])
+  type          String    @default("CHAT")   // CHAT | VOICE
+  ratePerMinute Float                        // INR/min — snapshot at session start
+  status        String    @default("ACTIVE") // ACTIVE | ENDED | EXPIRED
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+  lastTickAt    DateTime  @default(now())
+  totalMinutes  Float     @default(0)
+  totalCharged  Float     @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([clientId, status])
+  @@index([companionId, status])
 }
 
 model Wallet {

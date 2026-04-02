@@ -21,7 +21,7 @@ and engage in per-minute billed chat and voice calls.
 - ✅ Schema: MessageThread companion relation fixed
 - ✅ Real-time chat (Ably — token auth, server publish, typing indicators)
 - ✅ Wallet system (balance, recharge via Razorpay, transaction history, atomic credit/debit)
-- ❌ Per-minute billing
+- ✅ Per-minute billing (start/tick/end, atomic debit+companion credit, anti-double-billing)
 - ❌ Image upload
 - ❌ Companion onboarding
 - ❌ Voice calling
