@@ -27,6 +27,7 @@ model User {
   favorites        Favorite[]            @relation("ClientFavorites")
   favoritedBy      Favorite[]            @relation("CompanionFavorites")
   messageThreads   MessageThread[]       @relation("ClientThreads")
+  companionThreads MessageThread[]       @relation("CompanionThreads")
   reviewsReceived  Review[]              @relation("ReviewedUser")
   reviewsGiven     Review[]              @relation("Reviewer")
   notifications    Notification[]
@@ -80,6 +81,7 @@ model MessageThread {
   clientId     String
   companionId  String
   client       User      @relation("ClientThreads", fields: [clientId], references: [id])
+  companion    User      @relation("CompanionThreads", fields: [companionId], references: [id])
   messageCount Int       @default(0)
   isLocked     Boolean   @default(false)
   messages     Message[]

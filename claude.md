@@ -17,7 +17,8 @@ and engage in per-minute billed chat and voice calls.
 - ✅ Messaging DB structure
 - ✅ Admin APIs
 - ✅ Razorpay basic integration
-- 🔧 In progress: [update this]
+- ✅ Security: cookie secure flag, JWT secret guard, test creds removed
+- ✅ Schema: MessageThread companion relation fixed
 - ❌ Real-time chat
 - ❌ Wallet system
 - ❌ Per-minute billing

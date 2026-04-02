@@ -101,14 +101,6 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="mt-6 pt-6 border-t border-charcoal-border">
-          <p className="text-center text-xs text-white/40">
-            Test accounts:<br />
-            admin@plusone.com / admin123<br />
-            client1@test.com / client123 (FREE)<br />
-            client2@test.com / client123 (PREMIUM)
-          </p>
-        </div>
       </Card>
     </div>
   );
