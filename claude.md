@@ -23,7 +23,7 @@ and engage in per-minute billed chat and voice calls.
 - ✅ Wallet system (balance, recharge via Razorpay, transaction history, atomic credit/debit)
 - ✅ Per-minute billing (start/tick/end, atomic debit+companion credit, anti-double-billing)
 - ✅ Image upload (Cloudinary — avatar, companion gallery, verification docs)
-- ❌ Companion onboarding
+- ✅ Companion onboarding (self-registration, 4-step wizard, admin approval flow)
 - ✅ Voice calling (Agora RTC — token auth, signaling via Ably, useVoiceCall hook)
 - ❌ Production UI
 

@@ -115,9 +115,11 @@ export default function SignupPage() {
         </div>
 
         <div className="mt-6 pt-6 border-t border-charcoal-border">
-          <p className="text-xs text-white/40">
-            By signing up, you agree to our Terms of Service and Privacy Policy.
-            Companion accounts can only be created by administrators.
+          <p className="text-xs text-white/40 text-center">
+            Want to work as a companion?{' '}
+            <Link href="/companion-signup" className="text-gold hover:underline">
+              Apply here
+            </Link>
           </p>
         </div>
       </Card>
