@@ -22,7 +22,7 @@ and engage in per-minute billed chat and voice calls.
 - ✅ Real-time chat (Ably — token auth, server publish, typing indicators)
 - ✅ Wallet system (balance, recharge via Razorpay, transaction history, atomic credit/debit)
 - ✅ Per-minute billing (start/tick/end, atomic debit+companion credit, anti-double-billing)
-- ❌ Image upload
+- ✅ Image upload (Cloudinary — avatar, companion gallery, verification docs)
 - ❌ Companion onboarding
 - ❌ Voice calling
 - ❌ Production UI

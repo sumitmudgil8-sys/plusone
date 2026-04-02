@@ -1,4 +1,10 @@
 export const MESSAGE_LIMIT = 8;
+export const UPLOAD_MAX_IMAGE_BYTES = 5 * 1024 * 1024;    // 5 MB
+export const UPLOAD_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024; // 10 MB
+export const UPLOAD_ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+export const UPLOAD_ALLOWED_DOCUMENT_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+export const COMPANION_GALLERY_MAX_IMAGES = 8;
+
 export const BILLING_TICK_SECONDS = 60;        // bill every 60s
 export const BILLING_GRACE_SECONDS = 120;      // session auto-expires if no tick for 2 min
 export const BILLING_MIN_BALANCE_MINUTES = 1;  // must have ≥1 min balance to start
