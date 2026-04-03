@@ -40,7 +40,10 @@ model User {
   clientBillingSessions    BillingSession[]  @relation("ClientBillingSessions")
   companionBillingSessions BillingSession[]  @relation("CompanionBillingSessions")
   isTemporaryPassword      Boolean           @default(false)
+  isOnline                 Boolean           @default(false)
   companionImages          CompanionImage[]
+  blockedByCompanion       BlockedUser[]     @relation("BlockedCompanion")
+  blockedClients           BlockedUser[]     @relation("BlockedClient")
 }
 
 model ClientProfile {
@@ -260,9 +263,22 @@ model CompanionImage {
   companionId String
   imageUrl    String
   publicId    String?
+  isPrimary   Boolean  @default(false)
   createdAt   DateTime @default(now())
   companion   User     @relation(fields: [companionId], references: [id], onDelete: Cascade)
 
+  @@index([companionId])
+}
+
+model BlockedUser {
+  id          String   @id @default(cuid())
+  companionId String
+  clientId    String
+  companion   User     @relation("BlockedCompanion", fields: [companionId], references: [id], onDelete: Cascade)
+  client      User     @relation("BlockedClient", fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([companionId, clientId])
   @@index([companionId])
 }
 

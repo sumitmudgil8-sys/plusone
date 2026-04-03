@@ -57,6 +57,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Block check — companion may have blocked this client
+    if (user.role === 'CLIENT') {
+      const block = await prisma.blockedUser.findUnique({
+        where: { companionId_clientId: { companionId: actualCompanionId, clientId } },
+      });
+      if (block) {
+        return NextResponse.json(
+          { success: false, error: 'Unable to send messages to this companion' },
+          { status: 403 }
+        );
+      }
+    }
+
     // Check message limit for CLIENT senders
     if (user.role === 'CLIENT') {
       const clientUser = await prisma.user.findUnique({

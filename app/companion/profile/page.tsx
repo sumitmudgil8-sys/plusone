@@ -9,6 +9,7 @@ interface CompanionImageRecord {
   id: string;
   imageUrl: string;
   publicId: string | null;
+  isPrimary: boolean;
   createdAt: string;
 }
 
@@ -49,6 +50,7 @@ export default function CompanionProfilePage() {
   const [images, setImages] = useState<CompanionImageRecord[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [settingPrimary, setSettingPrimary] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Security / password-change state
@@ -175,6 +177,22 @@ export default function CompanionProfilePage() {
       const res = await fetch(`/api/companion/images/${id}`, { method: 'DELETE' });
       if (res.ok) setImages((prev) => prev.filter((img) => img.id !== id));
     } catch { /* non-fatal */ }
+  };
+
+  const handleSetPrimary = async (id: string) => {
+    setSettingPrimary(id);
+    try {
+      const res = await fetch('/api/companion/images/set-primary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId: id }),
+      });
+      if (res.ok) {
+        setImages((prev) => prev.map((img) => ({ ...img, isPrimary: img.id === id })));
+      }
+    } catch { /* non-fatal */ } finally {
+      setSettingPrimary(null);
+    }
   };
 
   const scrollToSecurity = () => {
@@ -392,8 +410,17 @@ export default function CompanionProfilePage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {images.map((img) => (
-              <div key={img.id} className="relative group aspect-square rounded-lg overflow-hidden bg-charcoal-surface">
+              <div key={img.id} className={`relative group aspect-square rounded-lg overflow-hidden bg-charcoal-surface ${img.isPrimary ? 'ring-2 ring-gold' : ''}`}>
                 <img src={img.imageUrl} alt="Gallery" className="w-full h-full object-cover" />
+
+                {/* Primary badge */}
+                {img.isPrimary && (
+                  <span className="absolute top-1.5 left-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gold text-black leading-none">
+                    Main
+                  </span>
+                )}
+
+                {/* Delete button */}
                 <button
                   onClick={() => handleDeleteImage(img.id)}
                   className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
@@ -403,6 +430,17 @@ export default function CompanionProfilePage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
+
+                {/* Set as Main button — shows on hover for non-primary images */}
+                {!img.isPrimary && (
+                  <button
+                    onClick={() => handleSetPrimary(img.id)}
+                    disabled={settingPrimary === img.id}
+                    className="absolute bottom-0 inset-x-0 py-1.5 text-[11px] font-medium text-white bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gold hover:text-black disabled:opacity-50"
+                  >
+                    {settingPrimary === img.id ? '…' : 'Set as Main'}
+                  </button>
+                )}
               </div>
             ))}
           </div>

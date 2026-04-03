@@ -48,6 +48,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if companion has blocked this client
+    const block = await prisma.blockedUser.findUnique({
+      where: { companionId_clientId: { companionId, clientId: user.id } },
+    });
+    if (block) {
+      return NextResponse.json(
+        { success: false, error: 'Unable to start session with this companion' },
+        { status: 403 }
+      );
+    }
+
     // Return existing active session if one exists (idempotent)
     const existing = await prisma.billingSession.findFirst({
       where: { clientId: user.id, companionId, status: 'ACTIVE' },

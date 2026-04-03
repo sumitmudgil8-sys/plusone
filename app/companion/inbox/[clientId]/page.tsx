@@ -61,6 +61,8 @@ export default function CompanionChatPage() {
 
   const [voiceSessionId, setVoiceSessionId] = useState<string | null>(voiceSessionIdParam);
   const [callDuration, setCallDuration] = useState(0);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blocking, setBlocking] = useState(false);
   const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -79,6 +81,15 @@ export default function CompanionChatPage() {
         if (clientRes.ok) {
           const clientData = await clientRes.json();
           setClient(clientData.user);
+        }
+
+        const blockedRes = await fetch('/api/companion/blocked');
+        if (blockedRes.ok) {
+          const blockedData = await blockedRes.json();
+          const alreadyBlocked = (blockedData.data?.blocked ?? []).some(
+            (b: { clientId: string }) => b.clientId === clientId
+          );
+          setIsBlocked(alreadyBlocked);
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -144,6 +155,35 @@ export default function CompanionChatPage() {
     setVoiceSessionId(null);
     setCallDuration(0);
   }, [voiceSessionId, call]);
+
+  const handleToggleBlock = async () => {
+    setBlocking(true);
+    try {
+      if (isBlocked) {
+        // Find the block record id to delete — refetch blocked list
+        const res = await fetch('/api/companion/blocked');
+        if (res.ok) {
+          const d = await res.json();
+          const record = (d.data?.blocked ?? []).find(
+            (b: { clientId: string; id: string }) => b.clientId === clientId
+          );
+          if (record) {
+            await fetch(`/api/companion/block/${record.id}`, { method: 'DELETE' });
+            setIsBlocked(false);
+          }
+        }
+      } else {
+        const res = await fetch('/api/companion/block', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId }),
+        });
+        if (res.ok) setIsBlocked(true);
+      }
+    } catch { /* non-fatal */ } finally {
+      setBlocking(false);
+    }
+  };
 
   const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -233,6 +273,30 @@ export default function CompanionChatPage() {
       )}
 
       <Card className="h-full flex flex-col overflow-hidden">
+        {/* Block button in header */}
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-charcoal-border shrink-0">
+          <div className="flex items-center gap-2">
+            {callerAvatar ? (
+              <img src={callerAvatar} alt={callerName} className="w-8 h-8 rounded-full object-cover" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-charcoal-border flex items-center justify-center">
+                <span className="text-sm font-medium text-white">{callerName[0]}</span>
+              </div>
+            )}
+            <span className="text-sm font-medium text-white">{callerName}</span>
+          </div>
+          <button
+            onClick={handleToggleBlock}
+            disabled={blocking}
+            className={`text-xs px-3 py-1 rounded-lg border transition-colors disabled:opacity-40 ${
+              isBlocked
+                ? 'border-green-500/40 text-green-400 hover:bg-green-500/10'
+                : 'border-red-500/30 text-red-400 hover:bg-red-500/10'
+            }`}
+          >
+            {blocking ? '…' : isBlocked ? 'Unblock' : 'Block'}
+          </button>
+        </div>
         <ChatWindow
           companionId={clientId}
           companionName={callerName}
