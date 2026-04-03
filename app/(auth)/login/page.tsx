@@ -33,6 +33,12 @@ export default function LoginPage() {
         return;
       }
 
+      // Companions with a temporary password must change it first
+      if (data.user.role === 'COMPANION' && data.user.isTemporaryPassword) {
+        router.push('/companion/change-password');
+        return;
+      }
+
       // Redirect based on role
       switch (data.user.role) {
         case 'CLIENT':

@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
         email,
         passwordHash,
         role: 'COMPANION',
+        isTemporaryPassword: true,
         companionProfile: {
           create: {
             name,
@@ -68,7 +69,12 @@ export async function POST(request: NextRequest) {
       // Phone can be added via onboarding; skip silently for now.
     }
 
-    const token = signJWT({ id: user.id, email: user.email, role: user.role });
+    const token = signJWT({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      isTemporaryPassword: true,
+    });
 
     const response = NextResponse.json(
       {
