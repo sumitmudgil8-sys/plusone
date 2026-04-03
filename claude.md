@@ -26,6 +26,7 @@ and engage in per-minute billed chat and voice calls.
 - ✅ Companion onboarding (self-registration, 4-step wizard, admin approval flow)
 - ✅ Voice calling (Agora RTC — token auth, signaling via Ably, useVoiceCall hook)
 - ✅ Production UI (wallet recharge, voice call overlay, incoming call notification)
+- ✅ Deployment ready (CSP fixed for Ably/Razorpay/Cloudinary, env guards, dead Socket.IO removed)
 
 ## Conventions (Claude MUST follow these)
 - All API routes in /app/api
