@@ -25,7 +25,7 @@ and engage in per-minute billed chat and voice calls.
 - ✅ Image upload (Cloudinary — avatar, companion gallery, verification docs)
 - ✅ Companion onboarding (self-registration, 4-step wizard, admin approval flow)
 - ✅ Voice calling (Agora RTC — token auth, signaling via Ably, useVoiceCall hook)
-- ❌ Production UI
+- ✅ Production UI (wallet recharge, voice call overlay, incoming call notification)
 
 ## Conventions (Claude MUST follow these)
 - All API routes in /app/api
