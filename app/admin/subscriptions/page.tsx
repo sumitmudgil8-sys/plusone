@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency } from '@/lib/utils';
-import { SUBSCRIPTION_PRICE } from '@/lib/constants';
 import type { User } from '@/types';
 
 export default function AdminSubscriptionsPage() {
@@ -73,10 +72,8 @@ export default function AdminSubscriptionsPage() {
           <p className="text-sm text-white/60">Premium Users</p>
         </Card>
         <Card className="text-center">
-          <p className="text-3xl font-bold text-white">
-            {formatCurrency(premiumUsers.length * SUBSCRIPTION_PRICE)}
-          </p>
-          <p className="text-sm text-white/60">Est. Revenue</p>
+          <p className="text-3xl font-bold text-white">{users.length - premiumUsers.length}</p>
+          <p className="text-sm text-white/60">Free Users</p>
         </Card>
       </div>
 

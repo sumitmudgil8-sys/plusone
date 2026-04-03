@@ -1,10 +1,7 @@
-"use client";
 'use client';
 
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
-import { SUBSCRIPTION_PRICE } from '@/lib/constants';
-import { formatCurrency } from '@/lib/utils';
 
 interface MessageLockBannerProps {
   messageCount: number;
@@ -12,24 +9,15 @@ interface MessageLockBannerProps {
   isLocked: boolean;
 }
 
-export function MessageLockBanner({
-  messageCount,
-  limit,
-  isLocked,
-}: MessageLockBannerProps) {
+export function MessageLockBanner({ messageCount, limit, isLocked }: MessageLockBannerProps) {
   const router = useRouter();
 
   if (!isLocked && messageCount < limit) {
-    // Show progress bar
     return (
       <div className="px-4 py-2 border-t border-charcoal-border">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-white/60">
-            {messageCount}/{limit} messages used
-          </span>
-          <span className="text-xs text-gold">
-            {limit - messageCount} remaining
-          </span>
+          <span className="text-xs text-white/60">{messageCount}/{limit} messages used</span>
+          <span className="text-xs text-gold">{limit - messageCount} remaining</span>
         </div>
         <div className="h-1.5 bg-charcoal-border rounded-full overflow-hidden">
           <div
@@ -43,7 +31,6 @@ export function MessageLockBanner({
 
   if (!isLocked) return null;
 
-  // Show lock banner
   return (
     <div className="px-4 py-4 border-t border-gold/30 bg-gold/5">
       <div className="flex items-center gap-3 mb-3">
@@ -53,11 +40,9 @@ export function MessageLockBanner({
           </svg>
         </div>
         <div className="flex-1">
-          <p className="text-sm font-medium text-white">
-            Message limit reached
-          </p>
+          <p className="text-sm font-medium text-white">Message limit reached</p>
           <p className="text-xs text-white/60">
-            You have used {limit}/{limit} free messages. Upgrade to Premium to continue chatting with unlimited companions.
+            You have used {limit}/{limit} free messages. Recharge your wallet to continue chatting.
           </p>
         </div>
       </div>
@@ -67,7 +52,7 @@ export function MessageLockBanner({
         onClick={() => router.push('/client/profile')}
         className="w-full"
       >
-        Upgrade for {formatCurrency(SUBSCRIPTION_PRICE)}
+        Recharge Wallet
       </Button>
     </div>
   );

@@ -27,6 +27,18 @@ export default function ClientLayout({
         <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
       </div>
 
+      {/* Footer */}
+      <footer className="hidden md:block border-t border-charcoal-border bg-charcoal-surface mt-auto">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between text-xs text-white/30">
+          <span>© {new Date().getFullYear()} Plus One. Pay per minute · No subscription.</span>
+          <div className="flex gap-5">
+            <a href="/terms" className="hover:text-white/60 transition-colors">Terms</a>
+            <a href="/privacy" className="hover:text-white/60 transition-colors">Privacy</a>
+            <a href="/refund-policy" className="hover:text-white/60 transition-colors">Refund Policy</a>
+          </div>
+        </div>
+      </footer>
+
       <ClientNav />
     </div>
   );

@@ -13,8 +13,7 @@ export const PLATFORM_COMMISSION_RATE = 0.20;  // 20% platform cut; companion ge
 export const WALLET_MIN_RECHARGE = 100;   // INR
 export const WALLET_MAX_RECHARGE = 50000; // INR
 export const WALLET_RECHARGE_PRESETS = [100, 200, 500, 1000, 2000]; // INR
-export const MAX_FREE_COMPANIONS = 20;
-export const SUBSCRIPTION_PRICE = 5000; // INR
+export const MAX_FREE_COMPANIONS = 15; // first N profiles free without wallet balance
 export const DEPOSIT_PERCENTAGE = 20; // 20% deposit required
 
 export const COLORS = {

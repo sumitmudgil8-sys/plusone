@@ -1,4 +1,3 @@
-"use client";
 'use client';
 
 import Link from 'next/link';
@@ -14,6 +13,7 @@ interface CompanionCardProps {
   bio?: string;
   hourlyRate: number;
   avatarUrl?: string;
+  primaryImageUrl?: string | null;
   images?: string[];
   distance: number;
   isFavorited: boolean;
@@ -32,6 +32,7 @@ export function CompanionCard({
   bio,
   hourlyRate,
   avatarUrl,
+  primaryImageUrl,
   images,
   distance,
   isFavorited: initialFavorited,
@@ -46,46 +47,36 @@ export function CompanionCard({
   const [isFavorited, setIsFavorited] = useState(initialFavorited);
   const [isHovered, setIsHovered] = useState(false);
 
+  const displayImage = primaryImageUrl ?? avatarUrl ?? null;
+
   const toggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-
     try {
       const res = await fetch('/api/favorites', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companionId: id }),
       });
-
       const data = await res.json();
-      if (data.success) {
-        setIsFavorited(data.isFavorited);
-      }
+      if (data.success) setIsFavorited(data.isFavorited);
     } catch (error) {
       console.error('Error toggling favorite:', error);
     }
   };
 
-  const renderStars = (rating: number) => {
-    return (
-      <div className="flex gap-0.5">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <svg
-            key={star}
-            className={`w-3.5 h-3.5 ${star <= rating ? 'text-gold fill-current' : 'text-white/20'}`}
-            viewBox="0 0 20 20"
-          >
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
-        ))}
-      </div>
-    );
-  };
+  const renderStars = (rating: number) => (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <svg key={star} className={`w-3.5 h-3.5 ${star <= rating ? 'text-gold fill-current' : 'text-white/20'}`} viewBox="0 0 20 20">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      ))}
+    </div>
+  );
 
   return (
-    <Link href={accessible ? `/client/booking/${id}` : '#'}
-      onClick={(e) => !accessible && e.preventDefault()}
-    >
+    <Link href={accessible ? `/client/booking/${id}` : '#'} onClick={(e) => !accessible && e.preventDefault()}>
       <Card
         className={cn(
           'relative overflow-hidden transition-all duration-300',
@@ -96,9 +87,9 @@ export function CompanionCard({
       >
         {/* Image */}
         <div className="relative aspect-[4/3] bg-charcoal-border overflow-hidden">
-          {avatarUrl ? (
+          {displayImage ? (
             <img
-              src={avatarUrl}
+              src={displayImage}
               alt={name}
               className="w-full h-full object-cover transition-transform duration-300"
               style={{ transform: isHovered ? 'scale(1.05)' : 'scale(1)' }}
@@ -140,14 +131,15 @@ export function CompanionCard({
 
           {/* Lock Overlay */}
           {!accessible && (
-            <div className="absolute inset-0 bg-charcoal/70 flex items-center justify-center backdrop-blur-sm">
-              <div className="text-center">
-                <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-charcoal-border flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="absolute inset-0 bg-charcoal/80 flex items-center justify-center backdrop-blur-sm">
+              <div className="text-center px-3">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gold/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </div>
-                <p className="text-sm text-white/60">Upgrade to unlock</p>
+                <p className="text-xs text-white/80 font-medium">Recharge wallet</p>
+                <p className="text-xs text-white/50">to browse more</p>
               </div>
             </div>
           )}
@@ -156,21 +148,21 @@ export function CompanionCard({
         {/* Content */}
         <div className="p-4">
           <div className="flex items-start justify-between mb-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <h3 className="font-semibold text-white truncate">{name}</h3>
               {(gender || age) && (
-                <span className="text-xs text-white/50">
+                <span className="text-xs text-white/50 shrink-0">
                   {[gender, age ? `${age}` : ''].filter(Boolean).join(' · ')}
                 </span>
               )}
             </div>
-            <span className="text-gold font-medium whitespace-nowrap">{formattedPrice}/hr</span>
+            <span className="text-gold font-medium whitespace-nowrap text-sm ml-2">{formattedPrice}/hr</span>
           </div>
 
           {reviewCount > 0 ? (
             <div className="flex items-center gap-2">
               {renderStars(Math.round(averageRating))}
-              <span className="text-xs text-white/50">{averageRating.toFixed(1)} ({reviewCount} reviews)</span>
+              <span className="text-xs text-white/50">{averageRating.toFixed(1)} ({reviewCount})</span>
             </div>
           ) : (
             <p className="text-xs text-white/40">No reviews yet</p>

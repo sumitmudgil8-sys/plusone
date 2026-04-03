@@ -21,100 +21,73 @@ export async function GET(request: NextRequest) {
   const languages = searchParams.get('languages');
   const interests = searchParams.get('interests');
   const search = searchParams.get('search');
-  const sortBy = searchParams.get('sortBy') || 'distance'; // distance, price, rating
+  const sortBy = searchParams.get('sortBy') || 'distance';
 
   try {
-    // Get client profile for location
-    const clientProfile = await prisma.clientProfile.findUnique({
-      where: { userId: user.id },
-    });
+    const [clientProfile, wallet] = await Promise.all([
+      prisma.clientProfile.findUnique({ where: { userId: user.id } }),
+      prisma.wallet.findUnique({ where: { userId: user.id }, select: { balance: true } }),
+    ]);
 
-    const clientLat = clientProfile?.lat || 28.6139;
-    const clientLng = clientProfile?.lng || 77.2090;
+    const clientLat = clientProfile?.lat ?? 28.6139;
+    const clientLng = clientProfile?.lng ?? 77.2090;
+    const hasWalletBalance = (wallet?.balance ?? 0) > 0;
 
-    // Get current user with subscription
-    const currentUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { subscriptionTier: true },
-    });
+    // Show all active, non-banned companions.
+    // isApproved is intentionally NOT required so newly created companions are visible.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const companionProfileFilter: any = {};
 
-    const isPremium = currentUser?.subscriptionTier === 'PREMIUM';
+    if (minPrice || maxPrice) {
+      companionProfileFilter.hourlyRate = {};
+      if (minPrice) companionProfileFilter.hourlyRate.gte = parseFloat(minPrice);
+      if (maxPrice) companionProfileFilter.hourlyRate.lte = parseFloat(maxPrice);
+    }
+    if (date) companionProfileFilter.availability = { contains: date };
+    if (gender) companionProfileFilter.gender = gender;
+    if (minAge || maxAge) {
+      companionProfileFilter.age = {};
+      if (minAge) companionProfileFilter.age.gte = parseInt(minAge);
+      if (maxAge) companionProfileFilter.age.lte = parseInt(maxAge);
+    }
+    if (languages) companionProfileFilter.languages = { contains: languages.split(',')[0] };
+    if (interests) companionProfileFilter.interests = { contains: interests.split(',')[0] };
 
-    // Build where clause
-    const where: any = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const whereClause: any = {
       role: 'COMPANION',
       isActive: true,
       isBanned: false,
-      companionProfile: {
-        isApproved: true,
-      },
+      companionProfile: companionProfileFilter,
     };
 
-    if (minPrice || maxPrice) {
-      where.companionProfile.hourlyRate = {};
-      if (minPrice) where.companionProfile.hourlyRate.gte = parseFloat(minPrice);
-      if (maxPrice) where.companionProfile.hourlyRate.lte = parseFloat(maxPrice);
-    }
-
-    if (date) {
-      where.companionProfile.availability = {
-        contains: date,
-      };
-    }
-
-    if (gender) {
-      where.companionProfile.gender = gender;
-    }
-
-    if (minAge || maxAge) {
-      where.companionProfile.age = {};
-      if (minAge) where.companionProfile.age.gte = parseInt(minAge);
-      if (maxAge) where.companionProfile.age.lte = parseInt(maxAge);
-    }
-
-    if (languages) {
-      const langList = languages.split(',');
-      where.companionProfile.languages = {
-        contains: langList[0], // SQLite doesn't support array operations well
-      };
-    }
-
-    if (interests) {
-      const interestList = interests.split(',');
-      where.companionProfile.interests = {
-        contains: interestList[0], // SQLite doesn't support array operations well
-      };
-    }
-
     if (search) {
-      where.OR = [
+      whereClause.OR = [
         { companionProfile: { name: { contains: search, mode: 'insensitive' } } },
         { companionProfile: { bio: { contains: search, mode: 'insensitive' } } },
       ];
     }
 
-    // Get companions with favorites for this client
     const companions = await prisma.user.findMany({
-      where,
+      where: whereClause,
       include: {
         companionProfile: true,
+        companionImages: {
+          where: { isPrimary: true },
+          take: 1,
+        },
         favorites: {
           where: { clientId: user.id },
         },
       },
     });
 
-    // Calculate distance and add computed fields
-    let companionsWithDistance: any[] = companions
+    let companionsWithDistance = companions
       .filter((c) => c.companionProfile)
       .map((companion) => {
         const profile = companion.companionProfile!;
-        const distance = calculateDistance(
-          clientLat,
-          clientLng,
-          profile.lat,
-          profile.lng
-        );
+        const distance = calculateDistance(clientLat, clientLng, profile.lat, profile.lng);
+        const primaryImageUrl = companion.companionImages[0]?.imageUrl ?? null;
 
         return {
           id: companion.id,
@@ -122,6 +95,7 @@ export async function GET(request: NextRequest) {
           bio: profile.bio,
           hourlyRate: profile.hourlyRate,
           avatarUrl: profile.avatarUrl,
+          primaryImageUrl,
           images: JSON.parse(profile.images || '[]'),
           isApproved: profile.isApproved,
           isVerified: profile.isVerified,
@@ -139,7 +113,6 @@ export async function GET(request: NextRequest) {
         };
       });
 
-    // Sort based on sortBy parameter
     if (sortBy === 'price') {
       companionsWithDistance.sort((a, b) => a.hourlyRate - b.hourlyRate);
     } else if (sortBy === 'rating') {
@@ -148,19 +121,17 @@ export async function GET(request: NextRequest) {
       companionsWithDistance.sort((a, b) => a.distance - b.distance);
     }
 
-    // Apply accessibility limits
-    const companionsWithAccessibility = companionsWithDistance.map((companion: any, index: number) => ({
+    // First MAX_FREE_COMPANIONS are always accessible.
+    // Beyond that, requires wallet balance > 0.
+    const result = companionsWithDistance.map((companion, index) => ({
       ...companion,
-      accessible: isPremium || index < MAX_FREE_COMPANIONS,
+      accessible: index < MAX_FREE_COMPANIONS || hasWalletBalance,
       formattedPrice: formatCurrency(companion.hourlyRate),
     }));
 
-    return NextResponse.json({ companions: companionsWithAccessibility });
+    return NextResponse.json({ companions: result });
   } catch (error) {
     console.error('Error fetching companions:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch companions' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch companions' }, { status: 500 });
   }
 }
