@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
       id: user.id,
       email: user.email,
       role: user.role,
+      isTemporaryPassword: user.isTemporaryPassword,
     });
 
     // Get name safely
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
         role: user.role,
         subscriptionTier: user.subscriptionTier,
         name,
+        isTemporaryPassword: user.isTemporaryPassword,
       },
     });
 

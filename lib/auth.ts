@@ -11,6 +11,7 @@ export interface JWTPayload {
   id: string;
   email: string;
   role: string;
+  isTemporaryPassword?: boolean;
   iat?: number;
   exp?: number;
 }

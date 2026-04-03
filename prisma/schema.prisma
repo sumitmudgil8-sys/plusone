@@ -39,6 +39,8 @@ model User {
   wallet                   Wallet?
   clientBillingSessions    BillingSession[]  @relation("ClientBillingSessions")
   companionBillingSessions BillingSession[]  @relation("CompanionBillingSessions")
+  isTemporaryPassword      Boolean           @default(false)
+  companionImages          CompanionImage[]
 }
 
 model ClientProfile {
@@ -251,6 +253,17 @@ model WalletTransaction {
   createdAt    DateTime @default(now())
 
   @@index([walletId, createdAt])
+}
+
+model CompanionImage {
+  id          String   @id @default(cuid())
+  companionId String
+  imageUrl    String
+  publicId    String?
+  createdAt   DateTime @default(now())
+  companion   User     @relation(fields: [companionId], references: [id], onDelete: Cascade)
+
+  @@index([companionId])
 }
 
 model Payment {

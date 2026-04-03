@@ -45,6 +45,16 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
+  // Force password change before accessing any companion route
+  if (
+    user.role === 'COMPANION' &&
+    user.isTemporaryPassword === true &&
+    pathname.startsWith('/companion') &&
+    pathname !== '/companion/change-password'
+  ) {
+    return NextResponse.redirect(new URL('/companion/change-password', request.url));
+  }
+
   if (pathname.startsWith('/admin') && user.role !== 'ADMIN') {
     return NextResponse.redirect(new URL('/login', request.url));
   }

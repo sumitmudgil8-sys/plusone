@@ -1,25 +1,45 @@
-"use client";
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
+interface CompanionImageRecord {
+  id: string;
+  imageUrl: string;
+  publicId: string | null;
+  createdAt: string;
+}
+
+interface ProfileFormData {
+  name: string;
+  bio: string;
+  hourlyRate: number;
+  avatarUrl: string;
+  availability: string[];
+}
+
 export default function CompanionProfilePage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ProfileFormData>({
     name: '',
     bio: '',
     hourlyRate: 2000,
     avatarUrl: '',
-    availability: [] as string[],
+    availability: [],
   });
+
+  const [images, setImages] = useState<CompanionImageRecord[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchUser();
+    fetchImages();
   }, []);
 
   const fetchUser = async () => {
@@ -31,11 +51,11 @@ export default function CompanionProfilePage() {
         const profile = data.user.companionProfile;
         if (profile) {
           setFormData({
-            name: profile.name || '',
-            bio: profile.bio || '',
-            hourlyRate: profile.hourlyRate || 2000,
-            avatarUrl: profile.avatarUrl || '',
-            availability: JSON.parse(profile.availability || '[]'),
+            name: profile.name ?? '',
+            bio: profile.bio ?? '',
+            hourlyRate: profile.hourlyRate ?? 2000,
+            avatarUrl: profile.avatarUrl ?? '',
+            availability: JSON.parse(profile.availability ?? '[]'),
           });
         }
       }
@@ -46,10 +66,23 @@ export default function CompanionProfilePage() {
     }
   };
 
+  const fetchImages = async () => {
+    try {
+      const res = await fetch('/api/companion/images');
+      if (res.ok) {
+        const data = await res.json();
+        setImages(data.data.images);
+      }
+    } catch {
+      // non-fatal
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/users/${user?.id}`, {
+      const userRecord = user as { id?: string } | null;
+      const res = await fetch(`/api/users/${userRecord?.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,6 +121,57 @@ export default function CompanionProfilePage() {
     });
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      setUploadError('Only JPG, PNG, and WebP images are allowed');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Image must be under 5 MB');
+      return;
+    }
+
+    setUploadError('');
+    setUploading(true);
+
+    const form = new FormData();
+    form.append('file', file);
+
+    try {
+      const res = await fetch('/api/companion/images', {
+        method: 'POST',
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setUploadError(data.error ?? 'Upload failed');
+        return;
+      }
+      setImages((prev) => [data.data.image, ...prev]);
+    } catch {
+      setUploadError('Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+      // Reset input so same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteImage = async (id: string) => {
+    try {
+      const res = await fetch(`/api/companion/images/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setImages((prev) => prev.filter((img) => img.id !== id));
+      }
+    } catch {
+      // non-fatal
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -96,7 +180,8 @@ export default function CompanionProfilePage() {
     );
   }
 
-  const isApproved = user?.companionProfile?.isApproved;
+  const profileData = user as { companionProfile?: { isApproved?: boolean } } | null;
+  const isApproved = profileData?.companionProfile?.isApproved;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -206,6 +291,61 @@ export default function CompanionProfilePage() {
             Save Changes
           </Button>
         </div>
+      </Card>
+
+      {/* Image Gallery */}
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-medium text-white">Gallery</h2>
+            <p className="text-xs text-white/40 mt-0.5">JPG, PNG, WebP · Max 5 MB each</p>
+          </div>
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            isLoading={uploading}
+            className="text-sm py-1.5 px-3"
+          >
+            + Upload Image
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleImageUpload}
+          />
+        </div>
+
+        {uploadError && (
+          <p className="text-sm text-red-400 mb-3">{uploadError}</p>
+        )}
+
+        {images.length === 0 ? (
+          <p className="text-sm text-white/40 text-center py-8">
+            No images yet. Upload your first photo.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {images.map((img) => (
+              <div key={img.id} className="relative group aspect-square rounded-lg overflow-hidden bg-charcoal-surface">
+                <img
+                  src={img.imageUrl}
+                  alt="Gallery"
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  onClick={() => handleDeleteImage(img.id)}
+                  className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                  title="Delete image"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       {/* Availability */}
