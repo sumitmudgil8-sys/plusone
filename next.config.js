@@ -69,12 +69,23 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https:",
               "font-src 'self'",
-              "connect-src 'self' wss://*.agora.io https://*.agora.io wss://*.edge.agora.io https://*.sd-rtn.com wss://*.sd-rtn.com",
+              [
+                "connect-src 'self'",
+                // Agora RTC (voice calls)
+                "wss://*.agora.io https://*.agora.io wss://*.edge.agora.io https://*.sd-rtn.com wss://*.sd-rtn.com",
+                // Ably Realtime (chat + call signaling)
+                "wss://*.ably.io https://*.ably.io wss://*.ably-realtime.com https://*.ably-realtime.com",
+                // Razorpay (payments)
+                "https://api.razorpay.com https://lumberjack.razorpay.com",
+                // Cloudinary (image uploads)
+                "https://api.cloudinary.com https://res.cloudinary.com",
+              ].join(' '),
               "media-src 'self'",
+              "frame-src https://api.razorpay.com",
               "frame-ancestors 'none'",
             ].join('; '),
           },
