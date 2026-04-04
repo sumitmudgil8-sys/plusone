@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
-import { createOrder, getKeyId } from '@/lib/payment';
+import { createPaymentLink } from '@/lib/setu';
 import { prisma } from '@/lib/prisma';
-import { WALLET_MIN_RECHARGE, WALLET_MAX_RECHARGE } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
+// ₹100 (10 000 paise) minimum, ₹50 000 (5 000 000 paise) maximum
+// Matches existing WALLET_MIN_RECHARGE / WALLET_MAX_RECHARGE limits.
 const rechargeSchema = z.object({
   amount: z
     .number()
-    .min(WALLET_MIN_RECHARGE, `Minimum recharge is ₹${WALLET_MIN_RECHARGE}`)
-    .max(WALLET_MAX_RECHARGE, `Maximum recharge is ₹${WALLET_MAX_RECHARGE}`),
+    .int('Amount must be a whole number of paise')
+    .min(10000, 'Minimum recharge is ₹100')
+    .max(5000000, 'Maximum recharge is ₹50,000'),
 });
 
-// POST /api/wallet/recharge — create a Razorpay order for wallet top-up
+// POST /api/wallet/recharge — create a Setu UPI payment link for wallet top-up
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['CLIENT']);
   if (auth.user === null) return auth.response;
@@ -30,39 +32,69 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { amount } = parsed.data;
+  const { amount } = parsed.data; // paise
 
   try {
-    const receipt = `wallet_${Date.now()}`;
-    const order = await createOrder(amount, receipt, {
-      userId: user.id,
-      type: 'WALLET_RECHARGE',
+    // Return an existing PENDING link if created in the last 30 minutes.
+    // Prevents duplicate links from rapid retries.
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const existing = await prisma.setuPayment.findFirst({
+      where: {
+        userId: user.id,
+        status: 'PENDING',
+        amount,
+        createdAt: { gte: thirtyMinutesAgo },
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
     });
 
-    // Record a pending payment so verify can look it up
-    await prisma.payment.create({
+    if (existing) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          setuPaymentId: existing.setuPaymentId,
+          upiLink: existing.upiLink,
+          qrCode: existing.qrCode,
+          shortUrl: existing.shortUrl,
+          expiresAt: existing.expiresAt,
+          reused: true,
+        },
+      });
+    }
+
+    // Create a new payment link via Setu Collect API
+    const link = await createPaymentLink(user.id, amount);
+
+    // Persist record so the webhook can look it up
+    const setuPayment = await prisma.setuPayment.create({
       data: {
         userId: user.id,
-        type: 'WALLET_RECHARGE',
+        setuPaymentId: link.setuPaymentId,
         amount,
-        razorpayOrderId: order.id,
-        metadata: JSON.stringify({ walletRecharge: true }),
+        upiLink: link.upiLink,
+        qrCode: link.qrCode,
+        shortUrl: link.shortUrl,
+        expiresAt: new Date(link.expiresAt),
+        metadata: { source: 'wallet_recharge' },
       },
     });
 
     return NextResponse.json({
       success: true,
       data: {
-        orderId: order.id,
-        amount: order.amount,  // in paise
-        currency: order.currency,
-        keyId: getKeyId(),
+        setuPaymentId: setuPayment.setuPaymentId,
+        upiLink: setuPayment.upiLink,
+        qrCode: setuPayment.qrCode,
+        shortUrl: setuPayment.shortUrl,
+        expiresAt: setuPayment.expiresAt,
+        reused: false,
       },
     });
   } catch (error) {
-    console.error('Wallet recharge order error:', error);
+    console.error('Wallet recharge error:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to create recharge order' },
+      { success: false, error: 'Failed to create recharge link' },
       { status: 500 }
     );
   }

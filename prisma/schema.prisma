@@ -44,6 +44,7 @@ model User {
   companionImages          CompanionImage[]
   blockedByCompanion       BlockedUser[]     @relation("BlockedCompanion")
   blockedClients           BlockedUser[]     @relation("BlockedClient")
+  setuPayments             SetuPayment[]
 }
 
 model ClientProfile {
@@ -297,4 +298,27 @@ model Payment {
   metadata      String?  @default("{}")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+enum SetuStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+model SetuPayment {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  setuPaymentId String      @unique
+  amount        Int                     // in paise
+  status        SetuStatus  @default(PENDING)
+  upiLink       String?
+  qrCode        String?
+  shortUrl      String?
+  expiresAt     DateTime
+  metadata      Json?
+  createdAt     DateTime    @default(now())
+  completedAt   DateTime?
 }
