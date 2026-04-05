@@ -90,7 +90,27 @@ export default function CompanionDashboard() {
   const handleToggleOnline = async () => {
     setTogglingOnline(true);
     try {
-      const res = await fetch('/api/companion/availability', { method: 'POST' });
+      // Attempt to get location to send with the availability toggle (going online only)
+      const body: { latitude?: number; longitude?: number } = {};
+      if (!isOnline && 'geolocation' in navigator) {
+        await new Promise<void>((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              body.latitude = pos.coords.latitude;
+              body.longitude = pos.coords.longitude;
+              resolve();
+            },
+            () => resolve(), // Proceed without location if denied
+            { enableHighAccuracy: false, timeout: 5000 }
+          );
+        });
+      }
+
+      const res = await fetch('/api/companion/availability', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
       if (res.ok) {
         const d = await res.json();
         setUser((prev) => prev ? { ...prev, isOnline: d.data.isOnline } : prev);

@@ -6,7 +6,6 @@ import { useParams } from 'next/navigation';
 import { BookingForm } from '@/components/booking/BookingForm';
 import { CompanionProfile } from '@/components/companion/CompanionProfile';
 import { ReviewSection } from '@/components/reviews/ReviewComponents';
-import { SafetyCheckIn } from '@/components/safety/SafetyCheckIn';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -142,12 +141,6 @@ export default function BookingPage() {
             hourlyRate={companion.hourlyRate}
             availability={companion.availability || []}
           />
-
-          {/* Safety Check-in */}
-          <div className="mt-6 pt-6 border-t border-charcoal-border">
-            <h3 className="text-sm font-medium text-white/80 mb-3">Safety Features</h3>
-            <SafetyCheckIn companionId={companion.id} />
-          </div>
         </Card>
       </div>
 

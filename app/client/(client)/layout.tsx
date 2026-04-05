@@ -1,5 +1,6 @@
 "use client";
 import { ClientNav } from '@/components/layout/ClientNav';
+import { PushPermissionPrompt } from '@/components/PushPermissionPrompt';
 
 export default function ClientLayout({
   children,
@@ -40,6 +41,7 @@ export default function ClientLayout({
       </footer>
 
       <ClientNav />
+      <PushPermissionPrompt />
     </div>
   );
 }

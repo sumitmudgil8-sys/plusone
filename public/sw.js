@@ -77,32 +77,32 @@ self.addEventListener('fetch', (event) => {
 
 // Push notification support
 self.addEventListener('push', (event) => {
+  if (!event.data) return;
   const data = event.data.json();
-  const options = {
-    body: data.message,
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    data: data.url,
-    actions: [
-      { action: 'open', title: 'Open' },
-      { action: 'close', title: 'Close' },
-    ],
-  };
-
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { url: data.url || '/' },
+      vibrate: [200, 100, 200],
+      requireInteraction: false,
+    })
   );
 });
 
 // Notification click handler
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
-  if (event.action === 'open' || !event.action) {
-    event.waitUntil(
-      clients.openWindow(event.notification.data || '/')
-    );
-  }
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then((clientList) => {
+      const url = event.notification.data?.url || '/';
+      for (const client of clientList) {
+        if (client.url === url && 'focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
 });
 
 // Background sync for offline form submissions

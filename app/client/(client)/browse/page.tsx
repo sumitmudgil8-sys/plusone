@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CompanionCard } from '@/components/companion/CompanionCard';
 import { Button } from '@/components/ui/Button';
 import { MAX_FREE_COMPANIONS } from '@/lib/constants';
+import { useLocation } from '@/hooks/useLocation';
 
 interface CompanionRow {
   id: string;
@@ -28,12 +29,25 @@ interface CompanionRow {
 
 export default function BrowsePage() {
   const router = useRouter();
+  const { getLocationIfGranted } = useLocation();
   const [companions, setCompanions] = useState<CompanionRow[]>([]);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [nearbyMode, setNearbyMode] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationToast, setLocationToast] = useState('');
   const ablyRef = useRef<import('ably').Realtime | null>(null);
+
+  // On mount: silently fetch location if already granted
+  useEffect(() => {
+    getLocationIfGranted().then((coords) => {
+      if (coords) {
+        setUserLocation({ lat: coords.latitude, lng: coords.longitude });
+      }
+    });
+  }, []);
 
   useEffect(() => {
     fetchCompanions();
@@ -43,9 +57,18 @@ export default function BrowsePage() {
     };
   }, []);
 
+  // Re-fetch when nearby mode or location changes
+  useEffect(() => {
+    if (!loading) fetchCompanions();
+  }, [nearbyMode, userLocation]);
+
   const fetchCompanions = async () => {
     try {
-      const res = await fetch('/api/companions');
+      let url = '/api/companions';
+      if (nearbyMode && userLocation) {
+        url += `?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=50`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
       setCompanions(data.companions ?? []);
       setIsSubscribed(data.isSubscribed ?? false);
@@ -55,6 +78,36 @@ export default function BrowsePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleNearbyToggle = async (enable: boolean) => {
+    if (!enable) {
+      setNearbyMode(false);
+      return;
+    }
+
+    if (userLocation) {
+      setNearbyMode(true);
+      return;
+    }
+
+    // Request location
+    if (!('geolocation' in navigator)) {
+      setLocationToast('Location not supported on this device');
+      setTimeout(() => setLocationToast(''), 3000);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setNearbyMode(true);
+      },
+      () => {
+        setLocationToast('Location access needed for nearby search');
+        setTimeout(() => setLocationToast(''), 3000);
+      }
+    );
   };
 
   const setupAbly = async () => {
@@ -116,17 +169,58 @@ export default function BrowsePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Browse Companions</h1>
-        <p className="text-white/60 text-sm mt-0.5">
-          {isSubscribed
-            ? 'All companions — unlimited access'
-            : `Showing ${Math.min(companions.length, MAX_FREE_COMPANIONS)} of ${total} companions`}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Browse Companions</h1>
+          <p className="text-white/60 text-sm mt-0.5">
+            {nearbyMode
+              ? `${companions.length} companion${companions.length !== 1 ? 's' : ''} nearby`
+              : isSubscribed
+              ? 'All companions — unlimited access'
+              : `Showing ${Math.min(companions.length, MAX_FREE_COMPANIONS)} of ${total} companions`}
+          </p>
+        </div>
+
+        {/* Nearby toggle — only show if location is available or requestable */}
+        {('geolocation' in (typeof navigator !== 'undefined' ? navigator : {})) && (
+          <div className="flex items-center gap-1 shrink-0 bg-charcoal-surface border border-charcoal-border rounded-full p-1">
+            <button
+              onClick={() => handleNearbyToggle(false)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                !nearbyMode
+                  ? 'bg-gold text-black'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => handleNearbyToggle(true)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                nearbyMode
+                  ? 'bg-gold text-black'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Nearby
+            </button>
+          </div>
+        )}
       </div>
 
+      {/* Location denied toast */}
+      {locationToast && (
+        <div className="p-3 rounded-xl bg-error/10 border border-error/30 text-error text-sm text-center">
+          {locationToast}
+        </div>
+      )}
+
       {/* Subscription banner */}
-      {hasLocked && !bannerDismissed && (
+      {hasLocked && !bannerDismissed && !nearbyMode && (
         <div className="flex items-center justify-between p-3 rounded-xl bg-gold/10 border border-gold/25">
           <p className="text-sm text-white/70">
             You&apos;re viewing{' '}
@@ -160,12 +254,28 @@ export default function BrowsePage() {
             className={companion.isNew ? 'animate-fade-in' : undefined}
             style={companion.isNew ? { animation: 'fadeIn 0.4s ease-out' } : undefined}
           >
-            <CompanionCard {...companion} />
+            <CompanionCard {...companion} nearbyMode={nearbyMode} />
           </div>
         ))}
       </div>
 
-      {companions.length === 0 && (
+      {companions.length === 0 && nearbyMode && (
+        <div className="text-center py-16">
+          <svg className="w-14 h-14 mx-auto mb-4 text-white/15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          </svg>
+          <p className="text-white/50 font-medium">No companions found nearby</p>
+          <p className="text-white/30 text-sm mt-1">Try increasing your search area or view all companions</p>
+          <button
+            onClick={() => setNearbyMode(false)}
+            className="mt-4 px-5 py-2 rounded-full bg-gold/20 border border-gold/30 text-gold text-sm font-medium hover:bg-gold/30 transition-colors"
+          >
+            View All
+          </button>
+        </div>
+      )}
+
+      {companions.length === 0 && !nearbyMode && (
         <div className="text-center py-16">
           <svg className="w-14 h-14 mx-auto mb-4 text-white/15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -175,7 +285,7 @@ export default function BrowsePage() {
       )}
 
       {/* Bottom CTA */}
-      {hasLocked && (
+      {hasLocked && !nearbyMode && (
         <div className="rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/5 to-transparent p-6 text-center space-y-3">
           <h3 className="text-lg font-semibold text-white">Unlock all companions</h3>
           <p className="text-white/55 text-sm">

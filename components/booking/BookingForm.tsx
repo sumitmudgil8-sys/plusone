@@ -29,11 +29,17 @@ export function BookingForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const totalAmount = hourlyRate * duration;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!termsAccepted) {
+      setError('Please accept the terms and conditions to proceed.');
+      return;
+    }
     setError('');
     setLoading(true);
 
@@ -148,10 +154,107 @@ export function BookingForm({
           </div>
         )}
 
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={termsAccepted}
+            onChange={(e) => setTermsAccepted(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-charcoal-border bg-charcoal accent-gold cursor-pointer flex-shrink-0"
+          />
+          <span className="text-sm text-white/70 leading-snug">
+            I understand that all meetings will take place in public settings and agree to{' '}
+            <button
+              type="button"
+              onClick={() => setShowTermsModal(true)}
+              className="text-gold underline underline-offset-2 hover:text-gold/80 transition-colors"
+            >
+              terms and conditions
+            </button>
+          </span>
+        </label>
+
         <Button type="submit" size="lg" className="w-full" isLoading={loading}>
           Confirm Booking
         </Button>
       </form>
+
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-charcoal border border-charcoal-border rounded-xl w-full max-w-lg flex flex-col max-h-[80vh]">
+            <div className="p-5 border-b border-charcoal-border flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white">Terms &amp; Conditions</h3>
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="text-white/50 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto flex-1 space-y-4 text-sm text-white/70 leading-relaxed">
+              <p className="font-semibold text-white">Last updated: April 2026</p>
+              <p>
+                By booking a companion through Plus One, you agree to the following terms and conditions.
+                Please read them carefully before confirming your booking.
+              </p>
+              <h4 className="font-semibold text-white mt-4">1. Public Meeting Requirement</h4>
+              <p>
+                All meetings between clients and companions must take place exclusively in public settings
+                such as cafes, restaurants, parks, or other publicly accessible venues. Private meetings
+                at residences, hotels, or any non-public location are strictly prohibited.
+              </p>
+              <h4 className="font-semibold text-white mt-4">2. Nature of Service</h4>
+              <p>
+                Plus One is a companionship platform. Companions provide social companionship services only.
+                Any request for services of a romantic, sexual, or otherwise inappropriate nature is strictly
+                forbidden and will result in immediate account termination.
+              </p>
+              <h4 className="font-semibold text-white mt-4">3. Conduct &amp; Respect</h4>
+              <p>
+                Clients are expected to treat companions with dignity and respect at all times. Harassment,
+                abuse, or inappropriate behaviour of any kind will not be tolerated and will result in
+                permanent suspension from the platform.
+              </p>
+              <h4 className="font-semibold text-white mt-4">4. Cancellation Policy</h4>
+              <p>
+                Bookings cancelled less than 24 hours before the scheduled meeting may incur a cancellation
+                fee. Repeated no-shows may result in account restrictions.
+              </p>
+              <h4 className="font-semibold text-white mt-4">5. Safety &amp; Reporting</h4>
+              <p>
+                If you feel unsafe or experience any issue during a meeting, please leave the situation
+                immediately and report the incident to Plus One support. We take all safety reports seriously
+                and will investigate promptly.
+              </p>
+              <h4 className="font-semibold text-white mt-4">6. Privacy</h4>
+              <p>
+                Do not share personal contact information with companions outside the platform. All
+                communication should remain within the Plus One app to ensure safety for both parties.
+              </p>
+              <h4 className="font-semibold text-white mt-4">7. Amendments</h4>
+              <p>
+                Plus One reserves the right to update these terms at any time. Continued use of the platform
+                after changes constitutes acceptance of the revised terms.
+              </p>
+            </div>
+            <div className="p-5 border-t border-charcoal-border">
+              <Button
+                type="button"
+                size="lg"
+                className="w-full"
+                onClick={() => {
+                  setTermsAccepted(true);
+                  setShowTermsModal(false);
+                }}
+              >
+                Accept &amp; Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Modal
         isOpen={showSuccessModal}

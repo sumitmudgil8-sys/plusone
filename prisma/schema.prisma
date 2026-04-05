@@ -69,6 +69,11 @@ model User {
   isTemporaryPassword Boolean            @default(false)
   isOnline            Boolean            @default(false)
 
+  // Location fields
+  latitude            Float?
+  longitude           Float?
+  locationUpdatedAt   DateTime?
+
   // Relations
   clientProfile    ClientProfile?
   companionProfile CompanionProfile?
@@ -97,6 +102,7 @@ model User {
   setuPayments             SetuPayment[]
   clientProfileViews       CompanionProfileView[] @relation("ClientViews")
   companionProfileViews    CompanionProfileView[] @relation("CompanionViews")
+  pushSubscriptions        PushSubscription[]
 }
 
 model ClientProfile {
@@ -391,4 +397,17 @@ model SetuPayment {
   metadata      Json?
   createdAt     DateTime    @default(now())
   completedAt   DateTime?
+}
+
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
 }

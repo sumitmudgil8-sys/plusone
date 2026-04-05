@@ -25,6 +25,7 @@ interface CompanionCardProps {
   gender?: string;
   age?: number;
   city?: string;
+  nearbyMode?: boolean;
 }
 
 export function CompanionCard({
@@ -42,6 +43,7 @@ export function CompanionCard({
   gender,
   age,
   city,
+  nearbyMode = false,
 }: CompanionCardProps) {
   const [isFavorited, setIsFavorited] = useState(initialFavorited);
   const [isHovered, setIsHovered] = useState(false);
@@ -101,6 +103,19 @@ export function CompanionCard({
           {/* Dark gradient overlay at bottom */}
           <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
 
+          {/* Nearby distance badge — bottom-left pill */}
+          {nearbyMode && accessible && distance > 0 && (
+            <div className="absolute bottom-2 left-2 z-10">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/50 backdrop-blur-sm text-xs text-white/80">
+                <svg className="w-3 h-3 text-gold shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {formatDistance(distance)} away
+              </span>
+            </div>
+          )}
+
           {/* Badges top-left */}
           {accessible && (
             <div className="absolute top-2 left-2 flex flex-col gap-1">
@@ -141,7 +156,7 @@ export function CompanionCard({
                     {[city, gender, age ? `${age}` : ''].filter(Boolean).join(' · ')}
                   </p>
                 )}
-                {accessible && distance > 0 && (
+                {accessible && !nearbyMode && distance > 0 && (
                   <p className="text-xs text-white/50 mt-0.5">{formatDistance(distance)} away</p>
                 )}
               </div>

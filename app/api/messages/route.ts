@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { getAblyClient, getUserChannelName } from '@/lib/ably';
+import { sendPushToUser } from '@/lib/push';
 
 export const runtime = 'nodejs';
 
@@ -121,6 +122,31 @@ export async function POST(request: NextRequest) {
       });
     } catch (ablyError) {
       console.error('Ably publish error (non-fatal):', ablyError);
+    }
+
+    // Push notification to offline receiver (best-effort)
+    try {
+      const receiver = await prisma.user.findUnique({
+        where: { id: receiverId },
+        select: { isOnline: true },
+      });
+      if (receiver && !receiver.isOnline) {
+        const senderName =
+          message.sender.clientProfile?.name ??
+          message.sender.companionProfile?.name ??
+          'Someone';
+        const inboxPath =
+          user.role === 'CLIENT'
+            ? `/companion/inbox/${clientId}`
+            : `/client/chat/${actualCompanionId}`;
+        await sendPushToUser(receiverId, {
+          title: `New message from ${senderName}`,
+          body: content.slice(0, 100),
+          url: inboxPath,
+        });
+      }
+    } catch (pushErr) {
+      console.error('Push notification error (non-fatal):', pushErr);
     }
 
     return NextResponse.json(

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { CompanionNav } from '@/components/layout/CompanionNav';
 import { useSocket } from '@/hooks/useSocket';
+import { PushPermissionPrompt } from '@/components/PushPermissionPrompt';
 
 interface IncomingCall {
   sessionId: string;
@@ -251,6 +252,7 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
       </div>
 
       <CompanionNav />
+      <PushPermissionPrompt />
 
       {incomingCall && !needsPasswordChange && (
         <IncomingCallModal

@@ -22,6 +22,9 @@ export async function GET(request: NextRequest) {
   const interests = searchParams.get('interests');
   const search = searchParams.get('search');
   const sortBy = searchParams.get('sortBy') || 'distance';
+  const userLat = searchParams.get('lat') ? parseFloat(searchParams.get('lat')!) : null;
+  const userLng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : null;
+  const radius = searchParams.get('radius') ? parseFloat(searchParams.get('radius')!) : 50;
 
   try {
     const [clientProfile, clientUser] = await Promise.all([
@@ -124,7 +127,16 @@ export async function GET(request: NextRequest) {
         };
       });
 
-    if (sortBy === 'price') {
+    // If user provided real-time coordinates, compute distance from those and filter by radius
+    if (userLat !== null && userLng !== null) {
+      companionsWithDistance = companionsWithDistance
+        .map((c) => ({
+          ...c,
+          distance: calculateDistance(userLat, userLng!, c.lat, c.lng),
+        }))
+        .filter((c) => c.distance <= radius)
+        .sort((a, b) => a.distance - b.distance);
+    } else if (sortBy === 'price') {
       companionsWithDistance.sort((a, b) => a.hourlyRatePaise - b.hourlyRatePaise);
     } else if (sortBy === 'rating') {
       companionsWithDistance.sort((a, b) => b.averageRating - a.averageRating);
