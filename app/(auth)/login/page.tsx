@@ -6,9 +6,11 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
+import { useLocation } from '@/hooks/useLocation';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { updateLocation } = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,6 +40,9 @@ export default function LoginPage() {
         router.push('/companion/change-password');
         return;
       }
+
+      // Best-effort location update after login — never blocks redirect
+      updateLocation();
 
       // Redirect based on role
       switch (data.user.role) {

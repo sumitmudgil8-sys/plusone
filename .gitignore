@@ -18,3 +18,10 @@ data/dev.db
 
 # OS
 .DS_Store
+
+# next-pwa build artifacts (regenerated at build time)
+public/workbox-*.js
+public/worker-*.js
+public/sw.js
+public/sw.js.map
+tsconfig.tsbuildinfo

@@ -63,10 +63,16 @@ export const metadata: Metadata = {
       { url: '/icons/icon-192.png', sizes: '192x192' },
     ],
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+    'apple-mobile-web-app-title': 'Plus One',
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#D4AF37',
+  themeColor: '#C9A84C',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -82,7 +88,6 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased bg-charcoal text-white min-h-screen">
         {children}
-        <script src="/register-sw.js" defer />
       </body>
     </html>
   );

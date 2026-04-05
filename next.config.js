@@ -1,4 +1,30 @@
 /** @type {import('next').NextConfig} */
+const withPWA = require('next-pwa')({
+  dest: 'public',
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === 'development',
+  customWorkerDir: 'worker',
+  runtimeCaching: [
+    {
+      urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'cloudinary-images',
+        expiration: { maxEntries: 100, maxAgeSeconds: 7 * 24 * 60 * 60 },
+      },
+    },
+    {
+      urlPattern: /\/api\/companions/,
+      handler: 'NetworkFirst',
+      options: {
+        cacheName: 'api-companions',
+        expiration: { maxAgeSeconds: 60 },
+      },
+    },
+  ],
+});
+
 const nextConfig = {
   // Output standalone for Docker deployment
   output: 'standalone',
@@ -17,14 +43,6 @@ const nextConfig = {
   // Experimental features
   experimental: {
     optimizeCss: true,
-    turbo: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
-      },
-    },
   },
 
   // Security headers
@@ -163,4 +181,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withPWA(nextConfig);
