@@ -103,6 +103,8 @@ model User {
   clientProfileViews       CompanionProfileView[] @relation("ClientViews")
   companionProfileViews    CompanionProfileView[] @relation("CompanionViews")
   pushSubscriptions        PushSubscription[]
+  clientChatRequests       ChatRequest[]      @relation("ClientChatRequests")
+  companionChatRequests    ChatRequest[]      @relation("CompanionChatRequests")
 }
 
 model ClientProfile {
@@ -410,4 +412,26 @@ model PushSubscription {
   createdAt  DateTime @default(now())
 
   @@index([userId])
+}
+
+enum ChatRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+model ChatRequest {
+  id          String            @id @default(cuid())
+  clientId    String
+  companionId String
+  client      User              @relation("ClientChatRequests", fields: [clientId], references: [id], onDelete: Cascade)
+  companion   User              @relation("CompanionChatRequests", fields: [companionId], references: [id], onDelete: Cascade)
+  status      ChatRequestStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  expiresAt   DateTime
+
+  @@index([clientId])
+  @@index([companionId])
+  @@index([status])
 }

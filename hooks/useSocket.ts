@@ -24,6 +24,19 @@ type IncomingCallCallback = (data: {
   ratePerMinute: number;
 }) => void;
 
+type IncomingChatRequestCallback = (data: {
+  requestId: string;
+  clientId: string;
+  clientName: string;
+  clientAvatar: string | null;
+}) => void;
+
+type ChatRequestResponseCallback = (data: {
+  requestId: string;
+  companionId: string;
+  status: 'ACCEPTED' | 'DECLINED';
+}) => void;
+
 export function useSocket(userId?: string, _role?: string) {
   const realtimeRef = useRef<Ably.Realtime | null>(null);
   const channelRef = useRef<Ably.RealtimeChannel | null>(null);
@@ -32,6 +45,8 @@ export function useSocket(userId?: string, _role?: string) {
   const messageCallbacksRef = useRef<Set<MessageCallback>>(new Set());
   const typingCallbacksRef = useRef<Set<TypingCallback>>(new Set());
   const incomingCallCallbacksRef = useRef<Set<IncomingCallCallback>>(new Set());
+  const incomingChatRequestCallbacksRef = useRef<Set<IncomingChatRequestCallback>>(new Set());
+  const chatRequestResponseCallbacksRef = useRef<Set<ChatRequestResponseCallback>>(new Set());
 
   useEffect(() => {
     if (!userId) return;
@@ -63,6 +78,21 @@ export function useSocket(userId?: string, _role?: string) {
     channel.subscribe('call:incoming', (msg) => {
       const data = msg.data as Parameters<IncomingCallCallback>[0];
       incomingCallCallbacksRef.current.forEach((cb) => cb(data));
+    });
+
+    channel.subscribe('chat:request', (msg) => {
+      const data = msg.data as Parameters<IncomingChatRequestCallback>[0];
+      incomingChatRequestCallbacksRef.current.forEach((cb) => cb(data));
+    });
+
+    channel.subscribe('chat:accepted', (msg) => {
+      const data = msg.data as Parameters<ChatRequestResponseCallback>[0];
+      chatRequestResponseCallbacksRef.current.forEach((cb) => cb({ ...data, status: 'ACCEPTED' }));
+    });
+
+    channel.subscribe('chat:declined', (msg) => {
+      const data = msg.data as Parameters<ChatRequestResponseCallback>[0];
+      chatRequestResponseCallbacksRef.current.forEach((cb) => cb({ ...data, status: 'DECLINED' }));
     });
 
     return () => {
@@ -114,6 +144,20 @@ export function useSocket(userId?: string, _role?: string) {
     };
   }, []);
 
+  const onIncomingChatRequest = useCallback((callback: IncomingChatRequestCallback) => {
+    incomingChatRequestCallbacksRef.current.add(callback);
+    return () => {
+      incomingChatRequestCallbacksRef.current.delete(callback);
+    };
+  }, []);
+
+  const onChatRequestResponse = useCallback((callback: ChatRequestResponseCallback) => {
+    chatRequestResponseCallbacksRef.current.add(callback);
+    return () => {
+      chatRequestResponseCallbacksRef.current.delete(callback);
+    };
+  }, []);
+
   return {
     socket: realtimeRef.current,
     isConnected,
@@ -123,5 +167,7 @@ export function useSocket(userId?: string, _role?: string) {
     onMessage,
     onTyping,
     onIncomingCall,
+    onIncomingChatRequest,
+    onChatRequestResponse,
   };
 }

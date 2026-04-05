@@ -15,6 +15,13 @@ interface IncomingCall {
   ratePerMinute: number;
 }
 
+interface IncomingChatRequest {
+  requestId: string;
+  clientId: string;
+  clientName: string;
+  clientAvatar: string | null;
+}
+
 // ─── Force password-change modal ────────────────────────────────────────────
 // Covers the entire viewport. No close button. No escape. Inert backdrop.
 function ForcePasswordModal({ onSuccess }: { onSuccess: () => void }) {
@@ -184,12 +191,53 @@ function IncomingCallModal({
   );
 }
 
+// ─── Incoming chat request modal ─────────────────────────────────────────────
+function IncomingChatRequestModal({
+  request,
+  onAccept,
+  onDecline,
+}: {
+  request: IncomingChatRequest;
+  onAccept: () => void;
+  onDecline: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-sm mx-4 bg-[#1C1C1C] border border-[#3A3A3A] rounded-2xl p-8 shadow-2xl text-center space-y-5">
+        {request.clientAvatar ? (
+          <img src={request.clientAvatar} alt={request.clientName}
+            className="w-20 h-20 rounded-full mx-auto object-cover ring-4 ring-yellow-400/30" />
+        ) : (
+          <div className="w-20 h-20 rounded-full mx-auto bg-yellow-400/20 flex items-center justify-center ring-4 ring-yellow-400/30">
+            <span className="text-2xl text-yellow-400 font-semibold">{request.clientName[0]}</span>
+          </div>
+        )}
+        <div>
+          <p className="text-lg font-semibold text-white">{request.clientName}</p>
+          <p className="text-sm text-white/50 mt-1">Chat request</p>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onDecline}
+            className="flex-1 py-2.5 rounded-lg border border-[#3A3A3A] text-white/70 hover:text-white hover:border-white/30 transition-colors">
+            Decline
+          </button>
+          <button onClick={onAccept}
+            className="flex-1 py-2.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black font-semibold transition-colors">
+            Accept
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Layout ──────────────────────────────────────────────────────────────────
 export default function CompanionLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [userId, setUserId] = useState<string | undefined>();
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
+  const [incomingChatRequest, setIncomingChatRequest] = useState<IncomingChatRequest | null>(null);
 
   // Fetch current user from DB (source of truth — not JWT)
   useEffect(() => {
@@ -204,12 +252,17 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
       .catch(() => {});
   }, []);
 
-  const { onIncomingCall } = useSocket(userId, 'COMPANION');
+  const { onIncomingCall, onIncomingChatRequest } = useSocket(userId, 'COMPANION');
 
   useEffect(() => {
     const unsubscribe = onIncomingCall((data) => setIncomingCall(data));
     return unsubscribe;
   }, [onIncomingCall]);
+
+  useEffect(() => {
+    const unsubscribe = onIncomingChatRequest((data) => setIncomingChatRequest(data));
+    return unsubscribe;
+  }, [onIncomingChatRequest]);
 
   const handlePasswordChangeSuccess = useCallback(() => {
     setNeedsPasswordChange(false);
@@ -221,6 +274,37 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
     setIncomingCall(null);
     router.push(`/companion/inbox/${clientId}?voiceSessionId=${sessionId}`);
   }, [incomingCall, router]);
+
+  const handleAcceptChatRequest = useCallback(async () => {
+    if (!incomingChatRequest) return;
+    const { requestId, clientId } = incomingChatRequest;
+    setIncomingChatRequest(null);
+    try {
+      await fetch(`/api/chat-request/${requestId}/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ACCEPTED' }),
+      });
+    } catch {
+      // Non-fatal — navigate anyway
+    }
+    router.push(`/companion/inbox/${clientId}`);
+  }, [incomingChatRequest, router]);
+
+  const handleDeclineChatRequest = useCallback(async () => {
+    if (!incomingChatRequest) return;
+    const { requestId } = incomingChatRequest;
+    setIncomingChatRequest(null);
+    try {
+      await fetch(`/api/chat-request/${requestId}/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'DECLINED' }),
+      });
+    } catch {
+      // Non-fatal
+    }
+  }, [incomingChatRequest]);
 
   return (
     <div className="min-h-screen bg-charcoal flex flex-col">
@@ -259,6 +343,14 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
           call={incomingCall}
           onAccept={handleAcceptCall}
           onDecline={() => setIncomingCall(null)}
+        />
+      )}
+
+      {incomingChatRequest && !needsPasswordChange && !incomingCall && (
+        <IncomingChatRequestModal
+          request={incomingChatRequest}
+          onAccept={handleAcceptChatRequest}
+          onDecline={handleDeclineChatRequest}
         />
       )}
     </div>

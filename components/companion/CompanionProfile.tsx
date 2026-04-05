@@ -69,7 +69,9 @@ export function CompanionProfile({
   const chatRateLabel = chatRatePaise ? `₹${Math.round(chatRatePaise / 100)}/min` : null;
   const callRateLabel = callRatePaise ? `₹${Math.round(callRatePaise / 100)}/min` : null;
 
-  const chatDisabled = !chatRateLabel || !isOnline;
+  // Chat is always requestable (companion gets notified even when offline)
+  const chatDisabled = !chatRateLabel;
+  // Calls still require companion to be online
   const callDisabled = !callRateLabel || !isOnline;
 
   const bookingRate =
@@ -288,9 +290,12 @@ export function CompanionProfile({
               </a>
             </div>
 
-            {!isOnline && (
+            {callDisabled && !callRateLabel && (
+              <p className="text-xs text-center text-white/40">Call rate not configured</p>
+            )}
+            {callDisabled && callRateLabel && !isOnline && (
               <p className="text-xs text-center text-white/40">
-                {isBusy ? 'Companion is busy — chat & call unavailable' : 'Currently offline — chat & call unavailable'}
+                {isBusy ? 'Busy — calls unavailable' : 'Offline — send a chat request to connect'}
               </p>
             )}
 

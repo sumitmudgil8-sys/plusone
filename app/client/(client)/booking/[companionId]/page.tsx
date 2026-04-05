@@ -1,30 +1,47 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { BookingForm } from '@/components/booking/BookingForm';
 import { CompanionProfile } from '@/components/companion/CompanionProfile';
 import { ReviewSection } from '@/components/reviews/ReviewComponents';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { useSocket } from '@/hooks/useSocket';
+
+const CHAT_REQUEST_TIMEOUT_S = 180; // 3 minutes
+
+type ChatRequestStatus = 'idle' | 'sending' | 'waiting' | 'accepted' | 'declined' | 'expired';
 
 export default function BookingPage() {
   const params = useParams();
+  const router = useRouter();
   const companionId = params.companionId as string;
 
   const [companion, setCompanion] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showChatPrompt, setShowChatPrompt] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
   const startTimeRef = useRef(Date.now());
 
+  // Chat request state
+  const [userId, setUserId] = useState<string | undefined>();
+  const [chatRequestStatus, setChatRequestStatus] = useState<ChatRequestStatus>('idle');
+  const [chatRequestId, setChatRequestId] = useState<string | null>(null);
+  const [timeLeft, setTimeLeft] = useState(CHAT_REQUEST_TIMEOUT_S);
+
+  // Fetch current user ID for Ably socket
   useEffect(() => {
-    if (companionId) {
-      fetchCompanion();
-    }
+    fetch('/api/users/me')
+      .then((r) => r.json())
+      .then((d) => { if (d.user?.id) setUserId(d.user.id); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (companionId) fetchCompanion();
 
     return () => {
       const durationMs = Date.now() - startTimeRef.current;
@@ -38,6 +55,62 @@ export default function BookingPage() {
         );
       }
     };
+  }, [companionId]);
+
+  // Subscribe to chat request response events via Ably
+  const { onChatRequestResponse } = useSocket(userId, 'CLIENT');
+
+  useEffect(() => {
+    const unsubscribe = onChatRequestResponse((data) => {
+      if (data.requestId !== chatRequestId) return;
+      if (data.status === 'ACCEPTED') {
+        setChatRequestStatus('accepted');
+        // Small delay so the user sees the "Accepted" state before navigating
+        setTimeout(() => router.push(`/client/chat/${companionId}`), 800);
+      } else {
+        setChatRequestStatus('declined');
+      }
+    });
+    return unsubscribe;
+  }, [onChatRequestResponse, chatRequestId, companionId, router]);
+
+  // Countdown timer while waiting
+  useEffect(() => {
+    if (chatRequestStatus !== 'waiting') return;
+    setTimeLeft(CHAT_REQUEST_TIMEOUT_S);
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setChatRequestStatus('expired');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [chatRequestStatus]);
+
+  const handleChatRequest = useCallback(async () => {
+    setChatRequestStatus('sending');
+    try {
+      const res = await fetch('/api/chat-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companionId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setChatRequestStatus('idle');
+        return;
+      }
+      setChatRequestId(data.data.requestId);
+      setChatRequestStatus('waiting');
+    } catch {
+      setChatRequestStatus('idle');
+    }
   }, [companionId]);
 
   const fetchCompanion = async () => {
@@ -104,7 +177,7 @@ export default function BookingPage() {
         {activeTab === 'profile' && (
           <CompanionProfile
             companion={companion}
-            onChatClick={() => setShowChatPrompt(true)}
+            onChatClick={handleChatRequest}
             onBookClick={() => document.getElementById('booking-form')?.scrollIntoView({ behavior: 'smooth' })}
             showActions={companion.accessible}
           />
@@ -144,25 +217,81 @@ export default function BookingPage() {
         </Card>
       </div>
 
-      {showChatPrompt && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="max-w-md p-6">
-            <h3 className="text-lg font-medium text-white mb-4">Start a Conversation</h3>
-            <p className="text-white/60 mb-6">
-              You can chat with {companion.name} before booking.
-            </p>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setShowChatPrompt(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Link href={`/client/chat/${companion.id}`} className="flex-1">
-                <Button className="w-full">Start Chat</Button>
-              </Link>
-            </div>
+      {/* Chat request overlay */}
+      {chatRequestStatus !== 'idle' && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+          <Card className="max-w-sm w-full p-8 text-center space-y-5">
+            {chatRequestStatus === 'sending' && (
+              <>
+                <div className="animate-spin h-10 w-10 border-2 border-gold border-t-transparent rounded-full mx-auto" />
+                <p className="text-white font-medium">Sending request…</p>
+              </>
+            )}
+
+            {chatRequestStatus === 'waiting' && (
+              <>
+                <div className="w-16 h-16 rounded-full bg-gold/20 border-2 border-gold/40 flex items-center justify-center mx-auto">
+                  <svg className="w-8 h-8 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-white font-semibold text-lg">Waiting for {companion.name}…</p>
+                  <p className="text-white/50 text-sm mt-1">Request expires in {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}</p>
+                </div>
+                <div className="w-full bg-charcoal-border rounded-full h-1">
+                  <div
+                    className="bg-gold h-1 rounded-full transition-all duration-1000"
+                    style={{ width: `${(timeLeft / CHAT_REQUEST_TIMEOUT_S) * 100}%` }}
+                  />
+                </div>
+                <Button variant="outline" onClick={() => setChatRequestStatus('idle')} className="w-full">
+                  Cancel
+                </Button>
+              </>
+            )}
+
+            {chatRequestStatus === 'accepted' && (
+              <>
+                <div className="w-16 h-16 rounded-full bg-green-500/20 border-2 border-green-500/40 flex items-center justify-center mx-auto">
+                  <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="text-white font-semibold">Request accepted! Joining chat…</p>
+              </>
+            )}
+
+            {chatRequestStatus === 'declined' && (
+              <>
+                <div className="w-16 h-16 rounded-full bg-red-500/20 border-2 border-red-500/40 flex items-center justify-center mx-auto">
+                  <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-white font-semibold">{companion.name} declined the request</p>
+                  <p className="text-white/50 text-sm mt-1">Try again later</p>
+                </div>
+                <Button onClick={() => setChatRequestStatus('idle')} className="w-full">Close</Button>
+              </>
+            )}
+
+            {chatRequestStatus === 'expired' && (
+              <>
+                <div className="w-16 h-16 rounded-full bg-white/10 border-2 border-white/20 flex items-center justify-center mx-auto">
+                  <svg className="w-8 h-8 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-white font-semibold">Companion unavailable</p>
+                  <p className="text-white/50 text-sm mt-1">{companion.name} didn&apos;t respond in time</p>
+                </div>
+                <Button onClick={() => setChatRequestStatus('idle')} className="w-full">Try Again</Button>
+              </>
+            )}
           </Card>
         </div>
       )}
