@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { CompanionCard } from '@/components/companion/CompanionCard';
-import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { SearchFilters } from '@/components/search/SearchFilters';
 import { MAX_FREE_COMPANIONS } from '@/lib/constants';
@@ -22,9 +21,11 @@ interface Filters {
 export default function BrowsePage() {
   const router = useRouter();
   const [companions, setCompanions] = useState<any[]>([]);
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState('');
-  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const [filters, setFilters] = useState<Filters>({
     minPrice: 0,
@@ -53,6 +54,8 @@ export default function BrowsePage() {
       const res = await fetch(`/api/companions?${params.toString()}`);
       const data = await res.json();
       setCompanions(data.companions ?? []);
+      setIsSubscribed(data.isSubscribed ?? false);
+      setTotal(data.total ?? 0);
     } catch (error) {
       console.error('Error fetching companions:', error);
     } finally {
@@ -64,10 +67,6 @@ export default function BrowsePage() {
     fetchCompanions();
   }, [fetchCompanions]);
 
-  const handleLockedClick = () => {
-    setShowWalletModal(true);
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -76,15 +75,18 @@ export default function BrowsePage() {
     );
   }
 
-  const accessibleCount = companions.filter((c) => c.accessible).length;
-  const hasLocked = companions.some((c) => !c.accessible);
+  const hasLocked = !isSubscribed && total > MAX_FREE_COMPANIONS;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Browse Companions</h1>
-          <p className="text-white/60">Pay per minute · No subscription required</p>
+          <p className="text-white/60">
+            {isSubscribed
+              ? 'All companions — unlimited access'
+              : `Showing ${Math.min(total, MAX_FREE_COMPANIONS)} of ${total} companions`}
+          </p>
         </div>
         <SearchFilters filters={filters} onChange={setFilters} />
       </div>
@@ -132,31 +134,37 @@ export default function BrowsePage() {
         </div>
       </div>
 
-      {/* Free limit info banner */}
-      {hasLocked && (
+      {/* Subscription banner for free tier */}
+      {hasLocked && !bannerDismissed && (
         <div className="flex items-center justify-between p-3 rounded-xl bg-gold/10 border border-gold/25">
           <p className="text-sm text-white/70">
-            Showing first {MAX_FREE_COMPANIONS} companions free.
-            <span className="text-gold ml-1">Recharge your wallet to browse all.</span>
+            You&apos;re viewing{' '}
+            <span className="text-white font-medium">{MAX_FREE_COMPANIONS} of {total}</span>{' '}
+            companions.
+            <span className="text-gold ml-1">Subscribe for full access.</span>
           </p>
-          <button
-            onClick={() => router.push('/client/profile')}
-            className="text-xs text-gold font-semibold whitespace-nowrap ml-3 hover:underline"
-          >
-            Add Money →
-          </button>
+          <div className="flex items-center gap-2 ml-3 shrink-0">
+            <button
+              onClick={() => router.push('/client/subscription')}
+              className="text-xs text-gold font-semibold hover:underline whitespace-nowrap"
+            >
+              Subscribe →
+            </button>
+            <button
+              onClick={() => setBannerDismissed(true)}
+              className="text-xs text-white/30 hover:text-white/60"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
       {/* Results */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {(companions as any[]).map((companion) => (
-          <div
-            key={companion.id}
-            onClick={() => !companion.accessible && handleLockedClick()}
-          >
-            <CompanionCard {...companion} />
-          </div>
+          <CompanionCard key={companion.id} {...companion} />
         ))}
       </div>
 
@@ -170,57 +178,18 @@ export default function BrowsePage() {
         </div>
       )}
 
-      {/* Wallet recharge modal */}
-      <Modal
-        isOpen={showWalletModal}
-        onClose={() => setShowWalletModal(false)}
-        title="Recharge Wallet to Continue"
-      >
-        <div className="space-y-4">
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gold/20 flex items-center justify-center">
-              <svg className="w-8 h-8 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-medium text-white mb-2">Browse All Companions</h3>
-            <p className="text-white/60 text-sm">
-              You&apos;ve browsed the first {MAX_FREE_COMPANIONS} companions for free.
-              Recharge your wallet to unlock all profiles.
-            </p>
-          </div>
-
-          <ul className="space-y-2 text-sm text-white/70">
-            <li className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-gold shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              Pay only for time spent — per minute billing
-            </li>
-            <li className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-gold shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              No subscription — no recurring charges
-            </li>
-            <li className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-gold shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              Balance never expires
-            </li>
-          </ul>
-
-          <div className="flex gap-3 pt-2">
-            <Button variant="outline" onClick={() => setShowWalletModal(false)} className="flex-1">
-              Maybe Later
-            </Button>
-            <Button onClick={() => { setShowWalletModal(false); router.push('/client/profile'); }} className="flex-1">
-              Recharge Wallet
-            </Button>
-          </div>
+      {/* Bottom subscription CTA for free users */}
+      {hasLocked && (
+        <div className="rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/5 to-transparent p-6 text-center space-y-4">
+          <h3 className="text-lg font-semibold text-white">Unlock all companions</h3>
+          <p className="text-white/60 text-sm">
+            ₹2,999/month — unlimited access to all profiles, bios, photos, and rates
+          </p>
+          <Button onClick={() => router.push('/client/subscription')} className="mx-auto">
+            Subscribe Now
+          </Button>
         </div>
-      </Modal>
+      )}
     </div>
   );
 }

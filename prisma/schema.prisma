@@ -34,6 +34,13 @@ enum SetuStatus {
   EXPIRED
 }
 
+enum SubscriptionStatus {
+  FREE
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model User {
@@ -43,7 +50,10 @@ model User {
   role             String                @default("CLIENT")
   isActive         Boolean               @default(true)
   isBanned         Boolean               @default(false)
-  subscriptionTier String                @default("FREE")
+  subscriptionTier      String             @default("FREE")
+  subscriptionStatus    SubscriptionStatus @default(FREE)
+  subscriptionExpiresAt DateTime?
+  subscriptionPlan      String?            // e.g. "MONTHLY_2999"
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
 

@@ -60,13 +60,14 @@ export default function FavoritesPage() {
               id={fav.companion.id}
               name={fav.companion.companionProfile.name}
               bio={fav.companion.companionProfile.bio}
-              hourlyRate={fav.companion.companionProfile.hourlyRate}
+              hourlyRatePaise={fav.companion.companionProfile.hourlyRate}
+              chatRatePerMinute={fav.companion.companionProfile.chatRatePerMinute}
+              callRatePerMinute={fav.companion.companionProfile.callRatePerMinute}
               avatarUrl={fav.companion.companionProfile.avatarUrl}
               images={JSON.parse(fav.companion.companionProfile.images || '[]')}
-              distance={0} // Would need to calculate
+              distance={0}
               isFavorited={true}
-              accessible={true} // Assume favorites are accessible
-              formattedPrice={`₹${fav.companion.companionProfile.hourlyRate}`}
+              accessible={true}
             />
           ))}
         </div>

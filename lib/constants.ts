@@ -16,7 +16,8 @@ export const WALLET_MIN_RECHARGE = 10000;   // ₹100
 export const WALLET_MAX_RECHARGE = 5000000; // ₹50,000
 export const WALLET_RECHARGE_PRESETS = [10000, 20000, 50000, 100000, 200000]; // ₹100/200/500/1000/2000
 
-export const MAX_FREE_COMPANIONS = 15; // first N profiles free without wallet balance
+export const MAX_FREE_COMPANIONS = 6;          // free tier sees first 6 cards; rest are blurred
+export const SUBSCRIPTION_PRICE_PAISE = 299900; // ₹2,999/month
 export const DEPOSIT_PERCENTAGE = 20; // 20% deposit required
 
 export const COLORS = {

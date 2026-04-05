@@ -86,10 +86,45 @@ export async function POST(request: NextRequest) {
 
   // 7a. Payment succeeded
   if (incomingStatus === SETU_SUCCESS_STATUS) {
-    // Use Setu-reported amount if available, fall back to the amount we stored.
-    // Wallet now stores balance in paise (Int) — no conversion needed.
     const confirmedPaise = amountInPaise ?? setuPayment.amount;
 
+    // Determine payment type from metadata
+    const meta = setuPayment.metadata as Record<string, unknown> | null;
+    const paymentType = (meta?.type as string | undefined) ?? 'wallet_recharge';
+
+    // ── Subscription payment ──────────────────────────────────────────────────
+    if (paymentType === 'subscription') {
+      try {
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // +30 days
+        await prisma.$transaction(async (tx) => {
+          await tx.user.update({
+            where: { id: setuPayment.userId },
+            data: {
+              subscriptionStatus: 'ACTIVE',
+              subscriptionExpiresAt: expiresAt,
+              subscriptionPlan: (meta?.plan as string | undefined) ?? 'MONTHLY_2999',
+            },
+          });
+
+          await tx.setuPayment.update({
+            where: { id: setuPayment.id },
+            data: { status: 'COMPLETED', completedAt: new Date() },
+          });
+        });
+
+        console.info('[setu-webhook] Subscription activated for user:', setuPayment.userId);
+      } catch (err) {
+        console.error('[setu-webhook] Failed to activate subscription:', err);
+        return NextResponse.json(
+          { success: false, error: 'Internal error' },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    // ── Wallet recharge (default) ─────────────────────────────────────────────
     let newBalance = 0;
 
     try {
@@ -127,16 +162,13 @@ export async function POST(request: NextRequest) {
       });
     } catch (err) {
       console.error('[setu-webhook] Failed to credit wallet:', err);
-      // Return 500 so Setu retries — the idempotency guard above protects
-      // against double-credits on retry because the DB record stays PENDING
-      // until the transaction commits.
       return NextResponse.json(
         { success: false, error: 'Internal error' },
         { status: 500 }
       );
     }
 
-    // 8. Notify the client in real-time via Ably (best-effort, non-fatal)
+    // Notify the client in real-time via Ably (best-effort, non-fatal)
     try {
       const ably = getAblyClient();
       const channel = ably.channels.get(`wallet:${setuPayment.userId}`);

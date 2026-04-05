@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { calculateDistance, formatCurrency } from '@/lib/utils';
+import { calculateDistance } from '@/lib/utils';
 import { MAX_FREE_COMPANIONS } from '@/lib/constants';
 
 export const runtime = 'nodejs';
@@ -24,24 +24,30 @@ export async function GET(request: NextRequest) {
   const sortBy = searchParams.get('sortBy') || 'distance';
 
   try {
-    const [clientProfile, wallet] = await Promise.all([
+    const [clientProfile, clientUser] = await Promise.all([
       prisma.clientProfile.findUnique({ where: { userId: user.id } }),
-      prisma.wallet.findUnique({ where: { userId: user.id }, select: { balance: true } }),
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { subscriptionStatus: true, subscriptionExpiresAt: true },
+      }),
     ]);
 
     const clientLat = clientProfile?.lat ?? 28.6139;
     const clientLng = clientProfile?.lng ?? 77.2090;
-    const hasWalletBalance = (wallet?.balance ?? 0) > 0;
 
-    // Show all active, non-banned companions.
-    // isApproved is intentionally NOT required so newly created companions are visible.
+    // Subscription check — ACTIVE and not yet expired
+    const now = new Date();
+    const isSubscribed =
+      clientUser?.subscriptionStatus === 'ACTIVE' &&
+      (clientUser.subscriptionExpiresAt == null || clientUser.subscriptionExpiresAt > now);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const companionProfileFilter: any = {};
 
     if (minPrice || maxPrice) {
       companionProfileFilter.hourlyRate = {};
-      if (minPrice) companionProfileFilter.hourlyRate.gte = parseFloat(minPrice);
-      if (maxPrice) companionProfileFilter.hourlyRate.lte = parseFloat(maxPrice);
+      if (minPrice) companionProfileFilter.hourlyRate.gte = parseInt(minPrice);
+      if (maxPrice) companionProfileFilter.hourlyRate.lte = parseInt(maxPrice);
     }
     if (date) companionProfileFilter.availability = { contains: date };
     if (gender) companionProfileFilter.gender = gender;
@@ -93,10 +99,15 @@ export async function GET(request: NextRequest) {
           id: companion.id,
           name: profile.name,
           bio: profile.bio,
-          hourlyRate: profile.hourlyRate,
+          // Pricing — all in paise
+          hourlyRatePaise: profile.hourlyRate,
+          chatRatePerMinute: profile.chatRatePerMinute,
+          callRatePerMinute: profile.callRatePerMinute,
+          // Images
           avatarUrl: profile.avatarUrl,
           primaryImageUrl,
           images: JSON.parse(profile.images || '[]'),
+          // Meta
           isApproved: profile.isApproved,
           isVerified: profile.isVerified,
           averageRating: profile.averageRating,
@@ -114,22 +125,25 @@ export async function GET(request: NextRequest) {
       });
 
     if (sortBy === 'price') {
-      companionsWithDistance.sort((a, b) => a.hourlyRate - b.hourlyRate);
+      companionsWithDistance.sort((a, b) => a.hourlyRatePaise - b.hourlyRatePaise);
     } else if (sortBy === 'rating') {
       companionsWithDistance.sort((a, b) => b.averageRating - a.averageRating);
     } else {
       companionsWithDistance.sort((a, b) => a.distance - b.distance);
     }
 
-    // First MAX_FREE_COMPANIONS are always accessible.
-    // Beyond that, requires wallet balance > 0.
+    // Free tier: first MAX_FREE_COMPANIONS accessible; rest are visible but locked.
+    // Subscribed clients: all accessible.
     const result = companionsWithDistance.map((companion, index) => ({
       ...companion,
-      accessible: index < MAX_FREE_COMPANIONS || hasWalletBalance,
-      formattedPrice: formatCurrency(companion.hourlyRate),
+      accessible: isSubscribed || index < MAX_FREE_COMPANIONS,
     }));
 
-    return NextResponse.json({ companions: result });
+    return NextResponse.json({
+      companions: result,
+      isSubscribed,
+      total: result.length,
+    });
   } catch (error) {
     console.error('Error fetching companions:', error);
     return NextResponse.json({ error: 'Failed to fetch companions' }, { status: 500 });
