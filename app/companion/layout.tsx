@@ -264,6 +264,31 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
     return unsubscribe;
   }, [onIncomingChatRequest]);
 
+  // Poll for pending chat requests — catches requests that arrived while offline
+  // or when Ably/push missed delivery. Runs once on mount and every 15 s.
+  useEffect(() => {
+    if (!userId) return;
+
+    const fetchPending = async () => {
+      try {
+        const res = await fetch('/api/chat-request/pending');
+        const data = await res.json();
+        if (data.success && data.data) {
+          // Only surface if not already showing one
+          setIncomingChatRequest((prev) =>
+            prev ? prev : data.data
+          );
+        }
+      } catch {
+        // Non-fatal
+      }
+    };
+
+    fetchPending();
+    const interval = setInterval(fetchPending, 15_000);
+    return () => clearInterval(interval);
+  }, [userId]);
+
   const handlePasswordChangeSuccess = useCallback(() => {
     setNeedsPasswordChange(false);
   }, []);
