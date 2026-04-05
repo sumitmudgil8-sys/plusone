@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, hashPassword } from '@/lib/auth';
 import { sendCompanionCredentialsEmail } from '@/lib/email';
+import { getAblyClient } from '@/lib/ably';
 import crypto from 'crypto';
 
 export const runtime = 'nodejs';
@@ -95,6 +96,24 @@ export async function POST(request: NextRequest) {
 
     // Send credentials by email — tempPassword is NOT returned in the response
     sendCompanionCredentialsEmail(email, name, tempPassword);
+
+    // Publish real-time event so browse page shows the new companion immediately
+    try {
+      const ably = getAblyClient();
+      const feedChannel = ably.channels.get('companions-feed');
+      await feedChannel.publish('companion.added', {
+        id: companion.id,
+        name,
+        city: null,
+        primaryImage: null,
+        hourlyRate: hourlyRatePaise,
+        chatRatePerMinute: null,
+        callRatePerMinute: null,
+        availabilityStatus: 'OFFLINE',
+      });
+    } catch (ablyErr) {
+      console.warn('[admin/companions] Ably publish failed (non-fatal):', ablyErr);
+    }
 
     const { passwordHash: _, ...companionWithoutPassword } = companion;
 

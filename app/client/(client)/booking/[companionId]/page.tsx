@@ -1,7 +1,6 @@
-"use client";
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { BookingForm } from '@/components/booking/BookingForm';
@@ -21,11 +20,25 @@ export default function BookingPage() {
   const [error, setError] = useState('');
   const [showChatPrompt, setShowChatPrompt] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
+  const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
     if (companionId) {
       fetchCompanion();
     }
+
+    return () => {
+      const durationMs = Date.now() - startTimeRef.current;
+      if (durationMs > 2000) {
+        navigator.sendBeacon(
+          '/api/client/profile-view',
+          new Blob(
+            [JSON.stringify({ companionId, durationMs })],
+            { type: 'application/json' }
+          )
+        );
+      }
+    };
   }, [companionId]);
 
   const fetchCompanion = async () => {

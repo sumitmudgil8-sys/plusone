@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
       capability: {
         [getUserChannelName(user.id)]: ['subscribe'],
         'private:user-*': ['publish'],
+        'companions-feed': ['subscribe'],
       },
     });
 

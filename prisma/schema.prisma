@@ -95,6 +95,8 @@ model User {
   blockedByCompanion       BlockedUser[]     @relation("BlockedCompanion")
   blockedClients           BlockedUser[]     @relation("BlockedClient")
   setuPayments             SetuPayment[]
+  clientProfileViews       CompanionProfileView[] @relation("ClientViews")
+  companionProfileViews    CompanionProfileView[] @relation("CompanionViews")
 }
 
 model ClientProfile {
@@ -107,6 +109,9 @@ model ClientProfile {
   phone            String?
   lat              Float    @default(28.6139)
   lng              Float    @default(77.2090)
+  occupation       String?
+  city             String?
+  dateOfBirth      DateTime?
   shareItinerary   Boolean  @default(false)
   trustedContact   String?
   trustedContactPhone String?
@@ -356,6 +361,20 @@ model Payment {
   metadata      String?  @default("{}")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model CompanionProfileView {
+  id          String   @id @default(cuid())
+  clientId    String
+  companionId String   // User.id of the companion
+  viewedAt    DateTime @default(now())
+  durationMs  Int      @default(0)
+
+  client    User @relation("ClientViews",    fields: [clientId],    references: [id], onDelete: Cascade)
+  companion User @relation("CompanionViews", fields: [companionId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, companionId])
+  @@index([clientId, viewedAt])
 }
 
 model SetuPayment {

@@ -5,36 +5,41 @@ import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { BookingCard } from '@/components/booking/BookingCard';
+
+interface RecentlyViewedItem {
+  companionId: string;
+  name: string;
+  primaryImage: string | null;
+  hourlyRatePaise: number;
+  viewedAt: string;
+}
 
 export default function ClientDashboard() {
   const [user, setUser] = useState<any>(null);
-  const [bookings, setBookings] = useState<any[]>([]);
   const [favorites, setFavorites] = useState<any[]>([]);
+  const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Get current user
-        const userRes = await fetch('/api/users/me');
+        const [userRes, favRes, viewedRes] = await Promise.all([
+          fetch('/api/users/me'),
+          fetch('/api/favorites'),
+          fetch('/api/client/recently-viewed'),
+        ]);
+
         if (userRes.ok) {
           const userData = await userRes.json();
           setUser(userData.user);
         }
-
-        // Get bookings
-        const bookingsRes = await fetch('/api/bookings');
-        if (bookingsRes.ok) {
-          const bookingsData = await bookingsRes.json();
-          setBookings(bookingsData.bookings.slice(0, 3));
-        }
-
-        // Get favorites
-        const favRes = await fetch('/api/favorites');
         if (favRes.ok) {
           const favData = await favRes.json();
-          setFavorites(favData.favorites);
+          setFavorites(favData.favorites ?? []);
+        }
+        if (viewedRes.ok) {
+          const viewedData = await viewedRes.json();
+          setRecentlyViewed(viewedData.data ?? []);
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -46,9 +51,7 @@ export default function ClientDashboard() {
     fetchData();
   }, []);
 
-  const activeBookings = bookings.filter(
-    (b) => b.status === 'PENDING' || b.status === 'CONFIRMED'
-  );
+  const isSubscribed = user?.subscriptionStatus === 'ACTIVE';
 
   if (loading) {
     return (
@@ -69,32 +72,26 @@ export default function ClientDashboard() {
           <p className="text-white/60">Ready to find your perfect companion?</p>
         </div>
         <Badge
-          variant={user?.subscriptionTier === 'PREMIUM' ? 'gold' : 'outline'}
+          variant={isSubscribed ? 'gold' : 'outline'}
           className="text-sm"
         >
-          {user?.subscriptionTier || 'FREE'}
+          {isSubscribed ? 'Subscribed' : 'Free'}
         </Badge>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="text-center">
-          <p className="text-3xl font-bold text-white">{activeBookings.length}</p>
-          <p className="text-sm text-white/60">Active Bookings</p>
-        </Card>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Card className="text-center">
           <p className="text-3xl font-bold text-white">{favorites.length}</p>
           <p className="text-sm text-white/60">Favorites</p>
         </Card>
         <Card className="text-center">
-          <p className="text-3xl font-bold text-gold">
-            {user?.subscriptionTier === 'PREMIUM' ? '∞' : '20'}
-          </p>
-          <p className="text-sm text-white/60">Companions</p>
+          <p className="text-3xl font-bold text-white">{recentlyViewed.length}</p>
+          <p className="text-sm text-white/60">Profiles Viewed</p>
         </Card>
-        <Card className="text-center">
-          <p className="text-3xl font-bold text-white">{bookings.length}</p>
-          <p className="text-sm text-white/60">Total Bookings</p>
+        <Card className="text-center col-span-2 md:col-span-1">
+          <p className="text-3xl font-bold text-gold">{isSubscribed ? '∞' : String(6)}</p>
+          <p className="text-sm text-white/60">Companions Access</p>
         </Card>
       </div>
 
@@ -110,12 +107,12 @@ export default function ClientDashboard() {
               Browse
             </Button>
           </Link>
-          <Link href="/client/bookings">
+          <Link href="/client/inbox">
             <Button variant="outline" className="w-full">
               <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-              Bookings
+              Messages
             </Button>
           </Link>
           <Link href="/client/favorites">
@@ -137,30 +134,73 @@ export default function ClientDashboard() {
         </div>
       </Card>
 
-      {/* Recent Bookings */}
+      {/* Recently Viewed */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-medium text-white">Recent Bookings</h2>
-          <Link href="/client/bookings" className="text-sm text-gold hover:underline">
-            View All
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-medium text-white">Recently Viewed</h2>
+          <Link href="/client/browse" className="text-sm text-gold hover:underline">
+            Browse All
           </Link>
         </div>
 
-        {bookings.length === 0 ? (
+        {recentlyViewed.length === 0 ? (
           <Card className="text-center py-8">
-            <p className="text-white/60">No bookings yet</p>
-            <Link href="/client/browse" className="mt-4 inline-block">
-              <Button>Browse Companions</Button>
+            <p className="text-white/50 text-sm">No profiles viewed yet</p>
+            <Link href="/client/browse" className="mt-3 inline-block">
+              <Button size="sm">Browse Companions</Button>
             </Link>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(bookings as any[]).map((booking) => (
-              <BookingCard key={booking.id} booking={booking} role="CLIENT" />
+          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth -mx-4 px-4">
+            {recentlyViewed.map((item) => (
+              <Link
+                key={item.companionId}
+                href={`/client/booking/${item.companionId}`}
+                className="shrink-0 snap-start"
+                style={{ width: 160 }}
+              >
+                <div className="relative rounded-xl overflow-hidden bg-charcoal-border" style={{ aspectRatio: '3/4' }}>
+                  {item.primaryImage ? (
+                    <img
+                      src={item.primaryImage}
+                      alt={item.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-3xl font-medium text-white/30 bg-charcoal">
+                      {item.name.charAt(0)}
+                    </div>
+                  )}
+                  {/* Gradient */}
+                  <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />
+                  {/* Labels */}
+                  <div className="absolute bottom-0 inset-x-0 p-2">
+                    <p className="text-white text-xs font-semibold truncate">{item.name}</p>
+                    {item.hourlyRatePaise > 0 && (
+                      <p className="text-white/60 text-xs">
+                        ₹{Math.round(item.hourlyRatePaise / 100).toLocaleString('en-IN')}/hr
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </Link>
             ))}
           </div>
         )}
       </div>
+
+      {/* Subscription CTA (free users) */}
+      {!isSubscribed && (
+        <div className="rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/5 to-transparent p-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-white">Unlock all companions</p>
+            <p className="text-xs text-white/50 mt-0.5">₹2,999/month — unlimited access</p>
+          </div>
+          <Link href="/client/subscription">
+            <Button size="sm" className="shrink-0">Subscribe</Button>
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

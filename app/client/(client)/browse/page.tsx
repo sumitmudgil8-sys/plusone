@@ -1,57 +1,51 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CompanionCard } from '@/components/companion/CompanionCard';
 import { Button } from '@/components/ui/Button';
-import { SearchFilters } from '@/components/search/SearchFilters';
 import { MAX_FREE_COMPANIONS } from '@/lib/constants';
 
-interface Filters {
-  minPrice: number;
-  maxPrice: number;
-  gender: string;
-  minAge: number;
-  maxAge: number;
-  languages: string[];
-  interests: string[];
-  sortBy: string;
+interface CompanionRow {
+  id: string;
+  name: string;
+  hourlyRatePaise: number;
+  chatRatePerMinute: number | null;
+  callRatePerMinute: number | null;
+  primaryImageUrl: string | null;
+  avatarUrl?: string;
+  distance: number;
+  isFavorited: boolean;
+  accessible: boolean;
+  isVerified: boolean;
+  averageRating: number;
+  reviewCount: number;
+  gender?: string;
+  age?: number;
+  city?: string;
+  isNew?: boolean;
 }
 
 export default function BrowsePage() {
   const router = useRouter();
-  const [companions, setCompanions] = useState<any[]>([]);
+  const [companions, setCompanions] = useState<CompanionRow[]>([]);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState('');
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const ablyRef = useRef<import('ably').Realtime | null>(null);
 
-  const [filters, setFilters] = useState<Filters>({
-    minPrice: 0,
-    maxPrice: 10000,
-    gender: '',
-    minAge: 18,
-    maxAge: 60,
-    languages: [],
-    interests: [],
-    sortBy: 'distance',
-  });
+  useEffect(() => {
+    fetchCompanions();
+    setupAbly();
+    return () => {
+      ablyRef.current?.close();
+    };
+  }, []);
 
-  const fetchCompanions = useCallback(async () => {
+  const fetchCompanions = async () => {
     try {
-      const params = new URLSearchParams();
-      if (filters.minPrice > 0) params.append('minPrice', filters.minPrice.toString());
-      if (filters.maxPrice < 10000) params.append('maxPrice', filters.maxPrice.toString());
-      if (selectedDate) params.append('date', selectedDate);
-      if (filters.gender) params.append('gender', filters.gender);
-      if (filters.minAge) params.append('minAge', filters.minAge.toString());
-      if (filters.maxAge) params.append('maxAge', filters.maxAge.toString());
-      if (filters.languages.length > 0) params.append('languages', filters.languages.join(','));
-      if (filters.interests.length > 0) params.append('interests', filters.interests.join(','));
-      if (filters.sortBy) params.append('sortBy', filters.sortBy);
-
-      const res = await fetch(`/api/companions?${params.toString()}`);
+      const res = await fetch('/api/companions');
       const data = await res.json();
       setCompanions(data.companions ?? []);
       setIsSubscribed(data.isSubscribed ?? false);
@@ -61,11 +55,54 @@ export default function BrowsePage() {
     } finally {
       setLoading(false);
     }
-  }, [filters, selectedDate]);
+  };
 
-  useEffect(() => {
-    fetchCompanions();
-  }, [fetchCompanions]);
+  const setupAbly = async () => {
+    try {
+      const Ably = (await import('ably')).default;
+      const ably = new Ably.Realtime({ authUrl: '/api/ably/token', authMethod: 'GET' });
+      ablyRef.current = ably;
+
+      const channel = ably.channels.get('companions-feed');
+      channel.subscribe('companion.added', (msg) => {
+        const d = msg.data as {
+          id: string;
+          name: string;
+          city: string | null;
+          primaryImage: string | null;
+          hourlyRate: number;
+          chatRatePerMinute: number | null;
+          callRatePerMinute: number | null;
+          availabilityStatus: string;
+        };
+
+        setCompanions((prev) => {
+          if (prev.some((c) => c.id === d.id)) return prev;
+          const newEntry: CompanionRow = {
+            id: d.id,
+            name: d.name,
+            hourlyRatePaise: d.hourlyRate,
+            chatRatePerMinute: d.chatRatePerMinute,
+            callRatePerMinute: d.callRatePerMinute,
+            primaryImageUrl: d.primaryImage,
+            avatarUrl: undefined,
+            distance: 0,
+            isFavorited: false,
+            accessible: false,
+            isVerified: false,
+            averageRating: 0,
+            reviewCount: 0,
+            city: d.city ?? undefined,
+            isNew: true,
+          };
+          return [newEntry, ...prev];
+        });
+        setTotal((t) => t + 1);
+      });
+    } catch {
+      // Ably setup failure is non-fatal
+    }
+  };
 
   if (loading) {
     return (
@@ -79,69 +116,23 @@ export default function BrowsePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Browse Companions</h1>
-          <p className="text-white/60">
-            {isSubscribed
-              ? 'All companions — unlimited access'
-              : `Showing ${Math.min(total, MAX_FREE_COMPANIONS)} of ${total} companions`}
-          </p>
-        </div>
-        <SearchFilters filters={filters} onChange={setFilters} />
+      <div>
+        <h1 className="text-2xl font-bold text-white">Browse Companions</h1>
+        <p className="text-white/60 text-sm mt-0.5">
+          {isSubscribed
+            ? 'All companions — unlimited access'
+            : `Showing ${Math.min(companions.length, MAX_FREE_COMPANIONS)} of ${total} companions`}
+        </p>
       </div>
 
-      {/* Filters */}
-      <div className="bg-charcoal-surface border border-charcoal-border rounded-2xl p-4 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-white/80 mb-2">
-              Rate: up to ₹{filters.maxPrice}/hr
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="10000"
-              step="500"
-              value={filters.maxPrice}
-              onChange={(e) => setFilters((prev) => ({ ...prev, maxPrice: parseInt(e.target.value) }))}
-              className="w-full h-2 bg-charcoal-border rounded-lg appearance-none cursor-pointer accent-gold"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-white/80 mb-2">Available Date</label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-2"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-white/80 mb-2">Sort By</label>
-            <select
-              value={filters.sortBy}
-              onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))}
-              className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-2"
-            >
-              <option value="distance">Distance</option>
-              <option value="price">Rate (Low to High)</option>
-              <option value="rating">Rating (High to Low)</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Subscription banner for free tier */}
+      {/* Subscription banner */}
       {hasLocked && !bannerDismissed && (
         <div className="flex items-center justify-between p-3 rounded-xl bg-gold/10 border border-gold/25">
           <p className="text-sm text-white/70">
             You&apos;re viewing{' '}
             <span className="text-white font-medium">{MAX_FREE_COMPANIONS} of {total}</span>{' '}
-            companions.
-            <span className="text-gold ml-1">Subscribe for full access.</span>
+            companions.{' '}
+            <span className="text-gold">Subscribe for full access.</span>
           </p>
           <div className="flex items-center gap-2 ml-3 shrink-0">
             <button
@@ -161,35 +152,47 @@ export default function BrowsePage() {
         </div>
       )}
 
-      {/* Results */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {(companions as any[]).map((companion) => (
-          <CompanionCard key={companion.id} {...companion} />
+      {/* Companion grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {companions.map((companion) => (
+          <div
+            key={companion.id}
+            className={companion.isNew ? 'animate-fade-in' : undefined}
+            style={companion.isNew ? { animation: 'fadeIn 0.4s ease-out' } : undefined}
+          >
+            <CompanionCard {...companion} />
+          </div>
         ))}
       </div>
 
       {companions.length === 0 && (
-        <div className="text-center py-12">
-          <svg className="w-16 h-16 mx-auto mb-4 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        <div className="text-center py-16">
+          <svg className="w-14 h-14 mx-auto mb-4 text-white/15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <p className="text-white/60 text-lg">No companions found</p>
-          <p className="text-white/40 text-sm mt-2">Try adjusting your filters</p>
+          <p className="text-white/50">No companions available yet</p>
         </div>
       )}
 
-      {/* Bottom subscription CTA for free users */}
+      {/* Bottom CTA */}
       {hasLocked && (
-        <div className="rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/5 to-transparent p-6 text-center space-y-4">
+        <div className="rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/5 to-transparent p-6 text-center space-y-3">
           <h3 className="text-lg font-semibold text-white">Unlock all companions</h3>
-          <p className="text-white/60 text-sm">
-            ₹2,999/month — unlimited access to all profiles, bios, photos, and rates
+          <p className="text-white/55 text-sm">
+            ₹2,999/month — unlimited access to all profiles, bios, photos &amp; rates
           </p>
           <Button onClick={() => router.push('/client/subscription')} className="mx-auto">
             Subscribe Now
           </Button>
         </div>
       )}
+
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
