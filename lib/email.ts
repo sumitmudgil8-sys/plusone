@@ -85,4 +85,106 @@ export const emailTemplates = {
   }),
 };
 
+// ─── Client onboarding emails ─────────────────────────────────────────────────
+
+export async function sendClientApprovedEmail(
+  email: string,
+  name: string
+): Promise<void> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://plusone.app';
+  try {
+    await sendEmail(
+      email,
+      'Your application has been approved — Plus One',
+      `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1C1C1C; color: #FFFFFF; padding: 40px; border-radius: 12px;">
+        <h1 style="color: #D4AF37; font-size: 28px; margin-bottom: 8px;">Welcome to Plus One</h1>
+        <p style="color: #A0A0A0; margin-bottom: 24px;">Your application has been approved</p>
+        <p>Hi ${name},</p>
+        <p>Great news — your application has been reviewed and approved. You can now access the platform and start browsing companions.</p>
+        <div style="margin: 32px 0;">
+          <a href="${appUrl}/client/dashboard"
+             style="background: #D4AF37; color: #1C1C1C; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+            Access Your Dashboard
+          </a>
+        </div>
+        <p style="color: #A0A0A0; font-size: 14px;">If you have any questions, reply to this email and we'll be happy to help.</p>
+        <p style="color: #A0A0A0; font-size: 14px;">— The Plus One Team</p>
+      </div>
+      `
+    );
+  } catch (err) {
+    console.error('sendClientApprovedEmail failed:', err);
+  }
+}
+
+export async function sendClientRejectedEmail(
+  email: string,
+  name: string,
+  reason: string
+): Promise<void> {
+  try {
+    await sendEmail(
+      email,
+      'Update on your Plus One application',
+      `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1C1C1C; color: #FFFFFF; padding: 40px; border-radius: 12px;">
+        <h1 style="color: #D4AF37; font-size: 28px; margin-bottom: 8px;">Application Update</h1>
+        <p style="color: #A0A0A0; margin-bottom: 24px;">Plus One</p>
+        <p>Hi ${name},</p>
+        <p>Thank you for your interest in Plus One. After carefully reviewing your application, we're unable to approve it at this time.</p>
+        <div style="background: #2A2A2A; border-left: 3px solid #D4AF37; padding: 16px; border-radius: 4px; margin: 24px 0;">
+          <p style="margin: 0; color: #A0A0A0; font-size: 14px;">Reason provided:</p>
+          <p style="margin: 8px 0 0; color: #FFFFFF;">${reason}</p>
+        </div>
+        <p>If you believe this is an error or would like to provide additional information, please contact our support team.</p>
+        <p style="color: #A0A0A0; font-size: 14px;">— The Plus One Team</p>
+      </div>
+      `
+    );
+  } catch (err) {
+    console.error('sendClientRejectedEmail failed:', err);
+  }
+}
+
+export async function sendCompanionCredentialsEmail(
+  email: string,
+  name: string,
+  tempPassword: string
+): Promise<void> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://plusone.app';
+  try {
+    await sendEmail(
+      email,
+      'Your Plus One companion account is ready',
+      `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1C1C1C; color: #FFFFFF; padding: 40px; border-radius: 12px;">
+        <h1 style="color: #D4AF37; font-size: 28px; margin-bottom: 8px;">Welcome, ${name}</h1>
+        <p style="color: #A0A0A0; margin-bottom: 24px;">Your companion account has been created</p>
+        <p>Your account is ready. Use the credentials below to log in and complete your profile setup.</p>
+        <div style="background: #2A2A2A; border-radius: 8px; padding: 24px; margin: 24px 0;">
+          <p style="margin: 0 0 8px; color: #A0A0A0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Login URL</p>
+          <p style="margin: 0 0 16px; color: #D4AF37;">${appUrl}/login</p>
+          <p style="margin: 0 0 8px; color: #A0A0A0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Email</p>
+          <p style="margin: 0 0 16px; font-family: monospace; font-size: 16px;">${email}</p>
+          <p style="margin: 0 0 8px; color: #A0A0A0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Temporary Password</p>
+          <p style="margin: 0; font-family: monospace; font-size: 20px; color: #D4AF37; letter-spacing: 2px;">${tempPassword}</p>
+        </div>
+        <p style="color: #EF4444; font-size: 14px;">You will be required to change your password on first login.</p>
+        <div style="margin: 32px 0;">
+          <a href="${appUrl}/login"
+             style="background: #D4AF37; color: #1C1C1C; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+            Log In Now
+          </a>
+        </div>
+        <p style="color: #A0A0A0; font-size: 14px;">Keep this email safe. If you did not expect this account, contact support immediately.</p>
+        <p style="color: #A0A0A0; font-size: 14px;">— The Plus One Team</p>
+      </div>
+      `
+    );
+  } catch (err) {
+    console.error('sendCompanionCredentialsEmail failed:', err);
+  }
+}
+
 export default transporter;

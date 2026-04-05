@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { getAblyClient, getUserChannelName } from '@/lib/ably';
-import { MESSAGE_LIMIT } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +12,7 @@ const sendMessageSchema = z.object({
 });
 
 // POST /api/messages - Send a message
+// Chat is per-minute billed — no free message limit applies.
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['CLIENT', 'COMPANION']);
   if (auth.user === null) return auth.response;
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     if (!thread) {
       thread = await prisma.messageThread.create({
-        data: { clientId, companionId: actualCompanionId, messageCount: 0, isLocked: false },
+        data: { clientId, companionId: actualCompanionId, messageCount: 0 },
       });
     }
 
@@ -65,28 +65,6 @@ export async function POST(request: NextRequest) {
       if (block) {
         return NextResponse.json(
           { success: false, error: 'Unable to send messages to this companion' },
-          { status: 403 }
-        );
-      }
-    }
-
-    // Check message limit for CLIENT senders
-    if (user.role === 'CLIENT') {
-      const clientUser = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: { subscriptionTier: true },
-      });
-
-      const isPremium = clientUser?.subscriptionTier === 'PREMIUM';
-
-      if (!isPremium && thread.messageCount >= MESSAGE_LIMIT) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'MESSAGE_LIMIT_REACHED',
-            locked: true,
-            message: `You've reached the limit of ${MESSAGE_LIMIT} messages. Upgrade to Premium to continue chatting.`,
-          },
           { status: 403 }
         );
       }
@@ -113,13 +91,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update thread count / lock status
+    // Update thread message count
     const isClientSender = user.role === 'CLIENT';
     await prisma.messageThread.update({
       where: { id: thread.id },
       data: {
         messageCount: { increment: isClientSender ? 1 : 0 },
-        isLocked: isClientSender && thread.messageCount + 1 >= MESSAGE_LIMIT,
       },
     });
 

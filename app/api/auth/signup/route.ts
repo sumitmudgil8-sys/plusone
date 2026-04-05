@@ -1,82 +1,88 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { hashPassword, signJWT, setAuthCookie } from '@/lib/auth';
+import { hashPassword } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
+const signupSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Enter a valid email address'),
+  phone: z
+    .string()
+    .regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  linkedInUrl: z
+    .string()
+    .url('Enter a valid URL')
+    .refine((url) => url.includes('linkedin.com'), {
+      message: 'Must be a LinkedIn profile URL (linkedin.com)',
+    }),
+});
+
+// POST /api/auth/signup
+// Creates a client account with PENDING_REVIEW status.
+// Does NOT issue a JWT — the client must log in manually after signup.
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, name } = body;
+    const parsed = signupSchema.safeParse(body);
 
-    // Validate input
-    if (!email || !password || !name) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Email, password, and name are required' },
+        { success: false, error: parsed.error.issues[0].message },
         { status: 400 }
       );
     }
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
+    const { name, email, phone, password, linkedInUrl } = parsed.data;
 
-    if (existingUser) {
+    // Check for existing account
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
       return NextResponse.json(
-        { error: 'User already exists with this email' },
+        { success: false, error: 'An account with this email already exists' },
         { status: 409 }
       );
     }
 
-    // Hash password
     const passwordHash = await hashPassword(password);
 
-    // Create user with CLIENT role and client profile
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        role: 'CLIENT',
-        clientProfile: {
-          create: {
-            name,
-            bio: '',
-            lat: 28.6139,
-            lng: 77.2090,
+    // Create User (PENDING_REVIEW) + ClientProfile + empty Wallet atomically
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email,
+          passwordHash,
+          role: 'CLIENT',
+          clientStatus: 'PENDING_REVIEW',
+          phone,
+          linkedInUrl,
+          clientProfile: {
+            create: {
+              name,
+              bio: '',
+              lat: 28.6139,
+              lng: 77.209,
+            },
           },
         },
-      },
-      include: {
-        clientProfile: true,
-      },
+      });
+
+      // Pre-create wallet so it's ready when the client is approved
+      await tx.wallet.create({
+        data: { userId: user.id, balance: 0 },
+      });
     });
 
-    // Generate JWT
-    const token = signJWT({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    // Create response
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        subscriptionTier: user.subscriptionTier,
-        name: user.clientProfile?.name,
-      },
+      message: 'Application submitted. We will review and email you within 24–48 hours.',
     });
-
-    // Set cookie
-    return setAuthCookie(response, token);
   } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(
-      { error: 'Something went wrong' },
+      { success: false, error: 'Something went wrong. Please try again.' },
       { status: 500 }
     );
   }

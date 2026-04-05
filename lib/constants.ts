@@ -1,4 +1,5 @@
-export const MESSAGE_LIMIT = 8;
+// MESSAGE_LIMIT removed — chat is now per-minute billed (paid-only, no free message cap)
+
 export const UPLOAD_MAX_IMAGE_BYTES = 5 * 1024 * 1024;    // 5 MB
 export const UPLOAD_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024; // 10 MB
 export const UPLOAD_ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -10,9 +11,11 @@ export const BILLING_GRACE_SECONDS = 120;      // session auto-expires if no tic
 export const BILLING_MIN_BALANCE_MINUTES = 1;  // must have ≥1 min balance to start
 export const PLATFORM_COMMISSION_RATE = 0.20;  // 20% platform cut; companion gets 80%
 
-export const WALLET_MIN_RECHARGE = 100;   // INR
-export const WALLET_MAX_RECHARGE = 50000; // INR
-export const WALLET_RECHARGE_PRESETS = [100, 200, 500, 1000, 2000]; // INR
+// Wallet recharge limits — all in paise
+export const WALLET_MIN_RECHARGE = 10000;   // ₹100
+export const WALLET_MAX_RECHARGE = 5000000; // ₹50,000
+export const WALLET_RECHARGE_PRESETS = [10000, 20000, 50000, 100000, 200000]; // ₹100/200/500/1000/2000
+
 export const MAX_FREE_COMPANIONS = 15; // first N profiles free without wallet balance
 export const DEPOSIT_PERCENTAGE = 20; // 20% deposit required
 

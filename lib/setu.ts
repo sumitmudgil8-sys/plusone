@@ -167,3 +167,169 @@ export function verifyWebhookSignature(
     return false;
   }
 }
+
+// ─── OKYC (Aadhaar OTP-based KYC) ────────────────────────────────────────────
+// Setu OKYC uses separate credentials from the Collect API.
+
+interface OkycConfig {
+  clientId: string;
+  clientSecret: string;
+  productInstanceId: string;
+  baseUrl: string;
+}
+
+function getOkycConfig(): OkycConfig {
+  const clientId = process.env.SETU_OKYC_CLIENT_ID;
+  const clientSecret = process.env.SETU_OKYC_CLIENT_SECRET;
+  const productInstanceId = process.env.SETU_OKYC_PRODUCT_INSTANCE_ID;
+  const mode = process.env.SETU_MODE ?? 'sandbox';
+
+  if (!clientId) throw new Error('SETU_OKYC_CLIENT_ID is not set');
+  if (!clientSecret) throw new Error('SETU_OKYC_CLIENT_SECRET is not set');
+  if (!productInstanceId) throw new Error('SETU_OKYC_PRODUCT_INSTANCE_ID is not set');
+
+  const baseUrl =
+    mode === 'production' ? 'https://prod.setu.co' : 'https://uat.setu.co';
+
+  return { clientId, clientSecret, productInstanceId, baseUrl };
+}
+
+// Separate token cache for OKYC (different credentials from Collect)
+interface OkycTokenCache {
+  token: string;
+  expiresAt: number;
+}
+
+let okycTokenCache: OkycTokenCache | null = null;
+
+async function getOkycToken(): Promise<string> {
+  const { clientId, clientSecret, baseUrl } = getOkycConfig();
+
+  const TWO_MINUTES_MS = 2 * 60 * 1000;
+  if (okycTokenCache && Date.now() < okycTokenCache.expiresAt - TWO_MINUTES_MS) {
+    return okycTokenCache.token;
+  }
+
+  const res = await fetch(`${baseUrl}/auth/detail`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientID: clientId, secret: clientSecret }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Setu OKYC auth failed (${res.status}): ${text}`);
+  }
+
+  const data = (await res.json()) as { token: { jwt: string } };
+  const token = data.token.jwt;
+
+  okycTokenCache = {
+    token,
+    expiresAt: Date.now() + 30 * 60 * 1000,
+  };
+
+  return token;
+}
+
+export interface OkycInitResult {
+  okycUrl: string;
+  refId: string;
+}
+
+/**
+ * Initiates a Setu OKYC session.
+ * Returns an okycUrl to redirect the user to complete Aadhaar OTP verification,
+ * and a refId to track the session.
+ *
+ * @param userId       Internal user ID — stored in metadata for reconciliation
+ * @param redirectUrl  Where Setu redirects after the user completes OKYC
+ */
+export async function initiateOkyc(
+  userId: string,
+  redirectUrl: string
+): Promise<OkycInitResult> {
+  const { baseUrl, productInstanceId } = getOkycConfig();
+  const token = await getOkycToken();
+
+  const res = await fetch(`${baseUrl}/api/kyc/v1/okyc/initiate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      'X-Setu-Product-Instance-ID': productInstanceId,
+    },
+    body: JSON.stringify({
+      redirectURL: redirectUrl,
+      additionalData: { userId },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Setu OKYC initiate failed (${res.status}): ${text}`);
+  }
+
+  // Setu OKYC response shape:
+  // { id, url, status }
+  const data = (await res.json()) as {
+    id: string;
+    url: string;
+    status: string;
+  };
+
+  return {
+    refId: data.id,
+    okycUrl: data.url,
+  };
+}
+
+export interface OkycStatusResult {
+  status: 'SUCCESS' | 'PENDING' | 'FAILED';
+  maskedAadhaar?: string;
+}
+
+/**
+ * Checks the status of a Setu OKYC verification session.
+ *
+ * @param refId  The ID returned by initiateOkyc
+ */
+export async function verifyOkycStatus(refId: string): Promise<OkycStatusResult> {
+  const { baseUrl, productInstanceId } = getOkycConfig();
+  const token = await getOkycToken();
+
+  const res = await fetch(`${baseUrl}/api/kyc/v1/okyc/${refId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Setu-Product-Instance-ID': productInstanceId,
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Setu OKYC status check failed (${res.status}): ${text}`);
+  }
+
+  // Setu OKYC status response shape:
+  // { id, status, aadhaarData: { maskedNumber } }
+  const data = (await res.json()) as {
+    id: string;
+    status: string;
+    aadhaarData?: { maskedNumber?: string };
+  };
+
+  const statusMap: Record<string, OkycStatusResult['status']> = {
+    SUCCESS: 'SUCCESS',
+    COMPLETE: 'SUCCESS',
+    PENDING: 'PENDING',
+    INITIATED: 'PENDING',
+    FAILED: 'FAILED',
+    ERROR: 'FAILED',
+  };
+
+  return {
+    status: statusMap[data.status] ?? 'PENDING',
+    maskedAadhaar: data.aadhaarData?.maskedNumber,
+  };
+}

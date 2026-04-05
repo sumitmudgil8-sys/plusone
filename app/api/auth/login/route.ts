@@ -10,7 +10,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email, password } = body;
 
-    // Validate input
     if (!email || !password) {
       return NextResponse.json(
         { error: 'Email and password are required' },
@@ -18,7 +17,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
@@ -28,48 +26,36 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    // Check if user is banned
     if (user.isBanned) {
       return NextResponse.json(
-        { error: 'Your account has been banned' },
+        { error: 'Your account has been suspended' },
         { status: 403 }
       );
     }
 
-    // Verify password
-    const isValidPassword = await comparePassword(
-      password,
-      user.passwordHash
-    );
-
+    const isValidPassword = await comparePassword(password, user.passwordHash);
     if (!isValidPassword) {
-      return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    // Generate JWT
-    const token = signJWT({
+    // Build JWT payload — include clientStatus for CLIENT users so middleware
+    // can gate access without a DB lookup on every request.
+    const jwtPayload: Parameters<typeof signJWT>[0] = {
       id: user.id,
       email: user.email,
       role: user.role,
       isTemporaryPassword: user.isTemporaryPassword,
-    });
+      ...(user.role === 'CLIENT' && { clientStatus: user.clientStatus }),
+    };
 
-    // Get name safely
+    const token = signJWT(jwtPayload);
+
     const name =
-      user.clientProfile?.name ||
-      user.companionProfile?.name ||
-      'User';
+      user.clientProfile?.name ?? user.companionProfile?.name ?? 'User';
 
-    // Create response
     const response = NextResponse.json({
       success: true,
       user: {
@@ -79,12 +65,11 @@ export async function POST(request: NextRequest) {
         subscriptionTier: user.subscriptionTier,
         name,
         isTemporaryPassword: user.isTemporaryPassword,
+        ...(user.role === 'CLIENT' && { clientStatus: user.clientStatus }),
       },
     });
 
-    // ✅ SET COOKIE (THIS WAS MISSING)
     const cookieStore = cookies();
-
     cookieStore.set('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

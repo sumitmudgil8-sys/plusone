@@ -43,7 +43,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showRechargeModal, setShowRechargeModal] = useState(false);
-  const [rechargeAmount, setRechargeAmount] = useState(500);
+  const [rechargeAmount, setRechargeAmount] = useState(50000); // paise (₹500 default preset)
   const [customAmount, setCustomAmount] = useState('');
   const [recharging, setRecharging] = useState(false);
   const [rechargeError, setRechargeError] = useState('');
@@ -105,11 +105,17 @@ export default function ProfilePage() {
   };
 
   const handleRecharge = async () => {
-    const amount = customAmount ? parseInt(customAmount, 10) : rechargeAmount;
-    if (!amount || amount < WALLET_MIN_RECHARGE || amount > WALLET_MAX_RECHARGE) {
+    // customAmount is entered by the user in ₹; convert to paise for the API.
+    // rechargeAmount (from presets) is already in paise.
+    const amountPaise = customAmount
+      ? Math.round(parseFloat(customAmount) * 100)
+      : rechargeAmount;
+
+    if (!amountPaise || amountPaise < WALLET_MIN_RECHARGE || amountPaise > WALLET_MAX_RECHARGE) {
       setRechargeError(`Amount must be between ${formatCurrency(WALLET_MIN_RECHARGE)} and ${formatCurrency(WALLET_MAX_RECHARGE)}`);
       return;
     }
+    const amount = amountPaise;
 
     setRecharging(true);
     setRechargeError('');

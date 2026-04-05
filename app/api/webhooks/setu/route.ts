@@ -87,9 +87,8 @@ export async function POST(request: NextRequest) {
   // 7a. Payment succeeded
   if (incomingStatus === SETU_SUCCESS_STATUS) {
     // Use Setu-reported amount if available, fall back to the amount we stored.
-    // Wallet stores balance in rupees (Float), so convert from paise.
+    // Wallet now stores balance in paise (Int) — no conversion needed.
     const confirmedPaise = amountInPaise ?? setuPayment.amount;
-    const amountInRupees = confirmedPaise / 100;
 
     let newBalance = 0;
 
@@ -101,8 +100,8 @@ export async function POST(request: NextRequest) {
       await prisma.$transaction(async (tx) => {
         await tx.wallet.upsert({
           where: { userId: setuPayment.userId },
-          create: { userId: setuPayment.userId, balance: amountInRupees },
-          update: { balance: { increment: amountInRupees } },
+          create: { userId: setuPayment.userId, balance: confirmedPaise },
+          update: { balance: { increment: confirmedPaise } },
         });
 
         const wallet = await tx.wallet.findUniqueOrThrow({
@@ -114,7 +113,7 @@ export async function POST(request: NextRequest) {
           data: {
             walletId: wallet.id,
             type: 'RECHARGE',
-            amount: amountInRupees,
+            amount: confirmedPaise,
             balanceAfter: wallet.balance,
             description: 'Wallet recharge via UPI',
             metadata: JSON.stringify({ setuPaymentId }),
@@ -143,7 +142,7 @@ export async function POST(request: NextRequest) {
       const channel = ably.channels.get(`wallet:${setuPayment.userId}`);
       await channel.publish('recharge_success', {
         newBalance,
-        amount: amountInRupees,
+        amount: confirmedPaise,
         setuPaymentId,
       });
     } catch (ablyErr) {

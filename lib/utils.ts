@@ -33,12 +33,19 @@ function toRadians(degrees: number): number {
   return (degrees * Math.PI) / 180;
 }
 
-export function formatCurrency(amount: number): string {
+/**
+ * Formats a monetary amount for display.
+ * All monetary values in the system are stored as paise (Int).
+ * This function converts paise → rupees before formatting.
+ *
+ * @param paise  Amount in paise (e.g. 50000 → displays ₹500)
+ */
+export function formatCurrency(paise: number): string {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(paise / 100);
 }
 
 export function formatDate(date: Date | string): string {

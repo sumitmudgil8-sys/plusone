@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, hashPassword } from '@/lib/auth';
+import { sendCompanionCredentialsEmail } from '@/lib/email';
 import crypto from 'crypto';
 
 export const runtime = 'nodejs';
@@ -65,18 +66,24 @@ export async function POST(request: NextRequest) {
     const tempPassword = crypto.randomBytes(6).toString('hex');
     const passwordHash = await hashPassword(tempPassword);
 
+    // hourlyRate param is kept in the API for backwards compat but now in paise.
+    // Default 200000 paise = ₹2000/hr.
+    const hourlyRatePaise =
+      typeof hourlyRate === 'number' && hourlyRate > 0 ? hourlyRate : 200000;
+
     const companion = await prisma.user.create({
       data: {
         email,
         passwordHash,
         role: 'COMPANION',
+        isTemporaryPassword: true,
         companionProfile: {
           create: {
             name,
-            hourlyRate,
+            hourlyRate: hourlyRatePaise,
             bio: '',
             lat: 28.6139,
-            lng: 77.2090,
+            lng: 77.209,
             isApproved: false,
             availability: '[]',
             images: '[]',
@@ -86,13 +93,15 @@ export async function POST(request: NextRequest) {
       include: { companionProfile: true },
     });
 
+    // Send credentials by email — tempPassword is NOT returned in the response
+    sendCompanionCredentialsEmail(email, name, tempPassword);
+
     const { passwordHash: _, ...companionWithoutPassword } = companion;
 
     return NextResponse.json({
       success: true,
       companion: companionWithoutPassword,
-      tempPassword,
-      message: `Companion account created. Temporary password: ${tempPassword}`,
+      // tempPassword intentionally omitted — delivered by email only
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating companion:', error);

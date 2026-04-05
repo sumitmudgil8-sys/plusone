@@ -2,41 +2,54 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyJWT } from './lib/auth';
 
-// Public routes that don't require authentication
-const publicRoutes = ['/', '/login', '/signup', '/offline', '/_next', '/api/auth', '/terms', '/privacy', '/refund-policy'];
+// Public routes — no auth required
+const publicRoutes = [
+  '/',
+  '/login',
+  '/signup',
+  '/offline',
+  '/_next',
+  '/api/auth',   // includes /api/auth/okyc/* (requireAuth handles internal auth)
+  '/terms',
+  '/privacy',
+  '/refund-policy',
+  '/apply',      // /apply/submitted is public
+];
+
+// CLIENT routes that are accessible regardless of clientStatus.
+// All others require clientStatus === 'APPROVED'.
+const clientStatusExempt = [
+  '/client/pending',
+  '/client/rejected',
+  '/client/verify',      // /client/verify and /client/verify/callback
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Check if route is public
+  // Allow public routes
   if (publicRoutes.some((route) => pathname.startsWith(route))) {
     return NextResponse.next();
   }
 
-  // Check if it's a static file
-  if (
-    pathname.includes('.') &&
-    !pathname.startsWith('/api/')
-  ) {
+  // Allow static files
+  if (pathname.includes('.') && !pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
 
-  // Get token from cookie
+  // Extract and verify JWT
   const token = request.cookies.get('token')?.value;
-
-  // If no token, redirect to login
   if (!token) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Verify token
   const user = verifyJWT(token);
-
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Role-based route protection
+  // ── Role-based route protection ───────────────────────────────────────────
+
   if (pathname.startsWith('/client') && user.role !== 'CLIENT') {
     return NextResponse.redirect(new URL('/login', request.url));
   }
@@ -45,23 +58,45 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Force password change before accessing any companion route
+  if (pathname.startsWith('/admin') && user.role !== 'ADMIN') {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // ── CLIENT approval gate ──────────────────────────────────────────────────
+  // Only applied to /client/* routes that are NOT in the exempt list.
+
+  if (pathname.startsWith('/client')) {
+    const isExempt = clientStatusExempt.some((p) => pathname.startsWith(p));
+
+    if (!isExempt) {
+      if (user.clientStatus === 'PENDING_REVIEW') {
+        return NextResponse.redirect(new URL('/client/pending', request.url));
+      }
+      if (user.clientStatus === 'REJECTED') {
+        return NextResponse.redirect(new URL('/client/rejected', request.url));
+      }
+      // 'APPROVED' or field absent (legacy users pre-migration) → allow through
+    }
+  }
+
+  // ── Companion: force password change before any dashboard access ──────────
+
   if (
     user.role === 'COMPANION' &&
     user.isTemporaryPassword === true &&
     pathname.startsWith('/companion') &&
     pathname !== '/companion/change-password'
   ) {
-    return NextResponse.redirect(new URL('/companion/change-password', request.url));
-  }
-
-  if (pathname.startsWith('/admin') && user.role !== 'ADMIN') {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(
+      new URL('/companion/change-password', request.url)
+    );
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons/).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons/).*)',
+  ],
 };

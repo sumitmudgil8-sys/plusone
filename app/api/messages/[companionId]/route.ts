@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { MESSAGE_LIMIT } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
@@ -54,25 +53,15 @@ export async function GET(
     });
 
     if (!thread) {
-      // Return empty thread data
+      // Return empty thread data — chat is per-minute billed, no free message limit
       return NextResponse.json({
         messages: [],
         messageCount: 0,
-        isLocked: false,
-        limit: MESSAGE_LIMIT,
       });
     }
 
-    // Get client subscription status
-    const clientUser = await prisma.user.findUnique({
-      where: { id: clientId },
-      select: { subscriptionTier: true },
-    });
-
-    const isPremium = clientUser?.subscriptionTier === 'PREMIUM';
-
     return NextResponse.json({
-      messages: thread.messages.map((msg: any) => ({
+      messages: thread.messages.map((msg: { id: string; content: string; senderId: string; createdAt: Date; sender: { clientProfile: { name: string | null; avatarUrl: string | null } | null; companionProfile: { name: string | null; avatarUrl: string | null } | null } }) => ({
         id: msg.id,
         content: msg.content,
         senderId: msg.senderId,
@@ -84,8 +73,6 @@ export async function GET(
         createdAt: msg.createdAt,
       })),
       messageCount: thread.messageCount,
-      isLocked: !isPremium && thread.isLocked,
-      limit: MESSAGE_LIMIT,
     });
   } catch (error) {
     console.error('Error fetching messages:', error);
