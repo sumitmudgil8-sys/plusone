@@ -135,8 +135,8 @@ model CompanionProfile {
   avatarUrl        String?
   images           String              @default("[]")  // JSON array of image URLs (legacy)
   hourlyRate       Int                 @default(200000) // paise (₹2000/hr default)
-  chatRatePerMinute Int?               // paise per minute for chat
-  callRatePerMinute Int?               // paise per minute for voice calls
+  chatRatePerMinute Int?               @default(2000)  // paise per minute for chat (₹20/min default)
+  callRatePerMinute Int?               @default(3200)  // paise per minute for voice calls (₹32/min default)
   tags             String              @default("[]")  // JSON array of tags
   isApproved       Boolean             @default(false)
   isVerified       Boolean             @default(false)
