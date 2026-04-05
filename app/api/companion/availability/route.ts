@@ -46,17 +46,17 @@ export async function POST(request: NextRequest) {
     updateData.locationUpdatedAt = new Date();
   }
 
-  const [updated] = await prisma.$transaction([
-    prisma.user.update({
-      where: { id: auth.user.id },
-      data: updateData,
-      select: { isOnline: true },
-    }),
-    prisma.companionProfile.update({
-      where: { userId: auth.user.id },
-      data: { availabilityStatus: goingOnline ? 'ONLINE' : 'OFFLINE' },
-    }),
-  ]);
+  await prisma.user.update({
+    where: { id: auth.user.id },
+    data: updateData,
+  });
 
-  return NextResponse.json({ success: true, data: { isOnline: updated.isOnline } });
+  await prisma.companionProfile.update({
+    where: { userId: auth.user.id },
+    data: {
+      availabilityStatus: goingOnline ? 'ONLINE' : 'OFFLINE',
+    },
+  });
+
+  return NextResponse.json({ success: true, data: { isOnline: goingOnline } });
 }
