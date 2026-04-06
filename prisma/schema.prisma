@@ -105,6 +105,7 @@ model User {
   pushSubscriptions        PushSubscription[]
   clientChatRequests       ChatRequest[]      @relation("ClientChatRequests")
   companionChatRequests    ChatRequest[]      @relation("CompanionChatRequests")
+  withdrawalRequests       WithdrawalRequest[]
 }
 
 model ClientProfile {
@@ -152,6 +153,20 @@ model CompanionProfile {
   averageRating    Float               @default(0)
   reviewCount      Int                 @default(0)
   city             String?
+
+  // Extended profile fields
+  height           String?
+  weight           String?
+  bodyType         String?
+  hairColor        String?
+  eyeColor         String?
+  ethnicity        String?
+  foodPreference   String?
+  drinking         String?
+  smoking          String?
+  education        String?
+  occupation       String?
+  personalityTags  String              @default("[]") // JSON array
 }
 
 model MessageThread {
@@ -421,6 +436,13 @@ enum ChatRequestStatus {
   EXPIRED
 }
 
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
 model ChatRequest {
   id          String            @id @default(cuid())
   clientId    String
@@ -432,6 +454,21 @@ model ChatRequest {
   expiresAt   DateTime
 
   @@index([clientId])
+  @@index([companionId])
+  @@index([status])
+}
+
+model WithdrawalRequest {
+  id          String           @id @default(cuid())
+  companionId String
+  companion   User             @relation(fields: [companionId], references: [id], onDelete: Cascade)
+  amount      Int              // paise
+  status      WithdrawalStatus @default(PENDING)
+  note        String?
+  adminNote   String?
+  createdAt   DateTime         @default(now())
+  resolvedAt  DateTime?
+
   @@index([companionId])
   @@index([status])
 }

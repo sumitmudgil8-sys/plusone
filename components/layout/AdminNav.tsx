@@ -1,6 +1,7 @@
 "use client";
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -12,10 +13,21 @@ const navItems = [
   { href: '/admin/companions', label: 'Companions', icon: StarIcon },
   { href: '/admin/bookings', label: 'Bookings', icon: CalendarIcon },
   { href: '/admin/subscriptions', label: 'Subscriptions', icon: CrownIcon },
+  { href: '/admin/withdrawals', label: 'Withdrawals', icon: WalletIcon },
 ];
 
 export function AdminNav() {
   const pathname = usePathname();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/admin/withdrawals?status=PENDING')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success) setPendingCount(d.data.withdrawals.length);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -34,6 +46,7 @@ export function AdminNav() {
           <ul className="hidden md:flex items-center gap-1">
             {navItems.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const badge = item.href === '/admin/withdrawals' && pendingCount > 0 ? pendingCount : null;
               return (
                 <li key={item.href}>
                   <Link
@@ -47,6 +60,11 @@ export function AdminNav() {
                   >
                     <item.icon className="w-4 h-4" />
                     <span className="text-sm font-medium">{item.label}</span>
+                    {badge !== null && (
+                      <span className="ml-1 text-xs bg-amber-500 text-black font-bold px-1.5 py-0.5 rounded-full leading-none">
+                        {badge}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
@@ -64,16 +82,22 @@ export function AdminNav() {
         <ul className="flex justify-around py-2">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const badge = item.href === '/admin/withdrawals' && pendingCount > 0 ? pendingCount : null;
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
                   className={cn(
-                    'flex flex-col items-center gap-1 px-3 py-2 rounded-lg',
+                    'relative flex flex-col items-center gap-1 px-3 py-2 rounded-lg',
                     isActive ? 'text-gold' : 'text-white/60'
                   )}
                 >
                   <item.icon className="w-5 h-5" />
+                  {badge !== null && (
+                    <span className="absolute -top-1 -right-1 text-[10px] bg-amber-500 text-black font-bold px-1 py-0.5 rounded-full leading-none">
+                      {badge}
+                    </span>
+                  )}
                   <span className="text-xs">{item.label}</span>
                 </Link>
               </li>
@@ -121,6 +145,14 @@ function CrownIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+    </svg>
+  );
+}
+
+function WalletIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
     </svg>
   );
 }

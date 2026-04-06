@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { BookingCard } from '@/components/booking/BookingCard';
-import { formatCurrency, formatDateTime } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 
-interface EarningsData {
+interface TodayBreakdown {
+  chats: number;
+  calls: number;
+  bookings: number;
   total: number;
-  today: number;
-  thisWeek: number;
-  completedSessions: number;
 }
 
 interface SessionRecord {
@@ -24,10 +24,14 @@ interface SessionRecord {
   endedAt: string | null;
 }
 
+function fmt(paise: number) {
+  return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
 export default function CompanionDashboard() {
   const [user, setUser] = useState<{ isOnline?: boolean; companionProfile?: { name?: string } } | null>(null);
   const [bookings, setBookings] = useState<any[]>([]);
-  const [earnings, setEarnings] = useState<EarningsData | null>(null);
+  const [today, setToday] = useState<TodayBreakdown | null>(null);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [togglingOnline, setTogglingOnline] = useState(false);
@@ -52,7 +56,7 @@ export default function CompanionDashboard() {
         }
         if (earningsRes.ok) {
           const d = await earningsRes.json();
-          setEarnings(d.data);
+          setToday(d.data?.periods?.today ?? null);
         }
         if (sessionsRes.ok) {
           const d = await sessionsRes.json();
@@ -90,7 +94,6 @@ export default function CompanionDashboard() {
   const handleToggleOnline = async () => {
     setTogglingOnline(true);
     try {
-      // Attempt to get location to send with the availability toggle (going online only)
       const body: { latitude?: number; longitude?: number } = {};
       if (!isOnline && 'geolocation' in navigator) {
         await new Promise<void>((resolve) => {
@@ -100,7 +103,7 @@ export default function CompanionDashboard() {
               body.longitude = pos.coords.longitude;
               resolve();
             },
-            () => resolve(), // Proceed without location if denied
+            () => resolve(),
             { enableHighAccuracy: false, timeout: 5000 }
           );
         });
@@ -157,23 +160,30 @@ export default function CompanionDashboard() {
         </button>
       </div>
 
-      {/* Earnings stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="text-center">
-          <p className="text-2xl font-bold text-gold">{formatCurrency(earnings?.total ?? 0)}</p>
-          <p className="text-xs text-white/50 mt-1">Total Earned</p>
-        </Card>
-        <Card className="text-center">
-          <p className="text-2xl font-bold text-white">{formatCurrency(earnings?.today ?? 0)}</p>
-          <p className="text-xs text-white/50 mt-1">Today</p>
-        </Card>
-        <Card className="text-center">
-          <p className="text-2xl font-bold text-white">{formatCurrency(earnings?.thisWeek ?? 0)}</p>
-          <p className="text-xs text-white/50 mt-1">This Week</p>
-        </Card>
-        <Card className="text-center">
-          <p className="text-2xl font-bold text-white">{earnings?.completedSessions ?? 0}</p>
-          <p className="text-xs text-white/50 mt-1">Sessions</p>
+      {/* Today's earnings breakdown */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-medium text-white">Today&apos;s Earnings</h2>
+          <Link href="/companion/earnings" className="text-sm text-gold hover:underline">
+            View Full Report
+          </Link>
+        </div>
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          {[
+            { icon: '💬', label: 'Chats', value: today?.chats ?? 0 },
+            { icon: '📞', label: 'Calls', value: today?.calls ?? 0 },
+            { icon: '📅', label: 'Bookings', value: today?.bookings ?? 0 },
+          ].map(({ icon, label, value }) => (
+            <div key={label} className="rounded-xl p-3 bg-charcoal-surface border border-charcoal-border text-center">
+              <p className="text-base mb-0.5">{icon}</p>
+              <p className="text-sm font-bold text-white">{fmt(value)}</p>
+              <p className="text-xs text-white/40">{label}</p>
+            </div>
+          ))}
+        </div>
+        <Card className="text-center py-3">
+          <p className="text-xs text-white/40 mb-0.5">Total today</p>
+          <p className="text-xl font-bold text-gold">{fmt(today?.total ?? 0)}</p>
         </Card>
       </div>
 
@@ -254,7 +264,7 @@ export default function CompanionDashboard() {
                     </div>
                   </div>
                   <span className="text-sm font-semibold text-green-400 shrink-0">
-                    +{formatCurrency(s.earned)}
+                    +{fmt(s.earned)}
                   </span>
                 </div>
               ))}

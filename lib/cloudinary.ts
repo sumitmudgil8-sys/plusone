@@ -16,7 +16,7 @@ function getCloudinary() {
   return cloudinary;
 }
 
-export type UploadFolder = 'avatars' | 'companion-gallery' | 'verification-docs';
+export type UploadFolder = 'avatars' | 'companion-gallery' | 'companion-avatars' | 'verification-docs';
 
 export interface UploadResult {
   url: string;
@@ -29,6 +29,9 @@ export interface UploadResult {
 
 const FOLDER_TRANSFORMS: Record<UploadFolder, object> = {
   avatars: {
+    transformation: [{ width: 400, height: 400, crop: 'fill', gravity: 'face', quality: 85, fetch_format: 'webp' }],
+  },
+  'companion-avatars': {
     transformation: [{ width: 400, height: 400, crop: 'fill', gravity: 'face', quality: 85, fetch_format: 'webp' }],
   },
   'companion-gallery': {
