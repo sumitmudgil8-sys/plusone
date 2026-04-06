@@ -62,13 +62,11 @@ export default function CompanionInboxPage() {
           }>;
 
           // The threads API returns companion-centric rows for COMPANION role.
-          // clientId and clientName are present.
           setThreads(
             list.map((t) => ({
               threadId: t.threadId,
               clientId: t.clientId,
               clientName: t.clientName,
-              // For companions the "other side" avatar isn't in threads API — show initials
               clientAvatar: null,
               lastMessage: t.lastMessage,
               unreadCount: t.unreadCount,

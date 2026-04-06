@@ -16,10 +16,12 @@ interface IncomingCall {
 }
 
 interface IncomingChatRequest {
-  requestId: string;
+  requestId?: string;    // old ChatRequest flow
+  sessionId?: string;    // new BillingSession flow
   clientId: string;
   clientName: string;
   clientAvatar: string | null;
+  ratePerMinute?: number;
 }
 
 // ─── Force password-change modal ────────────────────────────────────────────
@@ -214,7 +216,9 @@ function IncomingChatRequestModal({
         )}
         <div>
           <p className="text-lg font-semibold text-white">{request.clientName}</p>
-          <p className="text-sm text-white/50 mt-1">Chat request</p>
+          <p className="text-sm text-white/50 mt-1">
+            Chat request{request.ratePerMinute ? ` · ₹${Math.round(request.ratePerMinute / 100)}/min` : ''}
+          </p>
         </div>
         <div className="flex gap-3">
           <button onClick={onDecline}
@@ -302,14 +306,24 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
 
   const handleAcceptChatRequest = useCallback(async () => {
     if (!incomingChatRequest) return;
-    const { requestId, clientId } = incomingChatRequest;
+    const { requestId, sessionId, clientId } = incomingChatRequest;
     setIncomingChatRequest(null);
     try {
-      await fetch(`/api/chat-request/${requestId}/respond`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'ACCEPTED' }),
-      });
+      if (sessionId) {
+        // New BillingSession flow
+        await fetch('/api/billing/accept', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
+      } else if (requestId) {
+        // Old ChatRequest flow
+        await fetch(`/api/chat-request/${requestId}/respond`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'ACCEPTED' }),
+        });
+      }
     } catch {
       // Non-fatal — navigate anyway
     }
@@ -318,14 +332,24 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
 
   const handleDeclineChatRequest = useCallback(async () => {
     if (!incomingChatRequest) return;
-    const { requestId } = incomingChatRequest;
+    const { requestId, sessionId } = incomingChatRequest;
     setIncomingChatRequest(null);
     try {
-      await fetch(`/api/chat-request/${requestId}/respond`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'DECLINED' }),
-      });
+      if (sessionId) {
+        // New BillingSession flow
+        await fetch('/api/billing/decline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
+      } else if (requestId) {
+        // Old ChatRequest flow
+        await fetch(`/api/chat-request/${requestId}/respond`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'DECLINED' }),
+        });
+      }
     } catch {
       // Non-fatal
     }

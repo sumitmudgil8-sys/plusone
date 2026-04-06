@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { debitWallet, creditWallet } from '@/lib/wallet';
 import { getCompanionRatePerMinute } from '@/lib/billing';
+import { getAblyClient, getUserChannelName } from '@/lib/ably';
 import { BILLING_TICK_SECONDS, BILLING_MIN_BALANCE_MINUTES } from '@/lib/constants';
 
 export const runtime = 'nodejs';
@@ -87,6 +88,15 @@ export async function POST(request: NextRequest) {
           where: { id: sessionId },
           data: { status: 'ENDED', endedAt: new Date() },
         });
+        // Notify both sides
+        try {
+          const ably = getAblyClient();
+          const payload = { sessionId, totalCharged: session.totalCharged };
+          await Promise.all([
+            ably.channels.get(getUserChannelName(user.id)).publish('chat:ended', payload),
+            ably.channels.get(getUserChannelName(companionId)).publish('chat:ended', payload),
+          ]);
+        } catch { /* non-fatal */ }
         return NextResponse.json({
           success: true,
           data: { ended: true, reason: 'INSUFFICIENT_BALANCE', balance: 0 },
@@ -129,6 +139,15 @@ export async function POST(request: NextRequest) {
         where: { id: sessionId },
         data: { status: 'ENDED', endedAt: new Date() },
       });
+      // Notify both sides
+      try {
+        const ably = getAblyClient();
+        const payload = { sessionId, totalCharged: updatedSession.totalCharged };
+        await Promise.all([
+          ably.channels.get(getUserChannelName(user.id)).publish('chat:ended', payload),
+          ably.channels.get(getUserChannelName(companionId)).publish('chat:ended', payload),
+        ]);
+      } catch { /* non-fatal */ }
       return NextResponse.json({
         success: true,
         data: {

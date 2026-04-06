@@ -7,6 +7,7 @@ import { ChatWindow } from '@/components/chat/ChatWindow';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
+import { useSocket } from '@/hooks/useSocket';
 import { BILLING_TICK_SECONDS } from '@/lib/constants';
 
 interface CurrentUser {
@@ -22,6 +23,15 @@ interface ClientProfile {
 interface ClientUser {
   id: string;
   clientProfile: ClientProfile | null;
+}
+
+interface SessionSummary {
+  sessionId: string;
+  totalCharged: number;
+}
+
+function fmt(paise: number) {
+  return `₹${(paise / 100).toFixed(0)}`;
 }
 
 function PhoneOffIcon({ className }: { className?: string }) {
@@ -63,10 +73,21 @@ export default function CompanionChatPage() {
   const [callDuration, setCallDuration] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [blocking, setBlocking] = useState(false);
+
+  // Chat billing session state
+  const [chatSessionActive, setChatSessionActive] = useState(false);
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
+  const [chatRatePerMinute, setChatRatePerMinute] = useState(0);
+  const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
+  const summaryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const call = useVoiceCall(voiceSessionId, user?.id ?? '');
+
+  // Ably subscription for billing events (separate from ChatWindow's useSocket)
+  const { onChatRequestResponse, onChatEnded } = useSocket(user?.id || undefined, 'COMPANION');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -101,7 +122,74 @@ export default function CompanionChatPage() {
     fetchData();
   }, [clientId]);
 
-  // Start billing tick + duration counter when call connects
+  // Check for active billing session on mount
+  useEffect(() => {
+    if (!user) return;
+    const checkSession = async () => {
+      try {
+        const res = await fetch('/api/companion/active-session');
+        if (!res.ok) return;
+        const d = await res.json();
+        if (d.data?.active && d.data.clientId === clientId) {
+          setChatSessionActive(true);
+          setChatSessionId(d.data.sessionId);
+          setChatRatePerMinute(d.data.ratePerMinute ?? 0);
+        }
+      } catch {
+        // non-fatal
+      }
+    };
+    checkSession();
+  }, [user, clientId]);
+
+  // Subscribe to chat:accepted — companion's own accept confirmation
+  useEffect(() => {
+    return onChatRequestResponse((data) => {
+      if (data.status === 'ACCEPTED' && data.sessionId && data.clientId === clientId) {
+        setChatSessionActive(true);
+        setChatSessionId(data.sessionId);
+      }
+    });
+  }, [onChatRequestResponse, clientId]);
+
+  // Subscribe to chat:ended
+  useEffect(() => {
+    return onChatEnded((data) => {
+      if (!chatSessionId || data.sessionId !== chatSessionId) return;
+      setChatSessionActive(false);
+      setChatSessionId(null);
+      const summary: SessionSummary = { sessionId: data.sessionId, totalCharged: data.totalCharged };
+      setSessionSummary(summary);
+      if (summaryTimerRef.current) clearTimeout(summaryTimerRef.current);
+      summaryTimerRef.current = setTimeout(() => setSessionSummary(null), 60000);
+    });
+  }, [onChatEnded, chatSessionId]);
+
+  // End session handler (companion side)
+  const handleEndChatSession = useCallback(async () => {
+    if (!chatSessionId) return;
+    const sid = chatSessionId;
+    setChatSessionActive(false);
+    setChatSessionId(null);
+    try {
+      await fetch('/api/billing/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sid }),
+      });
+    } catch {
+      // non-fatal
+    }
+  }, [chatSessionId]);
+
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      if (summaryTimerRef.current) clearTimeout(summaryTimerRef.current);
+    };
+  }, []);
+
+  // Voice call billing tick + duration counter
   useEffect(() => {
     if (call.state === 'connected' && voiceSessionId) {
       durationIntervalRef.current = setInterval(() => {
@@ -129,7 +217,7 @@ export default function CompanionChatPage() {
     }
   }, [call.state, voiceSessionId]);
 
-  // End billing session if call ends unexpectedly
+  // End billing session if voice call ends unexpectedly
   useEffect(() => {
     if (call.state === 'ended' && voiceSessionId) {
       fetch('/api/billing/end', {
@@ -160,7 +248,6 @@ export default function CompanionChatPage() {
     setBlocking(true);
     try {
       if (isBlocked) {
-        // Find the block record id to delete — refetch blocked list
         const res = await fetch('/api/companion/blocked');
         if (res.ok) {
           const d = await res.json();
@@ -221,19 +308,13 @@ export default function CompanionChatPage() {
         <div className="absolute inset-0 z-10 bg-charcoal/95 backdrop-blur-sm flex flex-col items-center justify-center gap-6 rounded-xl">
           <div className="text-center">
             {callerAvatar ? (
-              <img
-                src={callerAvatar}
-                alt={callerName}
-                className="w-24 h-24 rounded-full mx-auto mb-4 object-cover ring-4 ring-gold/30"
-              />
+              <img src={callerAvatar} alt={callerName} className="w-24 h-24 rounded-full mx-auto mb-4 object-cover ring-4 ring-gold/30" />
             ) : (
               <div className="w-24 h-24 rounded-full mx-auto mb-4 bg-gold/20 flex items-center justify-center ring-4 ring-gold/30">
                 <span className="text-3xl text-gold font-semibold">{callerName[0]}</span>
               </div>
             )}
-
             <h2 className="text-xl font-semibold text-white">{callerName}</h2>
-
             <p className="text-white/60 mt-1 text-sm">
               {call.state === 'connecting' && 'Connecting...'}
               {call.state === 'connected' && (
@@ -242,9 +323,7 @@ export default function CompanionChatPage() {
                   <span className="ml-2 font-mono text-gold">{formatDuration(callDuration)}</span>
                 </>
               )}
-              {call.state === 'error' && (
-                <span className="text-red-400">{call.error}</span>
-              )}
+              {call.state === 'error' && <span className="text-red-400">{call.error}</span>}
             </p>
           </div>
 
@@ -253,14 +332,11 @@ export default function CompanionChatPage() {
               onClick={call.toggleMute}
               title={call.isMuted ? 'Unmute' : 'Mute'}
               className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
-                call.isMuted
-                  ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                  : 'bg-white/10 text-white hover:bg-white/20'
+                call.isMuted ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-white/10 text-white hover:bg-white/20'
               }`}
             >
               {call.isMuted ? <MicOffIcon className="w-6 h-6" /> : <MicIcon className="w-6 h-6" />}
             </button>
-
             <button
               onClick={handleEndCall}
               title="End call"
@@ -273,30 +349,57 @@ export default function CompanionChatPage() {
       )}
 
       <Card className="h-full flex flex-col overflow-hidden">
-        {/* Block button in header */}
+        {/* Header */}
         <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-charcoal-border shrink-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             {callerAvatar ? (
-              <img src={callerAvatar} alt={callerName} className="w-8 h-8 rounded-full object-cover" />
+              <img src={callerAvatar} alt={callerName} className="w-8 h-8 rounded-full object-cover shrink-0" />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-charcoal-border flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-charcoal-border flex items-center justify-center shrink-0">
                 <span className="text-sm font-medium text-white">{callerName[0]}</span>
               </div>
             )}
-            <span className="text-sm font-medium text-white">{callerName}</span>
+            <div className="min-w-0">
+              <span className="text-sm font-medium text-white">{callerName}</span>
+              {chatSessionActive && (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  <span className="text-xs text-green-400">
+                    Session Active · {fmt(chatRatePerMinute)}/min
+                  </span>
+                </div>
+              )}
+              {!chatSessionActive && sessionSummary && (
+                <p className="text-xs text-white/50 mt-0.5">
+                  Session ended · {fmt(sessionSummary.totalCharged)} earned
+                </p>
+              )}
+            </div>
           </div>
-          <button
-            onClick={handleToggleBlock}
-            disabled={blocking}
-            className={`text-xs px-3 py-1 rounded-lg border transition-colors disabled:opacity-40 ${
-              isBlocked
-                ? 'border-green-500/40 text-green-400 hover:bg-green-500/10'
-                : 'border-red-500/30 text-red-400 hover:bg-red-500/10'
-            }`}
-          >
-            {blocking ? '…' : isBlocked ? 'Unblock' : 'Block'}
-          </button>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {chatSessionActive && (
+              <button
+                onClick={handleEndChatSession}
+                className="text-xs px-2.5 py-1 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                End
+              </button>
+            )}
+            <button
+              onClick={handleToggleBlock}
+              disabled={blocking}
+              className={`text-xs px-3 py-1 rounded-lg border transition-colors disabled:opacity-40 ${
+                isBlocked
+                  ? 'border-green-500/40 text-green-400 hover:bg-green-500/10'
+                  : 'border-red-500/30 text-red-400 hover:bg-red-500/10'
+              }`}
+            >
+              {blocking ? '…' : isBlocked ? 'Unblock' : 'Block'}
+            </button>
+          </div>
         </div>
+
         <ChatWindow
           companionId={clientId}
           companionName={callerName}

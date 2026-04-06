@@ -17,7 +17,9 @@ const startSchema = z.object({
 });
 
 // POST /api/billing/start
-// Validates wallet balance, snapshots rate, creates or returns active BillingSession.
+// CHAT: Creates a PENDING BillingSession and publishes chat:request to companion.
+//       Billing does not start until companion accepts via /api/billing/accept.
+// VOICE: Creates an ACTIVE BillingSession immediately and publishes call:incoming.
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['CLIENT']);
   if (auth.user === null) return auth.response;
@@ -60,9 +62,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Return existing active session if one exists (idempotent)
+    // For CHAT: return existing PENDING or ACTIVE session (idempotent)
+    // For VOICE: return existing ACTIVE session only
+    const existingStatuses = type === 'CHAT' ? ['PENDING', 'ACTIVE'] : ['ACTIVE'];
     const existing = await prisma.billingSession.findFirst({
-      where: { clientId: user.id, companionId, status: 'ACTIVE' },
+      where: { clientId: user.id, companionId, status: { in: existingStatuses } },
     });
 
     if (existing) {
@@ -74,11 +78,12 @@ export async function POST(request: NextRequest) {
           ratePerMinute: existing.ratePerMinute,
           balance: wallet.balance,
           resumed: true,
+          pending: existing.status === 'PENDING',
         },
       });
     }
 
-    // Use the rate matching the session type (chat vs voice vs default hourly)
+    // Use the rate matching the session type
     const ratePerMinute =
       type === 'CHAT'
         ? (companion.companionProfile.chatRatePerMinute ?? getRatePerMinute(companion.companionProfile.hourlyRate))
@@ -103,25 +108,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create billing session
+    // CHAT: create PENDING session (billing starts only after companion accepts)
+    // VOICE: create ACTIVE session immediately
+    const sessionStatus = type === 'CHAT' ? 'PENDING' : 'ACTIVE';
+
     const session = await prisma.billingSession.create({
       data: {
         clientId: user.id,
         companionId,
         type,
         ratePerMinute,
-        status: 'ACTIVE',
+        status: sessionStatus,
       },
     });
 
-    // Fetch caller profile once for use in both VOICE and CHAT notifications
+    // Fetch caller profile for notifications
     const callerProfile = await prisma.clientProfile.findUnique({
       where: { userId: user.id },
       select: { name: true, avatarUrl: true },
     });
     const callerName = callerProfile?.name ?? 'Client';
 
-    // For voice calls, signal the companion via Ably so they can show incoming call UI
+    // VOICE: signal companion via Ably with call:incoming
     if (type === 'VOICE') {
       try {
         const ably = getAblyClient();
@@ -139,7 +147,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Push notification to companion for both CHAT and VOICE billing starts
+    // CHAT: publish chat:request to companion — companion must accept to activate billing
+    if (type === 'CHAT') {
+      try {
+        const ably = getAblyClient();
+        const channel = ably.channels.get(getUserChannelName(companionId));
+        await channel.publish('chat:request', {
+          sessionId: session.id,
+          clientId: user.id,
+          clientName: callerName,
+          clientAvatar: callerProfile?.avatarUrl ?? null,
+          ratePerMinute,
+        });
+      } catch (ablyErr) {
+        console.error('Ably chat request signal error (non-fatal):', ablyErr);
+      }
+    }
+
+    // Push notification to companion
     try {
       await sendPushToUser(companionId, {
         title: type === 'CHAT' ? `${callerName} wants to chat` : `Incoming call from ${callerName}`,
@@ -160,6 +185,7 @@ export async function POST(request: NextRequest) {
         ratePerMinute,
         balance: wallet.balance,
         resumed: false,
+        pending: type === 'CHAT',
       },
     });
   } catch (error) {

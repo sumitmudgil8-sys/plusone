@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getAblyClient, getUserChannelName } from '@/lib/ably';
 
 export const runtime = 'nodejs';
 
@@ -10,8 +11,8 @@ const endSchema = z.object({
 });
 
 // POST /api/billing/end
-// Ends an active billing session. Called when the client closes the chat/call.
-// No additional billing — last tick already covers up to 1 minute.
+// Ends an active billing session. Either participant can end it.
+// Publishes chat:ended to both client and companion via Ably.
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['CLIENT', 'COMPANION']);
   if (auth.user === null) return auth.response;
@@ -67,6 +68,18 @@ export async function POST(request: NextRequest) {
       where: { id: sessionId },
       data: { status: 'ENDED', endedAt: new Date() },
     });
+
+    // Notify both participants that the session has ended
+    try {
+      const ably = getAblyClient();
+      const payload = { sessionId: ended.id, totalCharged: ended.totalCharged };
+      await Promise.all([
+        ably.channels.get(getUserChannelName(ended.clientId)).publish('chat:ended', payload),
+        ably.channels.get(getUserChannelName(ended.companionId)).publish('chat:ended', payload),
+      ]);
+    } catch (ablyErr) {
+      console.error('Ably publish error (non-fatal):', ablyErr);
+    }
 
     return NextResponse.json({
       success: true,

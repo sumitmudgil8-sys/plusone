@@ -24,17 +24,28 @@ type IncomingCallCallback = (data: {
   ratePerMinute: number;
 }) => void;
 
+// Used by companions — payload from both old ChatRequest flow and new BillingSession flow
 type IncomingChatRequestCallback = (data: {
-  requestId: string;
+  requestId?: string;    // old ChatRequest flow
+  sessionId?: string;    // new BillingSession flow
   clientId: string;
   clientName: string;
   clientAvatar: string | null;
+  ratePerMinute?: number;
 }) => void;
 
+// Used by clients (chat:accepted / chat:declined) and companions (chat:accepted from billing/accept)
 type ChatRequestResponseCallback = (data: {
-  requestId: string;
-  companionId: string;
+  requestId?: string;
+  sessionId?: string;
+  companionId?: string;  // present on client-side accepted event
+  clientId?: string;     // present on companion-side accepted event
   status: 'ACCEPTED' | 'DECLINED';
+}) => void;
+
+type ChatEndedCallback = (data: {
+  sessionId: string;
+  totalCharged: number;
 }) => void;
 
 export function useSocket(userId?: string, _role?: string) {
@@ -47,6 +58,7 @@ export function useSocket(userId?: string, _role?: string) {
   const incomingCallCallbacksRef = useRef<Set<IncomingCallCallback>>(new Set());
   const incomingChatRequestCallbacksRef = useRef<Set<IncomingChatRequestCallback>>(new Set());
   const chatRequestResponseCallbacksRef = useRef<Set<ChatRequestResponseCallback>>(new Set());
+  const chatEndedCallbacksRef = useRef<Set<ChatEndedCallback>>(new Set());
 
   useEffect(() => {
     if (!userId) return;
@@ -86,13 +98,32 @@ export function useSocket(userId?: string, _role?: string) {
     });
 
     channel.subscribe('chat:accepted', (msg) => {
-      const data = msg.data as Parameters<ChatRequestResponseCallback>[0];
-      chatRequestResponseCallbacksRef.current.forEach((cb) => cb({ ...data, status: 'ACCEPTED' }));
+      const data = msg.data as Record<string, unknown>;
+      chatRequestResponseCallbacksRef.current.forEach((cb) =>
+        cb({
+          requestId: data.requestId as string | undefined,
+          sessionId: data.sessionId as string | undefined,
+          companionId: data.companionId as string | undefined,
+          clientId: data.clientId as string | undefined,
+          status: 'ACCEPTED',
+        })
+      );
     });
 
     channel.subscribe('chat:declined', (msg) => {
-      const data = msg.data as Parameters<ChatRequestResponseCallback>[0];
-      chatRequestResponseCallbacksRef.current.forEach((cb) => cb({ ...data, status: 'DECLINED' }));
+      const data = msg.data as Record<string, unknown>;
+      chatRequestResponseCallbacksRef.current.forEach((cb) =>
+        cb({
+          requestId: data.requestId as string | undefined,
+          sessionId: data.sessionId as string | undefined,
+          status: 'DECLINED',
+        })
+      );
+    });
+
+    channel.subscribe('chat:ended', (msg) => {
+      const data = msg.data as { sessionId: string; totalCharged: number };
+      chatEndedCallbacksRef.current.forEach((cb) => cb(data));
     });
 
     return () => {
@@ -158,6 +189,13 @@ export function useSocket(userId?: string, _role?: string) {
     };
   }, []);
 
+  const onChatEnded = useCallback((callback: ChatEndedCallback) => {
+    chatEndedCallbacksRef.current.add(callback);
+    return () => {
+      chatEndedCallbacksRef.current.delete(callback);
+    };
+  }, []);
+
   return {
     socket: realtimeRef.current,
     isConnected,
@@ -169,5 +207,6 @@ export function useSocket(userId?: string, _role?: string) {
     onIncomingCall,
     onIncomingChatRequest,
     onChatRequestResponse,
+    onChatEnded,
   };
 }

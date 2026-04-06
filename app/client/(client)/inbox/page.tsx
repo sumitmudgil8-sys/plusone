@@ -37,6 +37,11 @@ interface CurrentUser {
   role: string;
 }
 
+interface SessionSummary {
+  sessionId: string;
+  totalCharged: number;
+}
+
 /* ─── Helpers ────────────────────────────────────────────────── */
 
 function isSameDay(a: string, b: string) {
@@ -82,6 +87,10 @@ function statusLabel(s: string) {
   return 'Offline';
 }
 
+function fmt(paise: number) {
+  return `₹${(paise / 100).toFixed(0)}`;
+}
+
 /* ─── Component ──────────────────────────────────────────────── */
 
 export default function InboxPage() {
@@ -95,11 +104,22 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [showChat, setShowChat] = useState(false); // mobile: list vs chat
   const [showScrollPill, setShowScrollPill] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
-  // Active chat billing session (started when companion accepts)
+  // Billing session state
   const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const [chatRatePerMinute, setChatRatePerMinute] = useState<number>(0);
+  const [sessionActive, setSessionActive] = useState(false);
+  const [sessionWaiting, setSessionWaiting] = useState(false); // waiting for companion to accept
+  const [totalCharged, setTotalCharged] = useState(0);
+  const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
+  const [startingSession, setStartingSession] = useState(false);
   const chatTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const summaryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Store rate in ref for use in closures
+  const chatRateRef = useRef(0);
+  useEffect(() => { chatRateRef.current = chatRatePerMinute; }, [chatRatePerMinute]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesBoxRef = useRef<HTMLDivElement>(null);
@@ -111,13 +131,17 @@ export default function InboxPage() {
   useEffect(() => { activeThreadIdRef.current = activeThreadId; }, [activeThreadId]);
   useEffect(() => { threadsRef.current = threads; }, [threads]);
 
-  // Derive active thread from state
   const activeThread = threads.find((t) => t.threadId === activeThreadId) ?? null;
 
-  // Real-time via Ably (same channel names / events as existing useSocket hook)
-  const { onMessage, onChatRequestResponse } = useSocket(currentUser?.id, currentUser?.role);
+  const { onMessage, onChatRequestResponse, onChatEnded } = useSocket(currentUser?.id, currentUser?.role);
 
-  /* Scroll helpers */
+  /* ─── Toast helper ─── */
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  /* ─── Scroll helpers ─── */
   const isNearBottom = useCallback(() => {
     const el = messagesBoxRef.current;
     if (!el) return true;
@@ -136,7 +160,64 @@ export default function InboxPage() {
     }
   }, []);
 
-  /* Initial load */
+  /* ─── Tick interval ─── */
+  const startTickInterval = useCallback((sessionId: string) => {
+    if (chatTickRef.current) clearInterval(chatTickRef.current);
+    chatTickRef.current = setInterval(async () => {
+      try {
+        const res = await fetch('/api/billing/tick', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
+        const d = await res.json();
+        if (d.data?.ended) {
+          if (chatTickRef.current) {
+            clearInterval(chatTickRef.current);
+            chatTickRef.current = null;
+          }
+          // chat:ended event will handle UI update
+        } else if (d.data?.totalCharged !== undefined) {
+          setTotalCharged(d.data.totalCharged);
+        }
+      } catch {
+        // tick failure is non-fatal
+      }
+    }, BILLING_TICK_SECONDS * 1000);
+  }, []);
+
+  /* ─── Session summary auto-hide ─── */
+  const showSessionSummary = useCallback((summary: SessionSummary) => {
+    setSessionSummary(summary);
+    if (summaryTimerRef.current) clearTimeout(summaryTimerRef.current);
+    summaryTimerRef.current = setTimeout(() => {
+      setSessionSummary(null);
+    }, 60000);
+  }, []);
+
+  /* ─── End session ─── */
+  const endChatSession = useCallback(async () => {
+    if (!chatSessionId) return;
+    if (chatTickRef.current) {
+      clearInterval(chatTickRef.current);
+      chatTickRef.current = null;
+    }
+    const sid = chatSessionId;
+    setChatSessionId(null);
+    setSessionActive(false);
+    setSessionWaiting(false);
+    try {
+      await fetch('/api/billing/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sid }),
+      });
+    } catch {
+      // non-fatal — chat:ended Ably event will propagate from server
+    }
+  }, [chatSessionId]);
+
+  /* ─── Initial load ─── */
   useEffect(() => {
     const fetchAll = async () => {
       try {
@@ -163,7 +244,47 @@ export default function InboxPage() {
     fetchAll();
   }, []);
 
-  /* Fetch messages when active thread changes */
+  /* ─── Reset billing state when active thread changes ─── */
+  useEffect(() => {
+    // Clear previous session state when switching threads
+    if (chatTickRef.current) {
+      clearInterval(chatTickRef.current);
+      chatTickRef.current = null;
+    }
+    setChatSessionId(null);
+    setChatRatePerMinute(0);
+    setSessionActive(false);
+    setSessionWaiting(false);
+    setTotalCharged(0);
+    setSessionSummary(null);
+  }, [activeThreadId]);
+
+  /* ─── Check active session when thread is selected ─── */
+  useEffect(() => {
+    if (!activeThread || !currentUser) return;
+
+    const checkSession = async () => {
+      try {
+        const res = await fetch(`/api/billing/active-session?companionId=${activeThread.companionId}`);
+        if (!res.ok) return;
+        const d = await res.json();
+        if (d.data?.active) {
+          setChatSessionId(d.data.sessionId);
+          setChatRatePerMinute(d.data.ratePerMinute);
+          setTotalCharged(d.data.totalCharged ?? 0);
+          setSessionActive(true);
+          startTickInterval(d.data.sessionId);
+        }
+      } catch {
+        // non-fatal
+      }
+    };
+
+    checkSession();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeThreadId, currentUser]);
+
+  /* ─── Fetch messages when active thread changes ─── */
   useEffect(() => {
     if (!activeThreadId) return;
     const thread = threadsRef.current.find((t) => t.threadId === activeThreadId);
@@ -182,86 +303,90 @@ export default function InboxPage() {
       .finally(() => setMessagesLoading(false));
   }, [activeThreadId]);
 
-  /* Handle chat:accepted — start billing session and tick */
+  /* ─── chat:accepted / chat:declined ─── */
   useEffect(() => {
-    const unsubscribe = onChatRequestResponse(async (data) => {
-      if (data.status !== 'ACCEPTED') return;
-      const companionId = data.companionId;
-
-      // Start billing session
-      try {
-        const res = await fetch('/api/billing/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ companionId, type: 'CHAT' }),
-        });
-        const d = await res.json();
-        if (res.ok && d.success) {
-          const sessionId: string = d.data.sessionId;
-          const rate: number = d.data.ratePerMinute;
-          setChatSessionId(sessionId);
-          setChatRatePerMinute(rate);
-
-          // Start tick interval
-          if (chatTickRef.current) clearInterval(chatTickRef.current);
-          chatTickRef.current = setInterval(async () => {
-            try {
-              const tickRes = await fetch('/api/billing/tick', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId }),
-              });
-              const tickData = await tickRes.json();
-              if (tickData.data?.ended) {
-                // Session ended (insufficient balance or explicit end)
-                setChatSessionId(null);
-                setChatRatePerMinute(0);
-                if (chatTickRef.current) {
-                  clearInterval(chatTickRef.current);
-                  chatTickRef.current = null;
-                }
-              }
-            } catch {
-              // tick failure is non-fatal
-            }
-          }, BILLING_TICK_SECONDS * 1000);
-        }
-      } catch {
-        // billing start failure is non-fatal — chat continues
+    const unsubscribe = onChatRequestResponse((data) => {
+      if (data.status === 'ACCEPTED') {
+        const sid = data.sessionId;
+        if (!sid) return;
+        setChatSessionId(sid);
+        setSessionActive(true);
+        setSessionWaiting(false);
+        startTickInterval(sid);
+      } else {
+        // DECLINED
+        setChatSessionId(null);
+        setSessionWaiting(false);
+        showToast('Companion is unavailable right now. Please try again later.');
       }
     });
     return unsubscribe;
-  }, [onChatRequestResponse]);
+  }, [onChatRequestResponse, startTickInterval, showToast]);
 
-  /* Clean up tick interval on unmount */
+  /* ─── chat:ended ─── */
+  useEffect(() => {
+    const unsubscribe = onChatEnded((data) => {
+      if (chatTickRef.current) {
+        clearInterval(chatTickRef.current);
+        chatTickRef.current = null;
+      }
+      setChatSessionId(null);
+      setSessionActive(false);
+      setSessionWaiting(false);
+      showSessionSummary({ sessionId: data.sessionId, totalCharged: data.totalCharged });
+    });
+    return unsubscribe;
+  }, [onChatEnded, showSessionSummary]);
+
+  /* ─── Clean up on unmount ─── */
   useEffect(() => {
     return () => {
       if (chatTickRef.current) clearInterval(chatTickRef.current);
+      if (summaryTimerRef.current) clearTimeout(summaryTimerRef.current);
     };
   }, []);
 
-  /* End chat session when navigating away */
-  const endChatSession = useCallback(async () => {
-    if (!chatSessionId) return;
-    if (chatTickRef.current) {
-      clearInterval(chatTickRef.current);
-      chatTickRef.current = null;
-    }
-    const sid = chatSessionId;
-    setChatSessionId(null);
-    setChatRatePerMinute(0);
+  /* ─── Start session handler ─── */
+  const handleStartSession = useCallback(async () => {
+    if (!activeThread || startingSession || sessionWaiting) return;
+    setStartingSession(true);
     try {
-      await fetch('/api/billing/end', {
+      const res = await fetch('/api/billing/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: sid }),
+        body: JSON.stringify({ companionId: activeThread.companionId, type: 'CHAT' }),
       });
-    } catch {
-      // non-fatal
-    }
-  }, [chatSessionId]);
+      const d = await res.json();
 
-  /* Ably real-time messages */
+      if (res.status === 402) {
+        showToast('Insufficient balance. Please recharge your wallet to start a chat session.');
+        return;
+      }
+
+      if (!res.ok || !d.success) {
+        showToast(d.error ?? 'Failed to start session. Please try again.');
+        return;
+      }
+
+      const { sessionId, ratePerMinute } = d.data;
+      setChatSessionId(sessionId);
+      setChatRatePerMinute(ratePerMinute);
+
+      if (d.data.pending) {
+        setSessionWaiting(true);
+      } else {
+        // Resumed an already ACTIVE session
+        setSessionActive(true);
+        startTickInterval(sessionId);
+      }
+    } catch {
+      showToast('Failed to start session. Please try again.');
+    } finally {
+      setStartingSession(false);
+    }
+  }, [activeThread, startingSession, sessionWaiting, showToast, startTickInterval]);
+
+  /* ─── Ably real-time messages ─── */
   useEffect(() => {
     const unsubscribe = onMessage((data) => {
       const currentActiveId = activeThreadIdRef.current;
@@ -288,7 +413,6 @@ export default function InboxPage() {
         });
         scrollToBottom(false);
       } else {
-        // Update the right thread row in the list
         setThreads((prev) =>
           prev.map((t) =>
             t.companionId === data.senderId
@@ -311,7 +435,7 @@ export default function InboxPage() {
     return unsubscribe;
   }, [onMessage, scrollToBottom]);
 
-  /* Textarea auto-resize */
+  /* ─── Textarea auto-resize ─── */
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     const el = e.target;
@@ -326,7 +450,7 @@ export default function InboxPage() {
     }
   };
 
-  /* Send message */
+  /* ─── Send message ─── */
   const handleSend = async () => {
     if (!input.trim() || !activeThread || sending || !currentUser) return;
     const content = input.trim();
@@ -409,7 +533,6 @@ export default function InboxPage() {
   /* ─── Thread list panel ─── */
   const ThreadListPanel = (
     <div className="h-full flex flex-col border-r border-white/10 bg-black/20">
-      {/* Header */}
       <div className="px-4 py-4 border-b border-white/10 shrink-0">
         <h2 className="font-semibold text-white text-lg">Inbox</h2>
       </div>
@@ -435,19 +558,12 @@ export default function InboxPage() {
                   : 'hover:bg-white/5'
               )}
             >
-              {/* Avatar with availability dot */}
               <div className="relative shrink-0">
                 <div className="w-11 h-11 rounded-full overflow-hidden bg-amber-500/20 flex items-center justify-center">
                   {thread.companionAvatar ? (
-                    <img
-                      src={thread.companionAvatar}
-                      alt={thread.companionName}
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={thread.companionAvatar} alt={thread.companionName} className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-sm font-medium text-amber-400">
-                      {thread.companionName.charAt(0)}
-                    </span>
+                    <span className="text-sm font-medium text-amber-400">{thread.companionName.charAt(0)}</span>
                   )}
                 </div>
                 <span
@@ -461,22 +577,17 @@ export default function InboxPage() {
                   )}
                 />
               </div>
-
-              {/* Text content */}
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline">
                   <p className="text-sm font-medium text-white truncate">{thread.companionName}</p>
                   {thread.lastMessage && (
-                    <span className="text-xs text-white/40 shrink-0 ml-2">
-                      {formatTime(thread.lastMessage.createdAt)}
-                    </span>
+                    <span className="text-xs text-white/40 shrink-0 ml-2">{formatTime(thread.lastMessage.createdAt)}</span>
                   )}
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
                   <p className="text-xs text-white/50 truncate flex-1">
                     {thread.lastMessage
-                      ? (thread.lastMessage.senderId === currentUser.id ? 'You: ' : '') +
-                        thread.lastMessage.content
+                      ? (thread.lastMessage.senderId === currentUser.id ? 'You: ' : '') + thread.lastMessage.content
                       : 'No messages yet'}
                   </p>
                   {thread.unreadCount > 0 && (
@@ -493,12 +604,11 @@ export default function InboxPage() {
     </div>
   );
 
-  /* ─── Chat panel (right side) ─── */
+  /* ─── Chat panel ─── */
   const ChatPanel = activeThread ? (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Chat header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 shrink-0">
-        {/* Mobile back */}
         <button
           onClick={() => setShowChat(false)}
           className="md:hidden p-1 -ml-1 text-white/60 hover:text-white transition-colors"
@@ -509,19 +619,12 @@ export default function InboxPage() {
           </svg>
         </button>
 
-        {/* Avatar */}
         <div className="relative shrink-0">
           <div className="w-9 h-9 rounded-full overflow-hidden bg-amber-500/20 flex items-center justify-center">
             {activeThread.companionAvatar ? (
-              <img
-                src={activeThread.companionAvatar}
-                alt={activeThread.companionName}
-                className="w-full h-full object-cover"
-              />
+              <img src={activeThread.companionAvatar} alt={activeThread.companionName} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-xs font-medium text-amber-400">
-                {activeThread.companionName.charAt(0)}
-              </span>
+              <span className="text-xs font-medium text-amber-400">{activeThread.companionName.charAt(0)}</span>
             )}
           </div>
           <span
@@ -536,21 +639,19 @@ export default function InboxPage() {
           />
         </div>
 
-        {/* Name + status */}
         <div className="flex flex-col flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">{activeThread.companionName}</p>
-          {chatSessionId ? (
+          {sessionActive ? (
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
               <span className="text-xs text-green-400 font-medium">
-                Connected · ₹{Math.round(chatRatePerMinute / 100)}/min
+                Session Active · {fmt(chatRatePerMinute)}/min · Total: {fmt(totalCharged)}
               </span>
-              <button
-                onClick={endChatSession}
-                className="ml-2 text-xs text-red-400 hover:text-red-300 transition-colors"
-              >
-                End
-              </button>
+            </div>
+          ) : sessionWaiting ? (
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-xs text-amber-400">Waiting for companion to accept...</span>
             </div>
           ) : (
             <div className="flex items-center gap-1">
@@ -564,15 +665,20 @@ export default function InboxPage() {
                     : 'bg-gray-500'
                 )}
               />
-              <span className="text-xs text-white/50">
-                {statusLabel(activeThread.companionAvailabilityStatus)}
-              </span>
+              <span className="text-xs text-white/50">{statusLabel(activeThread.companionAvailabilityStatus)}</span>
             </div>
           )}
         </div>
 
-        {/* Actions */}
         <div className="ml-auto flex items-center gap-1 shrink-0">
+          {sessionActive && (
+            <button
+              onClick={endChatSession}
+              className="text-xs px-2.5 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              End Session
+            </button>
+          )}
           <a
             href={`/client/chat/${activeThread.companionId}`}
             className="p-2 text-white/60 hover:text-white transition-colors"
@@ -594,7 +700,21 @@ export default function InboxPage() {
         </div>
       </div>
 
-      {/* Messages area (flex-1 so it fills remaining height) */}
+      {/* Session summary banner (after session ends) */}
+      {sessionSummary && (
+        <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-2 bg-charcoal-surface border-b border-white/10">
+          <p className="text-xs text-white/70">
+            Session ended · Total charged: <span className="text-white font-semibold">{fmt(sessionSummary.totalCharged)}</span>
+          </p>
+          <button onClick={() => setSessionSummary(null)} className="text-white/40 hover:text-white transition-colors">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Messages area */}
       <div className="relative flex-1 overflow-hidden flex flex-col">
         {messagesLoading ? (
           <div className="flex-1 flex items-center justify-center">
@@ -603,7 +723,7 @@ export default function InboxPage() {
         ) : messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
             <p className="text-white/40 text-sm">No messages yet</p>
-            <p className="text-white/25 text-xs mt-1">Say hello!</p>
+            <p className="text-white/25 text-xs mt-1">Start a session to begin chatting</p>
           </div>
         ) : (
           <div
@@ -629,17 +749,10 @@ export default function InboxPage() {
                       <div className="flex-1 h-px bg-white/10" />
                     </div>
                   )}
-                  <div
-                    className={cn(
-                      'flex flex-col',
-                      isOwn ? 'items-end' : 'items-start',
-                      sameGroupPrev ? 'mt-0.5' : 'mt-2'
-                    )}
-                  >
+                  <div className={cn('flex flex-col', isOwn ? 'items-end' : 'items-start', sameGroupPrev ? 'mt-0.5' : 'mt-2')}>
                     <div
                       className={cn(
-                        'px-4 py-2 text-sm text-white break-words',
-                        'max-w-[70%] rounded-2xl',
+                        'px-4 py-2 text-sm text-white break-words max-w-[70%] rounded-2xl',
                         isOwn
                           ? 'bg-amber-500/20 border border-amber-500/30 rounded-tr-sm'
                           : 'bg-white/[0.08] border border-white/10 rounded-tl-sm'
@@ -648,12 +761,7 @@ export default function InboxPage() {
                       {msg.content}
                     </div>
                     {showTime && (
-                      <span
-                        className={cn(
-                          'text-xs text-white/30 mt-1',
-                          isOwn ? 'self-end' : 'self-start'
-                        )}
-                      >
+                      <span className={cn('text-xs text-white/30 mt-1', isOwn ? 'self-end' : 'self-start')}>
                         {formatTime(msg.createdAt)}
                       </span>
                     )}
@@ -665,7 +773,6 @@ export default function InboxPage() {
           </div>
         )}
 
-        {/* Scroll-to-bottom pill */}
         {showScrollPill && (
           <button
             onClick={() => scrollToBottom(true)}
@@ -677,43 +784,66 @@ export default function InboxPage() {
       </div>
 
       {/* Input area */}
-      <div className="shrink-0 border-t border-white/10 px-4 py-3">
-        <div className="flex items-end gap-3">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
-            rows={1}
-            className="flex-1 resize-none overflow-hidden bg-white/5 border border-white/10 focus:border-amber-500/50 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none transition-colors"
-            style={{ minHeight: '44px', maxHeight: '120px' }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || sending}
-            className={cn(
-              'w-10 h-10 rounded-full shrink-0 flex items-center justify-center transition-colors',
-              input.trim() && !sending
-                ? 'bg-amber-500 hover:bg-amber-400'
-                : 'bg-white/10 cursor-not-allowed'
-            )}
-          >
-            <svg
-              className={cn('w-4 h-4', input.trim() && !sending ? 'text-black' : 'text-white/30')}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2.5}
+      <div className="shrink-0 border-t border-white/10">
+        {/* Start Session bar — shown when no active session */}
+        {!sessionActive && !sessionWaiting && (
+          <div className="px-4 py-2 bg-white/[0.03] border-b border-white/10 flex items-center justify-between gap-3">
+            <span className="text-xs text-white/50">
+              Start a session to chat · {fmt(chatRatePerMinute || 2000)}/min
+            </span>
+            <button
+              onClick={handleStartSession}
+              disabled={startingSession}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-semibold transition-colors"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.269 20.876L5.999 12zm0 0h7.5" />
-            </svg>
-          </button>
+              {startingSession ? 'Starting…' : 'Start Session'}
+            </button>
+          </div>
+        )}
+
+        {/* Waiting bar */}
+        {sessionWaiting && (
+          <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+            <span className="text-xs text-amber-400">Waiting for companion to accept your request…</span>
+          </div>
+        )}
+
+        <div className="px-4 py-3">
+          <div className="flex items-end gap-3">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              placeholder={sessionActive ? 'Type a message...' : 'Start a session to send messages'}
+              disabled={!sessionActive}
+              rows={1}
+              className="flex-1 resize-none overflow-hidden bg-white/5 border border-white/10 focus:border-amber-500/50 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ minHeight: '44px', maxHeight: '120px' }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || sending || !sessionActive}
+              className={cn(
+                'w-10 h-10 rounded-full shrink-0 flex items-center justify-center transition-colors',
+                input.trim() && !sending && sessionActive
+                  ? 'bg-amber-500 hover:bg-amber-400'
+                  : 'bg-white/10 cursor-not-allowed'
+              )}
+            >
+              <svg
+                className={cn('w-4 h-4', input.trim() && !sending && sessionActive ? 'text-black' : 'text-white/30')}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.269 20.876L5.999 12zm0 0h7.5" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
   ) : (
-    /* Empty state — no conversation selected (desktop only) */
     <div className="flex-1 h-full flex flex-col items-center justify-center text-center px-8">
       <svg className="w-16 h-16 text-white/10 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -725,29 +855,21 @@ export default function InboxPage() {
 
   /* ─── Layout ─── */
   return (
-    /*
-     * -mx-4 -my-6: cancel the main's px-4 py-6 padding so inbox fills edge-to-edge.
-     * Height: mobile = 100dvh minus header (~65px) minus bottom nav (~64px).
-     *         desktop = 100dvh minus header only.
-     */
     <div className="-mx-4 -my-6 flex overflow-hidden h-[calc(100dvh-129px)] md:h-[calc(100dvh-65px)]">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-charcoal-surface border border-white/10 text-sm text-white shadow-xl max-w-xs text-center">
+          {toast}
+        </div>
+      )}
+
       {/* Left panel */}
-      <div
-        className={cn(
-          'h-full md:w-80 md:shrink-0',
-          showChat ? 'hidden md:block' : 'w-full block'
-        )}
-      >
+      <div className={cn('h-full md:w-80 md:shrink-0', showChat ? 'hidden md:block' : 'w-full block')}>
         {ThreadListPanel}
       </div>
 
       {/* Right panel */}
-      <div
-        className={cn(
-          'h-full flex-1 overflow-hidden',
-          showChat ? 'flex flex-col' : 'hidden md:flex md:flex-col'
-        )}
-      >
+      <div className={cn('h-full flex-1 overflow-hidden', showChat ? 'flex flex-col' : 'hidden md:flex md:flex-col')}>
         {ChatPanel}
       </div>
     </div>
