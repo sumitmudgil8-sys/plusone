@@ -70,17 +70,23 @@ export async function POST(request: NextRequest) {
     });
 
     if (existing) {
-      const wallet = await getOrCreateWallet(user.id);
-      return NextResponse.json({
-        success: true,
-        data: {
-          sessionId: existing.id,
-          ratePerMinute: existing.ratePerMinute,
-          balance: wallet.balance,
-          resumed: true,
-          pending: existing.status === 'PENDING',
-        },
-      });
+      // Auto-expire if pending and past expiry time
+      if (existing.status === 'PENDING' && existing.expiresAt && existing.expiresAt < new Date()) {
+        await prisma.billingSession.update({ where: { id: existing.id }, data: { status: 'EXPIRED' } });
+      } else {
+        const wallet = await getOrCreateWallet(user.id);
+        return NextResponse.json({
+          success: true,
+          data: {
+            sessionId: existing.id,
+            ratePerMinute: existing.ratePerMinute,
+            balance: wallet.balance,
+            resumed: true,
+            pending: existing.status === 'PENDING',
+            expiresAt: existing.expiresAt?.toISOString() ?? null,
+          },
+        });
+      }
     }
 
     // Use the rate matching the session type
@@ -111,6 +117,7 @@ export async function POST(request: NextRequest) {
     // CHAT: create PENDING session (billing starts only after companion accepts)
     // VOICE: create ACTIVE session immediately
     const sessionStatus = type === 'CHAT' ? 'PENDING' : 'ACTIVE';
+    const expiresAt = type === 'CHAT' ? new Date(Date.now() + 3 * 60 * 1000) : undefined;
 
     const session = await prisma.billingSession.create({
       data: {
@@ -119,6 +126,8 @@ export async function POST(request: NextRequest) {
         type,
         ratePerMinute,
         status: sessionStatus,
+        ...(type === 'VOICE' ? { startedAt: new Date() } : {}),
+        ...(expiresAt ? { expiresAt } : {}),
       },
     });
 
@@ -158,6 +167,7 @@ export async function POST(request: NextRequest) {
           clientName: callerName,
           clientAvatar: callerProfile?.avatarUrl ?? null,
           ratePerMinute,
+          expiresAt: expiresAt?.toISOString(),
         });
       } catch (ablyErr) {
         console.error('Ably chat request signal error (non-fatal):', ablyErr);
@@ -186,6 +196,7 @@ export async function POST(request: NextRequest) {
         balance: wallet.balance,
         resumed: false,
         pending: type === 'CHAT',
+        expiresAt: expiresAt?.toISOString() ?? null,
       },
     });
   } catch (error) {

@@ -13,7 +13,7 @@ import { useSocket } from '@/hooks/useSocket';
 
 const CHAT_REQUEST_TIMEOUT_S = 180; // 3 minutes
 
-type ChatRequestStatus = 'idle' | 'sending' | 'waiting' | 'accepted' | 'declined' | 'expired';
+type ChatRequestStatus = 'idle' | 'sending' | 'waiting' | 'accepted' | 'declined' | 'expired' | 'insufficient_balance';
 
 export default function BookingPage() {
   const params = useParams();
@@ -29,8 +29,9 @@ export default function BookingPage() {
   // Chat request state
   const [userId, setUserId] = useState<string | undefined>();
   const [chatRequestStatus, setChatRequestStatus] = useState<ChatRequestStatus>('idle');
-  const [chatRequestId, setChatRequestId] = useState<string | null>(null);
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(CHAT_REQUEST_TIMEOUT_S);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
 
   // Fetch current user ID for Ably socket
   useEffect(() => {
@@ -57,27 +58,33 @@ export default function BookingPage() {
     };
   }, [companionId]);
 
-  // Subscribe to chat request response events via Ably
+  // Subscribe to chat accepted/declined events via Ably
   const { onChatRequestResponse } = useSocket(userId, 'CLIENT');
 
   useEffect(() => {
     const unsubscribe = onChatRequestResponse((data) => {
-      if (data.requestId !== chatRequestId) return;
+      // Match by sessionId (new billing flow)
+      if (chatSessionId && data.sessionId !== chatSessionId) return;
       if (data.status === 'ACCEPTED') {
         setChatRequestStatus('accepted');
-        // Small delay so the user sees the "Accepted" state before navigating
-        setTimeout(() => router.push(`/client/chat/${companionId}`), 800);
+        // Navigate to the new inbox subpage
+        setTimeout(() => router.push(`/client/inbox/${companionId}`), 800);
       } else {
         setChatRequestStatus('declined');
       }
     });
     return unsubscribe;
-  }, [onChatRequestResponse, chatRequestId, companionId, router]);
+  }, [onChatRequestResponse, chatSessionId, companionId, router]);
 
   // Countdown timer while waiting
   useEffect(() => {
     if (chatRequestStatus !== 'waiting') return;
-    setTimeLeft(CHAT_REQUEST_TIMEOUT_S);
+
+    // Compute initial seconds from expiresAt if available
+    const initial = expiresAt
+      ? Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000))
+      : CHAT_REQUEST_TIMEOUT_S;
+    setTimeLeft(initial);
 
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
@@ -91,27 +98,41 @@ export default function BookingPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [chatRequestStatus]);
+  }, [chatRequestStatus, expiresAt]);
 
   const handleChatRequest = useCallback(async () => {
     setChatRequestStatus('sending');
     try {
-      const res = await fetch('/api/chat-request', {
+      const res = await fetch('/api/billing/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companionId }),
+        body: JSON.stringify({ companionId, type: 'CHAT' }),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) {
+      if (!res.ok) {
+        if (data.error === 'INSUFFICIENT_BALANCE') {
+          setChatRequestStatus('insufficient_balance');
+          return;
+        }
         setChatRequestStatus('idle');
         return;
       }
-      setChatRequestId(data.data.requestId);
+      if (!data.success) {
+        setChatRequestStatus('idle');
+        return;
+      }
+      setChatSessionId(data.data.sessionId);
+      setExpiresAt(data.data.expiresAt ?? null);
+      // If already ACTIVE (resumed), go straight to inbox
+      if (!data.data.pending) {
+        router.push(`/client/inbox/${companionId}`);
+        return;
+      }
       setChatRequestStatus('waiting');
     } catch {
       setChatRequestStatus('idle');
     }
-  }, [companionId]);
+  }, [companionId, router]);
 
   const fetchCompanion = async () => {
     try {
@@ -290,6 +311,24 @@ export default function BookingPage() {
                   <p className="text-white/50 text-sm mt-1">{companion.name} didn&apos;t respond in time</p>
                 </div>
                 <Button onClick={() => setChatRequestStatus('idle')} className="w-full">Try Again</Button>
+              </>
+            )}
+
+            {chatRequestStatus === 'insufficient_balance' && (
+              <>
+                <div className="w-16 h-16 rounded-full bg-yellow-500/20 border-2 border-yellow-500/40 flex items-center justify-center mx-auto">
+                  <svg className="w-8 h-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-white font-semibold">Insufficient balance</p>
+                  <p className="text-white/50 text-sm mt-1">Recharge your wallet to start a chat session</p>
+                </div>
+                <div className="flex gap-2 w-full">
+                  <Button variant="outline" onClick={() => setChatRequestStatus('idle')} className="flex-1">Cancel</Button>
+                  <Button onClick={() => router.push('/client/wallet')} className="flex-1">Recharge</Button>
+                </div>
               </>
             )}
           </Card>

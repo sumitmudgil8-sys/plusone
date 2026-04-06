@@ -22,6 +22,7 @@ interface IncomingChatRequest {
   clientName: string;
   clientAvatar: string | null;
   ratePerMinute?: number;
+  expiresAt?: string;    // ISO timestamp
 }
 
 // ─── Force password-change modal ────────────────────────────────────────────
@@ -203,6 +204,22 @@ function IncomingChatRequestModal({
   onAccept: () => void;
   onDecline: () => void;
 }) {
+  const [timeLeft, setTimeLeft] = useState<number>(() => {
+    if (!request.expiresAt) return 180;
+    return Math.max(0, Math.floor((new Date(request.expiresAt).getTime() - Date.now()) / 1000));
+  });
+
+  useEffect(() => {
+    if (!request.expiresAt) return;
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) { clearInterval(interval); onDecline(); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [request.expiresAt, onDecline]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-sm mx-4 bg-[#1C1C1C] border border-[#3A3A3A] rounded-2xl p-8 shadow-2xl text-center space-y-5">
@@ -219,7 +236,20 @@ function IncomingChatRequestModal({
           <p className="text-sm text-white/50 mt-1">
             Chat request{request.ratePerMinute ? ` · ₹${Math.round(request.ratePerMinute / 100)}/min` : ''}
           </p>
+          {request.expiresAt && (
+            <p className="text-xs text-white/40 mt-1">
+              Expires in {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+            </p>
+          )}
         </div>
+        {request.expiresAt && (
+          <div className="w-full bg-[#3A3A3A] rounded-full h-1">
+            <div
+              className="bg-yellow-400 h-1 rounded-full transition-all duration-1000"
+              style={{ width: `${Math.min(100, (timeLeft / 180) * 100)}%` }}
+            />
+          </div>
+        )}
         <div className="flex gap-3">
           <button onClick={onDecline}
             className="flex-1 py-2.5 rounded-lg border border-[#3A3A3A] text-white/70 hover:text-white hover:border-white/30 transition-colors">
@@ -270,15 +300,25 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
 
   // Poll for pending chat requests — catches requests that arrived while offline
   // or when Ably/push missed delivery. Runs once on mount and every 15 s.
+  // Checks both old ChatRequest model and new BillingSession model.
   useEffect(() => {
     if (!userId) return;
 
     const fetchPending = async () => {
       try {
+        // First check new BillingSession PENDING
+        const billingRes = await fetch('/api/billing/pending');
+        const billingData = await billingRes.json();
+        if (billingData.success && billingData.data) {
+          setIncomingChatRequest((prev) =>
+            prev ? prev : billingData.data
+          );
+          return;
+        }
+        // Fall back to old ChatRequest model
         const res = await fetch('/api/chat-request/pending');
         const data = await res.json();
         if (data.success && data.data) {
-          // Only surface if not already showing one
           setIncomingChatRequest((prev) =>
             prev ? prev : data.data
           );

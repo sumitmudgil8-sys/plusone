@@ -50,6 +50,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Check if request has expired
+  if (session.expiresAt && session.expiresAt < new Date()) {
+    await prisma.billingSession.update({ where: { id: sessionId }, data: { status: 'EXPIRED' } });
+    return NextResponse.json({ success: false, error: 'Request has expired' }, { status: 410 });
+  }
+
   const now = new Date();
   await prisma.billingSession.update({
     where: { id: sessionId },

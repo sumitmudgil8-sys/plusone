@@ -32,6 +32,13 @@ type IncomingChatRequestCallback = (data: {
   clientName: string;
   clientAvatar: string | null;
   ratePerMinute?: number;
+  expiresAt?: string;    // ISO timestamp for countdown
+}) => void;
+
+type BalanceLowCallback = (data: {
+  sessionId: string;
+  balance: number;
+  minutesRemaining: number;
 }) => void;
 
 // Used by clients (chat:accepted / chat:declined) and companions (chat:accepted from billing/accept)
@@ -46,6 +53,7 @@ type ChatRequestResponseCallback = (data: {
 type ChatEndedCallback = (data: {
   sessionId: string;
   totalCharged: number;
+  endedBy?: 'CLIENT' | 'COMPANION' | 'SYSTEM';
 }) => void;
 
 export function useSocket(userId?: string, _role?: string) {
@@ -59,6 +67,7 @@ export function useSocket(userId?: string, _role?: string) {
   const incomingChatRequestCallbacksRef = useRef<Set<IncomingChatRequestCallback>>(new Set());
   const chatRequestResponseCallbacksRef = useRef<Set<ChatRequestResponseCallback>>(new Set());
   const chatEndedCallbacksRef = useRef<Set<ChatEndedCallback>>(new Set());
+  const balanceLowCallbacksRef = useRef<Set<BalanceLowCallback>>(new Set());
 
   useEffect(() => {
     if (!userId) return;
@@ -122,8 +131,13 @@ export function useSocket(userId?: string, _role?: string) {
     });
 
     channel.subscribe('chat:ended', (msg) => {
-      const data = msg.data as { sessionId: string; totalCharged: number };
+      const data = msg.data as { sessionId: string; totalCharged: number; endedBy?: 'CLIENT' | 'COMPANION' | 'SYSTEM' };
       chatEndedCallbacksRef.current.forEach((cb) => cb(data));
+    });
+
+    channel.subscribe('chat:balance_low', (msg) => {
+      const data = msg.data as { sessionId: string; balance: number; minutesRemaining: number };
+      balanceLowCallbacksRef.current.forEach((cb) => cb(data));
     });
 
     return () => {
@@ -196,6 +210,13 @@ export function useSocket(userId?: string, _role?: string) {
     };
   }, []);
 
+  const onBalanceLow = useCallback((callback: BalanceLowCallback) => {
+    balanceLowCallbacksRef.current.add(callback);
+    return () => {
+      balanceLowCallbacksRef.current.delete(callback);
+    };
+  }, []);
+
   return {
     socket: realtimeRef.current,
     isConnected,
@@ -208,5 +229,6 @@ export function useSocket(userId?: string, _role?: string) {
     onIncomingChatRequest,
     onChatRequestResponse,
     onChatEnded,
+    onBalanceLow,
   };
 }

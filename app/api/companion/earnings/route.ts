@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   const weekStart = periodBounds('week');
   const monthStart = periodBounds('month');
 
-  // All billing sessions (ENDED)
+  // All billing sessions (ENDED) + active sessions
   const [
     allChatSessions,
     allCallSessions,
@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
     withdrawals,
     recentBillingSessions,
     recentBookingRecords,
+    activeSessions,
   ] = await Promise.all([
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'CHAT' },
@@ -123,6 +124,10 @@ export async function GET(request: NextRequest) {
           include: { clientProfile: true },
         },
       },
+    }),
+    prisma.billingSession.findMany({
+      where: { companionId, status: 'ACTIVE' },
+      include: { client: { include: { clientProfile: { select: { name: true } } } } },
     }),
   ]);
 
@@ -213,6 +218,15 @@ export async function GET(request: NextRequest) {
       },
       periods,
       recentTransactions,
+      activeSessions: activeSessions.map((s) => ({
+        sessionId: s.id,
+        type: s.type,
+        totalCharged: s.totalCharged,
+        durationSeconds: s.durationSeconds,
+        clientName: s.client.clientProfile?.name ?? 'Client',
+        clientId: s.clientId,
+        startedAt: s.startedAt?.toISOString() ?? null,
+      })),
       withdrawals: withdrawals.map((w) => ({
         id: w.id,
         amount: w.amount,

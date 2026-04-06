@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
         // Notify both sides
         try {
           const ably = getAblyClient();
-          const payload = { sessionId, totalCharged: session.totalCharged };
+          const payload = { sessionId, totalCharged: session.totalCharged, endedBy: 'SYSTEM' };
           await Promise.all([
             ably.channels.get(getUserChannelName(user.id)).publish('chat:ended', payload),
             ably.channels.get(getUserChannelName(companionId)).publish('chat:ended', payload),
@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
       data: {
         lastTickAt: new Date(),
         totalMinutes: { increment: 1 },
+        durationSeconds: { increment: BILLING_TICK_SECONDS },
         totalCharged: { increment: ratePerMinute },
       },
     });
@@ -142,7 +143,7 @@ export async function POST(request: NextRequest) {
       // Notify both sides
       try {
         const ably = getAblyClient();
-        const payload = { sessionId, totalCharged: updatedSession.totalCharged };
+        const payload = { sessionId, totalCharged: updatedSession.totalCharged, endedBy: 'SYSTEM' };
         await Promise.all([
           ably.channels.get(getUserChannelName(user.id)).publish('chat:ended', payload),
           ably.channels.get(getUserChannelName(companionId)).publish('chat:ended', payload),
@@ -160,13 +161,28 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Warn client when balance is low (≤ 2 minutes remaining)
+    const balanceLow = balance <= ratePerMinute * 2;
+    if (balanceLow) {
+      try {
+        const ably = getAblyClient();
+        await ably.channels.get(getUserChannelName(user.id)).publish('chat:balance_low', {
+          sessionId,
+          balance,
+          minutesRemaining: Math.floor(balance / ratePerMinute),
+        });
+      } catch { /* non-fatal */ }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
         ended: false,
         balance,
+        balanceLow,
         totalCharged: updatedSession.totalCharged,
         totalMinutes: updatedSession.totalMinutes,
+        durationSeconds: updatedSession.durationSeconds,
       },
     });
   } catch (error) {

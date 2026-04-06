@@ -300,21 +300,23 @@ model VerificationDocument {
 }
 
 model BillingSession {
-  id            String    @id @default(cuid())
-  clientId      String
-  companionId   String
-  client        User      @relation("ClientBillingSessions", fields: [clientId], references: [id])
-  companion     User      @relation("CompanionBillingSessions", fields: [companionId], references: [id])
-  type          String    @default("CHAT")    // CHAT | VOICE
-  ratePerMinute Int                           // paise/min — snapshot at session start
-  status        String    @default("ACTIVE")  // ACTIVE | ENDED | EXPIRED
-  startedAt     DateTime  @default(now())
-  endedAt       DateTime?
-  lastTickAt    DateTime  @default(now())
-  totalMinutes  Float     @default(0)
-  totalCharged  Int       @default(0)         // paise
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  clientId        String
+  companionId     String
+  client          User      @relation("ClientBillingSessions", fields: [clientId], references: [id])
+  companion       User      @relation("CompanionBillingSessions", fields: [companionId], references: [id])
+  type            String    @default("CHAT")    // CHAT | VOICE
+  ratePerMinute   Int                           // paise/min — snapshot at session start
+  status          String    @default("ACTIVE")  // PENDING | ACTIVE | ENDED | DECLINED | EXPIRED
+  startedAt       DateTime?                     // null until companion accepts (CHAT) or immediately (VOICE)
+  endedAt         DateTime?
+  lastTickAt      DateTime  @default(now())
+  totalMinutes    Float     @default(0)
+  durationSeconds Int       @default(0)
+  totalCharged    Int       @default(0)         // paise
+  expiresAt       DateTime?                     // PENDING requests expire at this time
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([clientId, status])
   @@index([companionId, status])

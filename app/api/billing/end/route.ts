@@ -72,7 +72,11 @@ export async function POST(request: NextRequest) {
     // Notify both participants that the session has ended
     try {
       const ably = getAblyClient();
-      const payload = { sessionId: ended.id, totalCharged: ended.totalCharged };
+      const payload = {
+        sessionId: ended.id,
+        totalCharged: ended.totalCharged,
+        endedBy: user.role as 'CLIENT' | 'COMPANION',
+      };
       await Promise.all([
         ably.channels.get(getUserChannelName(ended.clientId)).publish('chat:ended', payload),
         ably.channels.get(getUserChannelName(ended.companionId)).publish('chat:ended', payload),

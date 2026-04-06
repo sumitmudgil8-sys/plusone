@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   await prisma.billingSession.update({
     where: { id: sessionId },
-    data: { status: 'CANCELLED' },
+    data: { status: 'DECLINED' },
   });
 
   try {
