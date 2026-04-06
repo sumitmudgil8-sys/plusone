@@ -55,35 +55,35 @@ export async function GET(request: NextRequest) {
   ] = await Promise.all([
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'CHAT' },
-      _sum: { totalCharged: true },
+      _sum: { companionShare: true },
     }),
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'VOICE' },
-      _sum: { totalCharged: true },
+      _sum: { companionShare: true },
     }),
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'CHAT', endedAt: { gte: todayStart } },
-      _sum: { totalCharged: true },
+      _sum: { companionShare: true },
     }),
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'VOICE', endedAt: { gte: todayStart } },
-      _sum: { totalCharged: true },
+      _sum: { companionShare: true },
     }),
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'CHAT', endedAt: { gte: weekStart } },
-      _sum: { totalCharged: true },
+      _sum: { companionShare: true },
     }),
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'VOICE', endedAt: { gte: weekStart } },
-      _sum: { totalCharged: true },
+      _sum: { companionShare: true },
     }),
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'CHAT', endedAt: { gte: monthStart } },
-      _sum: { totalCharged: true },
+      _sum: { companionShare: true },
     }),
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'VOICE', endedAt: { gte: monthStart } },
-      _sum: { totalCharged: true },
+      _sum: { companionShare: true },
     }),
     prisma.booking.aggregate({
       where: { companionId, status: 'COMPLETED' },
@@ -131,9 +131,9 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  // Compute totals
-  const fromChats = allChatSessions._sum.totalCharged ?? 0;
-  const fromCalls = allCallSessions._sum.totalCharged ?? 0;
+  // Compute totals — billing sessions use companionShare (70% of totalCharged)
+  const fromChats = allChatSessions._sum.companionShare ?? 0;
+  const fromCalls = allCallSessions._sum.companionShare ?? 0;
   const fromBookings = allBookings._sum.totalAmount ?? 0;
   const totalEarned = fromChats + fromCalls + fromBookings;
 
@@ -145,33 +145,33 @@ export async function GET(request: NextRequest) {
     .reduce((sum, w) => sum + w.amount, 0);
   const availableBalance = totalEarned - paidOut;
 
-  // Period breakdowns
+  // Period breakdowns — all billing figures use companionShare (70% cut)
   const periods = {
     today: {
-      chats: todayChatSessions._sum.totalCharged ?? 0,
-      calls: todayCallSessions._sum.totalCharged ?? 0,
+      chats: todayChatSessions._sum.companionShare ?? 0,
+      calls: todayCallSessions._sum.companionShare ?? 0,
       bookings: todayBookings._sum.totalAmount ?? 0,
       total:
-        (todayChatSessions._sum.totalCharged ?? 0) +
-        (todayCallSessions._sum.totalCharged ?? 0) +
+        (todayChatSessions._sum.companionShare ?? 0) +
+        (todayCallSessions._sum.companionShare ?? 0) +
         (todayBookings._sum.totalAmount ?? 0),
     },
     thisWeek: {
-      chats: weekChatSessions._sum.totalCharged ?? 0,
-      calls: weekCallSessions._sum.totalCharged ?? 0,
+      chats: weekChatSessions._sum.companionShare ?? 0,
+      calls: weekCallSessions._sum.companionShare ?? 0,
       bookings: weekBookings._sum.totalAmount ?? 0,
       total:
-        (weekChatSessions._sum.totalCharged ?? 0) +
-        (weekCallSessions._sum.totalCharged ?? 0) +
+        (weekChatSessions._sum.companionShare ?? 0) +
+        (weekCallSessions._sum.companionShare ?? 0) +
         (weekBookings._sum.totalAmount ?? 0),
     },
     thisMonth: {
-      chats: monthChatSessions._sum.totalCharged ?? 0,
-      calls: monthCallSessions._sum.totalCharged ?? 0,
+      chats: monthChatSessions._sum.companionShare ?? 0,
+      calls: monthCallSessions._sum.companionShare ?? 0,
       bookings: monthBookings._sum.totalAmount ?? 0,
       total:
-        (monthChatSessions._sum.totalCharged ?? 0) +
-        (monthCallSessions._sum.totalCharged ?? 0) +
+        (monthChatSessions._sum.companionShare ?? 0) +
+        (monthCallSessions._sum.companionShare ?? 0) +
         (monthBookings._sum.totalAmount ?? 0),
     },
     allTime: {
@@ -185,7 +185,7 @@ export async function GET(request: NextRequest) {
   // Build recent transactions list (merge billing + booking, sort by date, take 20)
   const billingTx = recentBillingSessions.map((s) => ({
     type: s.type === 'VOICE' ? 'CALL' : 'CHAT',
-    amount: s.totalCharged,
+    amount: s.companionShare,  // 70% companion cut
     createdAt: s.endedAt ?? s.createdAt,
     durationMinutes: Math.round(s.totalMinutes),
     clientName: s.client.clientProfile?.name ?? 'Client',

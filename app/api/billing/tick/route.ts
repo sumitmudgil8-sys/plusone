@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { debitWallet, creditWallet } from '@/lib/wallet';
-import { getCompanionRatePerMinute } from '@/lib/billing';
 import { getAblyClient, getUserChannelName } from '@/lib/ably';
 import { BILLING_TICK_SECONDS, BILLING_MIN_BALANCE_MINUTES } from '@/lib/constants';
 
@@ -105,8 +104,8 @@ export async function POST(request: NextRequest) {
       throw err;
     }
 
-    // Credit companion wallet (best-effort — don't fail the tick if this errors)
-    const companionEarning = getCompanionRatePerMinute(ratePerMinute);
+    // Credit companion wallet — 70% of rate per minute (platform keeps 30%)
+    const companionEarning = Math.floor(ratePerMinute * 0.7);
     try {
       await creditWallet(
         companionId,
@@ -118,7 +117,7 @@ export async function POST(request: NextRequest) {
       console.error('Companion credit error (non-fatal):', companionErr);
     }
 
-    // Update session
+    // Update session (track companionShare for earnings display)
     const updatedSession = await prisma.billingSession.update({
       where: { id: sessionId },
       data: {
@@ -126,6 +125,7 @@ export async function POST(request: NextRequest) {
         totalMinutes: { increment: 1 },
         durationSeconds: { increment: BILLING_TICK_SECONDS },
         totalCharged: { increment: ratePerMinute },
+        companionShare: { increment: companionEarning },
       },
     });
 
