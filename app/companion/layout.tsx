@@ -299,11 +299,9 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
   }, [onIncomingChatRequest]);
 
   // Poll for pending chat requests — catches requests that arrived while offline
-  // or when Ably/push missed delivery. Runs once on mount and every 15 s.
-  // Checks both old ChatRequest model and new BillingSession model.
+  // or when Ably/push missed delivery. Starts immediately on mount (no userId
+  // dependency — both endpoints authenticate via session cookie).
   useEffect(() => {
-    if (!userId) return;
-
     const fetchPending = async () => {
       try {
         // First check new BillingSession PENDING
@@ -329,9 +327,9 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
     };
 
     fetchPending();
-    const interval = setInterval(fetchPending, 15_000);
+    const interval = setInterval(fetchPending, 10_000);
     return () => clearInterval(interval);
-  }, [userId]);
+  }, []);
 
   const handlePasswordChangeSuccess = useCallback(() => {
     setNeedsPasswordChange(false);
@@ -348,16 +346,17 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
     if (!incomingChatRequest) return;
     const { requestId, sessionId, clientId } = incomingChatRequest;
     setIncomingChatRequest(null);
+    // Navigate immediately — don't wait for API round-trip
+    router.push(`/companion/inbox/${clientId}`);
+    // Accept in background; [clientId] page picks up session via chat:accepted Ably event
     try {
       if (sessionId) {
-        // New BillingSession flow
         await fetch('/api/billing/accept', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId }),
         });
       } else if (requestId) {
-        // Old ChatRequest flow
         await fetch(`/api/chat-request/${requestId}/respond`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -365,9 +364,8 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
         });
       }
     } catch {
-      // Non-fatal — navigate anyway
+      // Non-fatal
     }
-    router.push(`/companion/inbox/${clientId}`);
   }, [incomingChatRequest, router]);
 
   const handleDeclineChatRequest = useCallback(async () => {

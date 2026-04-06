@@ -1,10 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ChatWindow } from '@/components/chat/ChatWindow';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
 import { useSocket } from '@/hooks/useSocket';
@@ -61,6 +59,7 @@ function MicOffIcon({ className }: { className?: string }) {
 
 export default function CompanionChatPage() {
   const params = useParams();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const clientId = params.clientId as string;
   const voiceSessionIdParam = searchParams.get('voiceSessionId');
@@ -280,7 +279,7 @@ export default function CompanionChatPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="fixed inset-0 z-50 bg-charcoal flex items-center justify-center">
         <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
       </div>
     );
@@ -288,12 +287,10 @@ export default function CompanionChatPage() {
 
   if (!user || !client) {
     return (
-      <Card className="text-center py-12">
+      <div className="fixed inset-0 z-50 bg-charcoal flex flex-col items-center justify-center gap-4">
         <p className="text-white/60">Unable to load chat</p>
-        <Link href="/companion/inbox">
-          <Button className="mt-4">Back to Inbox</Button>
-        </Link>
-      </Card>
+        <Button onClick={() => router.push('/companion/inbox')}>Back to Inbox</Button>
+      </div>
     );
   }
 
@@ -302,10 +299,71 @@ export default function CompanionChatPage() {
   const isInCall = call.state !== 'idle' && call.state !== 'ended';
 
   return (
-    <div className="h-[calc(100vh-200px)] min-h-[500px] relative">
+    <div className="fixed inset-0 z-50 bg-charcoal flex flex-col">
+      {/* Full-screen header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-charcoal-border bg-charcoal-surface shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Back button */}
+          <button
+            onClick={() => router.push('/companion/inbox')}
+            className="text-white/60 hover:text-white transition-colors shrink-0 -ml-1 p-1"
+            aria-label="Back to inbox"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          {callerAvatar ? (
+            <img src={callerAvatar} alt={callerName} className="w-9 h-9 rounded-full object-cover shrink-0" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-charcoal-border flex items-center justify-center shrink-0">
+              <span className="text-sm font-medium text-white">{callerName[0]}</span>
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white truncate">{callerName}</p>
+            {chatSessionActive && (
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-xs text-green-400">
+                  Session Active · {fmt(chatRatePerMinute)}/min
+                </span>
+              </div>
+            )}
+            {!chatSessionActive && sessionSummary && (
+              <p className="text-xs text-white/50">
+                Session ended · {fmt(sessionSummary.totalCharged)} earned
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {chatSessionActive && (
+            <button
+              onClick={handleEndChatSession}
+              className="text-xs px-2.5 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              End Session
+            </button>
+          )}
+          <button
+            onClick={handleToggleBlock}
+            disabled={blocking}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+              isBlocked
+                ? 'border-green-500/40 text-green-400 hover:bg-green-500/10'
+                : 'border-red-500/30 text-red-400 hover:bg-red-500/10'
+            }`}
+          >
+            {blocking ? '…' : isBlocked ? 'Unblock' : 'Block'}
+          </button>
+        </div>
+      </div>
+
       {/* Voice Call Overlay */}
       {isInCall && (
-        <div className="absolute inset-0 z-10 bg-charcoal/95 backdrop-blur-sm flex flex-col items-center justify-center gap-6 rounded-xl">
+        <div className="absolute inset-0 z-10 bg-charcoal/95 backdrop-blur-sm flex flex-col items-center justify-center gap-6">
           <div className="text-center">
             {callerAvatar ? (
               <img src={callerAvatar} alt={callerName} className="w-24 h-24 rounded-full mx-auto mb-4 object-cover ring-4 ring-gold/30" />
@@ -348,58 +406,8 @@ export default function CompanionChatPage() {
         </div>
       )}
 
-      <Card className="h-full flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-charcoal-border shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            {callerAvatar ? (
-              <img src={callerAvatar} alt={callerName} className="w-8 h-8 rounded-full object-cover shrink-0" />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-charcoal-border flex items-center justify-center shrink-0">
-                <span className="text-sm font-medium text-white">{callerName[0]}</span>
-              </div>
-            )}
-            <div className="min-w-0">
-              <span className="text-sm font-medium text-white">{callerName}</span>
-              {chatSessionActive && (
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                  <span className="text-xs text-green-400">
-                    Session Active · {fmt(chatRatePerMinute)}/min
-                  </span>
-                </div>
-              )}
-              {!chatSessionActive && sessionSummary && (
-                <p className="text-xs text-white/50 mt-0.5">
-                  Session ended · {fmt(sessionSummary.totalCharged)} earned
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {chatSessionActive && (
-              <button
-                onClick={handleEndChatSession}
-                className="text-xs px-2.5 py-1 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
-              >
-                End
-              </button>
-            )}
-            <button
-              onClick={handleToggleBlock}
-              disabled={blocking}
-              className={`text-xs px-3 py-1 rounded-lg border transition-colors disabled:opacity-40 ${
-                isBlocked
-                  ? 'border-green-500/40 text-green-400 hover:bg-green-500/10'
-                  : 'border-red-500/30 text-red-400 hover:bg-red-500/10'
-              }`}
-            >
-              {blocking ? '…' : isBlocked ? 'Unblock' : 'Block'}
-            </button>
-          </div>
-        </div>
-
+      {/* Chat area fills remaining space */}
+      <div className="flex-1 min-h-0 overflow-hidden">
         <ChatWindow
           companionId={clientId}
           companionName={callerName}
@@ -408,7 +416,7 @@ export default function CompanionChatPage() {
           currentUserRole="COMPANION"
           isClient={false}
         />
-      </Card>
+      </div>
     </div>
   );
 }
