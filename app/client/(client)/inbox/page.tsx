@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
+import { BILLING_TICK_SECONDS } from '@/lib/constants';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -95,6 +96,11 @@ export default function InboxPage() {
   const [showChat, setShowChat] = useState(false); // mobile: list vs chat
   const [showScrollPill, setShowScrollPill] = useState(false);
 
+  // Active chat billing session (started when companion accepts)
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
+  const [chatRatePerMinute, setChatRatePerMinute] = useState<number>(0);
+  const chatTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesBoxRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -109,7 +115,7 @@ export default function InboxPage() {
   const activeThread = threads.find((t) => t.threadId === activeThreadId) ?? null;
 
   // Real-time via Ably (same channel names / events as existing useSocket hook)
-  const { onMessage } = useSocket(currentUser?.id, currentUser?.role);
+  const { onMessage, onChatRequestResponse } = useSocket(currentUser?.id, currentUser?.role);
 
   /* Scroll helpers */
   const isNearBottom = useCallback(() => {
@@ -175,6 +181,85 @@ export default function InboxPage() {
       .catch((err) => console.error('Fetch messages error:', err))
       .finally(() => setMessagesLoading(false));
   }, [activeThreadId]);
+
+  /* Handle chat:accepted — start billing session and tick */
+  useEffect(() => {
+    const unsubscribe = onChatRequestResponse(async (data) => {
+      if (data.status !== 'ACCEPTED') return;
+      const companionId = data.companionId;
+
+      // Start billing session
+      try {
+        const res = await fetch('/api/billing/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ companionId, type: 'CHAT' }),
+        });
+        const d = await res.json();
+        if (res.ok && d.success) {
+          const sessionId: string = d.data.sessionId;
+          const rate: number = d.data.ratePerMinute;
+          setChatSessionId(sessionId);
+          setChatRatePerMinute(rate);
+
+          // Start tick interval
+          if (chatTickRef.current) clearInterval(chatTickRef.current);
+          chatTickRef.current = setInterval(async () => {
+            try {
+              const tickRes = await fetch('/api/billing/tick', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId }),
+              });
+              const tickData = await tickRes.json();
+              if (tickData.data?.ended) {
+                // Session ended (insufficient balance or explicit end)
+                setChatSessionId(null);
+                setChatRatePerMinute(0);
+                if (chatTickRef.current) {
+                  clearInterval(chatTickRef.current);
+                  chatTickRef.current = null;
+                }
+              }
+            } catch {
+              // tick failure is non-fatal
+            }
+          }, BILLING_TICK_SECONDS * 1000);
+        }
+      } catch {
+        // billing start failure is non-fatal — chat continues
+      }
+    });
+    return unsubscribe;
+  }, [onChatRequestResponse]);
+
+  /* Clean up tick interval on unmount */
+  useEffect(() => {
+    return () => {
+      if (chatTickRef.current) clearInterval(chatTickRef.current);
+    };
+  }, []);
+
+  /* End chat session when navigating away */
+  const endChatSession = useCallback(async () => {
+    if (!chatSessionId) return;
+    if (chatTickRef.current) {
+      clearInterval(chatTickRef.current);
+      chatTickRef.current = null;
+    }
+    const sid = chatSessionId;
+    setChatSessionId(null);
+    setChatRatePerMinute(0);
+    try {
+      await fetch('/api/billing/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sid }),
+      });
+    } catch {
+      // non-fatal
+    }
+  }, [chatSessionId]);
 
   /* Ably real-time messages */
   useEffect(() => {
@@ -454,21 +539,36 @@ export default function InboxPage() {
         {/* Name + status */}
         <div className="flex flex-col flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">{activeThread.companionName}</p>
-          <div className="flex items-center gap-1">
-            <span
-              className={cn(
-                'w-2 h-2 rounded-full',
-                activeThread.companionAvailabilityStatus === 'ONLINE'
-                  ? 'bg-green-400'
-                  : activeThread.companionAvailabilityStatus === 'BUSY'
-                  ? 'bg-amber-400'
-                  : 'bg-gray-500'
-              )}
-            />
-            <span className="text-xs text-white/50">
-              {statusLabel(activeThread.companionAvailabilityStatus)}
-            </span>
-          </div>
+          {chatSessionId ? (
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-xs text-green-400 font-medium">
+                Connected · ₹{Math.round(chatRatePerMinute / 100)}/min
+              </span>
+              <button
+                onClick={endChatSession}
+                className="ml-2 text-xs text-red-400 hover:text-red-300 transition-colors"
+              >
+                End
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <span
+                className={cn(
+                  'w-2 h-2 rounded-full',
+                  activeThread.companionAvailabilityStatus === 'ONLINE'
+                    ? 'bg-green-400'
+                    : activeThread.companionAvailabilityStatus === 'BUSY'
+                    ? 'bg-amber-400'
+                    : 'bg-gray-500'
+                )}
+              />
+              <span className="text-xs text-white/50">
+                {statusLabel(activeThread.companionAvailabilityStatus)}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Actions */}

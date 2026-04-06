@@ -124,27 +124,21 @@ export async function POST(request: NextRequest) {
       console.error('Ably publish error (non-fatal):', ablyError);
     }
 
-    // Push notification to offline receiver (best-effort)
+    // Push notification to receiver — always attempt regardless of online status
     try {
-      const receiver = await prisma.user.findUnique({
-        where: { id: receiverId },
-        select: { isOnline: true },
+      const senderName =
+        message.sender.clientProfile?.name ??
+        message.sender.companionProfile?.name ??
+        'Someone';
+      const inboxPath =
+        user.role === 'CLIENT'
+          ? `/companion/inbox/${clientId}`
+          : `/client/inbox`;
+      await sendPushToUser(receiverId, {
+        title: `New message from ${senderName}`,
+        body: content.slice(0, 100),
+        url: inboxPath,
       });
-      if (receiver && !receiver.isOnline) {
-        const senderName =
-          message.sender.clientProfile?.name ??
-          message.sender.companionProfile?.name ??
-          'Someone';
-        const inboxPath =
-          user.role === 'CLIENT'
-            ? `/companion/inbox/${clientId}`
-            : `/client/chat/${actualCompanionId}`;
-        await sendPushToUser(receiverId, {
-          title: `New message from ${senderName}`,
-          body: content.slice(0, 100),
-          url: inboxPath,
-        });
-      }
     } catch (pushErr) {
       console.error('Push notification error (non-fatal):', pushErr);
     }

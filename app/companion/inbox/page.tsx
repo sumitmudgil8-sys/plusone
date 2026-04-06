@@ -3,43 +3,88 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
-import { formatDate } from '@/lib/utils';
 
-export default function InboxPage() {
-  const [threads, setThreads] = useState<any[]>([]);
+interface ThreadRow {
+  threadId: string;
+  clientId: string;
+  clientName: string;
+  clientAvatar: string | null;
+  lastMessage: {
+    content: string;
+    senderId: string;
+    createdAt: string;
+    isRead: boolean;
+  } | null;
+  unreadCount: number;
+  updatedAt: string;
+}
+
+function relTime(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+export default function CompanionInboxPage() {
+  const [threads, setThreads] = useState<ThreadRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
 
   useEffect(() => {
-    fetchThreads();
-  }, []);
+    const load = async () => {
+      try {
+        const [userRes, threadsRes] = await Promise.all([
+          fetch('/api/users/me'),
+          fetch('/api/messages/threads'),
+        ]);
 
-  const fetchThreads = async () => {
-    try {
-      // Fetch all bookings to get client list
-      const res = await fetch('/api/bookings');
-      const data = await res.json();
-
-      // Get unique clients
-      const clientMap = new Map();
-      data.bookings?.forEach((booking: any) => {
-        if (!clientMap.has(booking.client.id)) {
-          clientMap.set(booking.client.id, {
-            clientId: booking.client.id,
-            clientName: booking.client.clientProfile?.name || 'Unknown',
-            clientAvatar: booking.client.clientProfile?.avatarUrl,
-            lastMessage: null,
-            unreadCount: 0,
-          });
+        if (userRes.ok) {
+          const d = await userRes.json();
+          setCurrentUserId(d.user.id ?? '');
         }
-      });
 
-      setThreads(Array.from(clientMap.values()));
-    } catch (error) {
-      console.error('Error fetching threads:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+        if (threadsRes.ok) {
+          const d = await threadsRes.json();
+          const list = (d.data ?? []) as Array<{
+            threadId: string;
+            clientId: string;
+            clientName: string;
+            companionId: string;
+            companionName: string;
+            companionAvatar: string | null;
+            lastMessage: ThreadRow['lastMessage'];
+            unreadCount: number;
+            updatedAt: string;
+          }>;
+
+          // The threads API returns companion-centric rows for COMPANION role.
+          // clientId and clientName are present.
+          setThreads(
+            list.map((t) => ({
+              threadId: t.threadId,
+              clientId: t.clientId,
+              clientName: t.clientName,
+              // For companions the "other side" avatar isn't in threads API — show initials
+              clientAvatar: null,
+              lastMessage: t.lastMessage,
+              unreadCount: t.unreadCount,
+              updatedAt: t.updatedAt,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Companion inbox load error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, []);
 
   if (loading) {
     return (
@@ -65,25 +110,42 @@ export default function InboxPage() {
             </p>
           </Card>
         ) : (
-          (threads as any[]).map((thread) => (
-            <Link key={thread.clientId} href={`/companion/inbox/${thread.clientId}`}>
+          threads.map((thread) => (
+            <Link key={thread.threadId} href={`/companion/inbox/${thread.clientId}`}>
               <Card className="flex items-center gap-4 hover:bg-white/5 transition-colors">
-                {thread.clientAvatar ? (
-                  <img
-                    src={thread.clientAvatar}
-                    alt={thread.clientName}
-                    className="w-12 h-12 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-charcoal-border flex items-center justify-center text-white font-medium">
-                    {thread.clientName.charAt(0)}
+                <div className="relative shrink-0">
+                  <div className="w-12 h-12 rounded-full bg-charcoal-border flex items-center justify-center text-white font-medium overflow-hidden">
+                    {thread.clientAvatar ? (
+                      <img src={thread.clientAvatar} alt={thread.clientName} className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{thread.clientName.charAt(0)}</span>
+                    )}
                   </div>
-                )}
-                <div className="flex-1">
-                  <p className="font-medium text-white">{thread.clientName}</p>
-                  <p className="text-sm text-white/50">Click to open chat</p>
+                  {thread.unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gold text-black text-xs font-bold flex items-center justify-center">
+                      {thread.unreadCount}
+                    </span>
+                  )}
                 </div>
-                <svg className="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="font-medium text-white truncate">{thread.clientName}</p>
+                    {thread.lastMessage && (
+                      <span className="text-xs text-white/40 shrink-0">
+                        {relTime(thread.lastMessage.createdAt)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-white/50 truncate mt-0.5">
+                    {thread.lastMessage
+                      ? (thread.lastMessage.senderId === currentUserId ? 'You: ' : '') +
+                        thread.lastMessage.content
+                      : 'No messages yet'}
+                  </p>
+                </div>
+
+                <svg className="w-5 h-5 text-white/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </Card>

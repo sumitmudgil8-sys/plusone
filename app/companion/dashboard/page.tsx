@@ -24,6 +24,15 @@ interface SessionRecord {
   endedAt: string | null;
 }
 
+interface ActiveSession {
+  active: boolean;
+  sessionId?: string;
+  type?: string;
+  totalCharged?: number;
+  clientName?: string;
+  clientId?: string;
+}
+
 function fmt(paise: number) {
   return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
@@ -35,6 +44,38 @@ export default function CompanionDashboard() {
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [togglingOnline, setTogglingOnline] = useState(false);
+  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
+  const prevActiveRef = useState<boolean>(false);
+
+  // Poll active session every 30s — show live earnings ticker
+  useEffect(() => {
+    const pollActive = async () => {
+      try {
+        const res = await fetch('/api/companion/active-session');
+        if (res.ok) {
+          const d = await res.json();
+          const wasActive = prevActiveRef[0];
+          setActiveSession(d.data);
+
+          // If session just ended, refresh earnings data
+          if (wasActive && !d.data.active) {
+            const earningsRes = await fetch('/api/companion/earnings');
+            if (earningsRes.ok) {
+              const ed = await earningsRes.json();
+              setToday(ed.data?.periods?.today ?? null);
+            }
+          }
+          prevActiveRef[1](d.data.active);
+        }
+      } catch {
+        // non-fatal
+      }
+    };
+
+    pollActive();
+    const interval = setInterval(pollActive, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -159,6 +200,27 @@ export default function CompanionDashboard() {
           {isOnline ? 'Online' : 'Offline'}
         </button>
       </div>
+
+      {/* Active session ticker */}
+      {activeSession?.active && (
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-green-500/10 border border-green-500/30">
+          <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-green-400">
+              Active {activeSession.type === 'VOICE' ? 'Voice' : 'Chat'} session
+              {activeSession.clientName ? ` · ${activeSession.clientName}` : ''}
+            </p>
+            <p className="text-xs text-white/50 mt-0.5">
+              Earned so far: {fmt(activeSession.totalCharged ?? 0)} · updates every 30s
+            </p>
+          </div>
+          {activeSession.clientId && (
+            <Link href={`/companion/inbox/${activeSession.clientId}`} className="text-xs text-green-400 hover:underline shrink-0">
+              Go to chat →
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Today's earnings breakdown */}
       <div>

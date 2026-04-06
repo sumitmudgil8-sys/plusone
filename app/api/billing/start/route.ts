@@ -7,6 +7,7 @@ import { getRatePerMinute } from '@/lib/billing';
 import { getAblyClient, getUserChannelName } from '@/lib/ably';
 import { getCallChannelName } from '@/lib/agora';
 import { BILLING_MIN_BALANCE_MINUTES } from '@/lib/constants';
+import { sendPushToUser } from '@/lib/push';
 
 export const runtime = 'nodejs';
 
@@ -77,8 +78,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Check client has enough balance for at least BILLING_MIN_BALANCE_MINUTES
-    const ratePerMinute = getRatePerMinute(companion.companionProfile.hourlyRate);
+    // Use the rate matching the session type (chat vs voice vs default hourly)
+    const ratePerMinute =
+      type === 'CHAT'
+        ? (companion.companionProfile.chatRatePerMinute ?? getRatePerMinute(companion.companionProfile.hourlyRate))
+        : type === 'VOICE'
+        ? (companion.companionProfile.callRatePerMinute ?? getRatePerMinute(companion.companionProfile.hourlyRate))
+        : getRatePerMinute(companion.companionProfile.hourlyRate);
     const minimumRequired = ratePerMinute * BILLING_MIN_BALANCE_MINUTES;
 
     const wallet = await getOrCreateWallet(user.id);
@@ -108,19 +114,22 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Fetch caller profile once for use in both VOICE and CHAT notifications
+    const callerProfile = await prisma.clientProfile.findUnique({
+      where: { userId: user.id },
+      select: { name: true, avatarUrl: true },
+    });
+    const callerName = callerProfile?.name ?? 'Client';
+
     // For voice calls, signal the companion via Ably so they can show incoming call UI
     if (type === 'VOICE') {
       try {
-        const callerProfile = await prisma.clientProfile.findUnique({
-          where: { userId: user.id },
-          select: { name: true, avatarUrl: true },
-        });
         const ably = getAblyClient();
         const channel = ably.channels.get(getUserChannelName(companionId));
         await channel.publish('call:incoming', {
           sessionId: session.id,
           clientId: user.id,
-          callerName: callerProfile?.name ?? 'Client',
+          callerName,
           callerAvatar: callerProfile?.avatarUrl ?? null,
           channelName: getCallChannelName(session.id),
           ratePerMinute,
@@ -128,6 +137,20 @@ export async function POST(request: NextRequest) {
       } catch (ablyErr) {
         console.error('Ably call signal error (non-fatal):', ablyErr);
       }
+    }
+
+    // Push notification to companion for both CHAT and VOICE billing starts
+    try {
+      await sendPushToUser(companionId, {
+        title: type === 'CHAT' ? `${callerName} wants to chat` : `Incoming call from ${callerName}`,
+        body:
+          type === 'CHAT'
+            ? `Chat session at ₹${Math.round(ratePerMinute / 100)}/min`
+            : `Voice call at ₹${Math.round(ratePerMinute / 100)}/min`,
+        url: `/companion/inbox/${user.id}`,
+      });
+    } catch (pushErr) {
+      console.error('Billing start push error (non-fatal):', pushErr);
     }
 
     return NextResponse.json({
