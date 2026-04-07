@@ -58,22 +58,35 @@ export default function ClientInboxPage() {
 
   const [timeLeft, setTimeLeft] = useState(180);
   const [balanceLow, setBalanceLow] = useState(false);
-  const [sessionSummary, setSessionSummary] = useState<{ totalCharged: number } | null>(null);
+  const [sessionSummary, setSessionSummary] = useState<{ totalCharged: number; durationSeconds: number } | null>(null);
+
+  // Live second-by-second timer (offset from server-confirmed durationSeconds)
+  const [liveSeconds, setLiveSeconds] = useState(0);
+  const liveSecondsRef = useRef(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const liveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const summaryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Ref to current sessionState for use inside effects without stale closure
   const sessionStateRef = useRef<SessionState>('LOADING');
   useEffect(() => { sessionStateRef.current = sessionState; }, [sessionState]);
-  // Ref to current sessionId so chat:accepted subscription doesn't re-register on session changes
   const sessionIdRef = useRef<string | null>(null);
   useEffect(() => { sessionIdRef.current = session?.sessionId ?? null; }, [session?.sessionId]);
 
   const { onChatRequestResponse, onChatEnded, onBalanceLow, sendTyping, onMessage, onTyping, isConnected } =
     useSocket(userId, 'CLIENT');
+
+  // Start live second timer
+  const startLiveTimer = useCallback((initialSeconds: number) => {
+    liveSecondsRef.current = initialSeconds;
+    setLiveSeconds(initialSeconds);
+    if (liveTimerRef.current) clearInterval(liveTimerRef.current);
+    liveTimerRef.current = setInterval(() => {
+      liveSecondsRef.current += 1;
+      setLiveSeconds(liveSecondsRef.current);
+    }, 1000);
+  }, []);
 
   // Fetch current user
   useEffect(() => {
@@ -89,11 +102,7 @@ export default function ClientInboxPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.companion) {
-          setCompanion({
-            id: companionId,
-            name: d.companion.name ?? 'Companion',
-            avatarUrl: d.companion.avatarUrl ?? null,
-          });
+          setCompanion({ id: companionId, name: d.companion.name ?? 'Companion', avatarUrl: d.companion.avatarUrl ?? null });
         }
       })
       .catch(() => {});
@@ -138,20 +147,16 @@ export default function ClientInboxPage() {
     checkSession();
   }, [userId, checkSession]);
 
-  // Re-check when Ably connects — catches the race where companion accepts
-  // before the client's Ably connection is fully established.
   useEffect(() => {
     if (!isConnected) return;
     if (sessionStateRef.current === 'PENDING') checkSession();
   }, [isConnected, checkSession]);
 
-  // Fetch thread messages when ACTIVE
+  // Fetch messages when ACTIVE
   const fetchMessages = useCallback(async () => {
     if (!userId) return;
     try {
-      const res = await fetch(
-        `/api/messages/thread?companionUserId=${companionId}&clientUserId=${userId}`
-      );
+      const res = await fetch(`/api/messages/thread?companionUserId=${companionId}&clientUserId=${userId}`);
       const d = await res.json();
       if (d.success && d.data) {
         setMessages(d.data.messages);
@@ -168,6 +173,16 @@ export default function ClientInboxPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Start live timer when ACTIVE
+  useEffect(() => {
+    if (sessionState === 'ACTIVE' && session) {
+      startLiveTimer(session.durationSeconds);
+    }
+    if (sessionState !== 'ACTIVE') {
+      if (liveTimerRef.current) clearInterval(liveTimerRef.current);
+    }
+  }, [sessionState, session?.sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pending countdown
   useEffect(() => {
@@ -204,8 +219,9 @@ export default function ClientInboxPage() {
         if (d.success && d.data) {
           if (d.data.ended) {
             if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
+            if (liveTimerRef.current) clearInterval(liveTimerRef.current);
             setSessionState('ENDED');
-            setSessionSummary({ totalCharged: d.data.totalCharged ?? 0 });
+            setSessionSummary({ totalCharged: d.data.totalCharged ?? 0, durationSeconds: liveSecondsRef.current });
           } else {
             setSession((prev) =>
               prev ? {
@@ -214,6 +230,9 @@ export default function ClientInboxPage() {
                 durationSeconds: d.data.durationSeconds ?? prev.durationSeconds + BILLING_TICK_SECONDS,
               } : prev
             );
+            // Sync live timer with server value
+            liveSecondsRef.current = d.data.durationSeconds ?? liveSecondsRef.current;
+            setLiveSeconds(liveSecondsRef.current);
             if (d.data.balanceLow) setBalanceLow(true);
           }
         }
@@ -221,7 +240,7 @@ export default function ClientInboxPage() {
     }, BILLING_TICK_SECONDS * 1000);
   }, []);
 
-  // Subscribe to chat:accepted — use ref for sessionId to avoid re-registering on session changes
+  // Subscribe to chat:accepted
   useEffect(() => {
     if (!userId) return;
     return onChatRequestResponse((data) => {
@@ -230,11 +249,7 @@ export default function ClientInboxPage() {
       const sessionId = data.sessionId ?? sessionIdRef.current;
       if (!sessionId) return;
       setSession((prev) => prev ? { ...prev, sessionId } : {
-        sessionId,
-        ratePerMinute: 0,
-        totalCharged: 0,
-        durationSeconds: 0,
-        expiresAt: null,
+        sessionId, ratePerMinute: 0, totalCharged: 0, durationSeconds: 0, expiresAt: null,
       });
       setSessionState('ACTIVE');
       startTick(sessionId);
@@ -246,12 +261,12 @@ export default function ClientInboxPage() {
     return onChatEnded((data) => {
       if (session?.sessionId && data.sessionId !== session.sessionId) return;
       if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
+      if (liveTimerRef.current) clearInterval(liveTimerRef.current);
       setSessionState('ENDED');
-      setSessionSummary({ totalCharged: data.totalCharged });
+      setSessionSummary({ totalCharged: data.totalCharged, durationSeconds: liveSecondsRef.current });
     });
   }, [onChatEnded, session?.sessionId]);
 
-  // Subscribe to chat:balance_low
   useEffect(() => {
     return onBalanceLow((data) => {
       if (session?.sessionId && data.sessionId !== session.sessionId) return;
@@ -259,22 +274,16 @@ export default function ClientInboxPage() {
     });
   }, [onBalanceLow, session?.sessionId]);
 
-  // Subscribe to incoming messages
   useEffect(() => {
     return onMessage((data) => {
       setMessages((prev) => [...prev, {
-        id: data.id,
-        content: data.content,
-        senderId: data.senderId,
-        senderName: data.senderName,
-        senderAvatar: data.senderAvatar ?? null,
-        createdAt: data.createdAt,
+        id: data.id, content: data.content, senderId: data.senderId,
+        senderName: data.senderName, senderAvatar: data.senderAvatar ?? null, createdAt: data.createdAt,
       }]);
       setIsTyping(false);
     });
   }, [onMessage]);
 
-  // Subscribe to typing
   useEffect(() => {
     return onTyping(() => {
       setIsTyping(true);
@@ -283,7 +292,7 @@ export default function ClientInboxPage() {
     });
   }, [onTyping]);
 
-  // Start tick when state becomes ACTIVE
+  // Start tick when ACTIVE
   useEffect(() => {
     if (sessionState === 'ACTIVE' && session?.sessionId) {
       startTick(session.sessionId);
@@ -297,8 +306,8 @@ export default function ClientInboxPage() {
   useEffect(() => {
     return () => {
       if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
+      if (liveTimerRef.current) clearInterval(liveTimerRef.current);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      if (summaryTimerRef.current) clearTimeout(summaryTimerRef.current);
     };
   }, []);
 
@@ -306,17 +315,13 @@ export default function ClientInboxPage() {
     if (!inputText.trim() || !userId || sessionState !== 'ACTIVE') return;
     const content = inputText.trim();
     setInputText('');
-    if (inputRef.current) inputRef.current.style.height = 'auto';
+    if (inputRef.current) { inputRef.current.style.height = 'auto'; }
     setSending(true);
 
     const optimisticId = `opt-${Date.now()}`;
     setMessages((prev) => [...prev, {
-      id: optimisticId,
-      content,
-      senderId: userId,
-      senderName: 'You',
-      senderAvatar: null,
-      createdAt: new Date().toISOString(),
+      id: optimisticId, content, senderId: userId,
+      senderName: 'You', senderAvatar: null, createdAt: new Date().toISOString(),
     }]);
 
     try {
@@ -327,12 +332,10 @@ export default function ClientInboxPage() {
       });
       const d = await res.json();
       if (d.success && d.data) {
-        setMessages((prev) =>
-          prev.map((m) => m.id === optimisticId ? { ...m, id: d.data.id } : m)
-        );
+        setMessages((prev) => prev.map((m) => m.id === optimisticId ? { ...m, id: d.data.id } : m));
         if (!threadId && d.data.threadId) setThreadId(d.data.threadId);
       }
-    } catch { /* non-fatal — keep optimistic */ } finally {
+    } catch { /* keep optimistic */ } finally {
       setSending(false);
     }
   }, [inputText, userId, sessionState, companionId, threadId]);
@@ -340,7 +343,7 @@ export default function ClientInboxPage() {
   const handleTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);
     e.target.style.height = 'auto';
-    e.target.style.height = e.target.scrollHeight + 'px';
+    e.target.style.height = `${e.target.scrollHeight}px`;
     if (isConnected && userId) {
       sendTyping({ threadId: threadId ?? companionId, userId, receiverId: companionId });
     }
@@ -350,7 +353,9 @@ export default function ClientInboxPage() {
     if (!session?.sessionId) return;
     const sid = session.sessionId;
     if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
+    if (liveTimerRef.current) clearInterval(liveTimerRef.current);
     setSessionState('ENDED');
+    setSessionSummary({ totalCharged: session.totalCharged, durationSeconds: liveSecondsRef.current });
     try {
       const res = await fetch('/api/billing/end', {
         method: 'POST',
@@ -358,189 +363,319 @@ export default function ClientInboxPage() {
         body: JSON.stringify({ sessionId: sid }),
       });
       const d = await res.json();
-      setSessionSummary({ totalCharged: d.data?.totalCharged ?? session.totalCharged });
-    } catch {
-      setSessionSummary({ totalCharged: session.totalCharged });
-    }
+      setSessionSummary({ totalCharged: d.data?.totalCharged ?? session.totalCharged, durationSeconds: liveSecondsRef.current });
+    } catch { /* keep local summary */ }
   }, [session]);
-
-  // ── Loading ──────────────────────────────────────────────────────────────
-  if (sessionState === 'LOADING') {
-    return (
-      <div className="fixed inset-0 z-50 bg-[#0A0A0F] flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full" />
-      </div>
-    );
-  }
 
   const companionName = companion?.name ?? 'Companion';
   const companionAvatar = companion?.avatarUrl ?? null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#0A0A0F]">
+  // Progress through current billing minute (0–1)
+  const minuteProgress = session ? (liveSeconds % BILLING_TICK_SECONDS) / BILLING_TICK_SECONDS : 0;
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#111118] shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link href="/client/inbox" className="text-white/50 hover:text-white shrink-0 -ml-1 p-1">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
-          {companionAvatar ? (
-            <img src={companionAvatar} alt={companionName}
-              className="w-9 h-9 rounded-full object-cover shrink-0" />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-              <span className="text-sm font-medium text-white">{companionName[0]}</span>
-            </div>
-          )}
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{companionName}</p>
-            {sessionState === 'ACTIVE' && session && (
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-xs text-green-400">
-                  {fmt(session.ratePerMinute)}/min · {formatDuration(session.durationSeconds)}
-                </span>
-              </div>
-            )}
-            {sessionState === 'PENDING' && (
-              <p className="text-xs text-amber-400">Waiting for response…</p>
-            )}
-            {sessionState === 'ENDED' && sessionSummary && (
-              <p className="text-xs text-white/50">
-                Session ended · {fmt(sessionSummary.totalCharged)} charged
-              </p>
-            )}
+  // ── Loading ───────────────────────────────────────────────────────────────
+  if (sessionState === 'LOADING') {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#0C0C14] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-full border-2 border-amber-500/30 border-t-amber-500 animate-spin" />
+          <p className="text-white/40 text-sm">Connecting…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── ENDED overlay ─────────────────────────────────────────────────────────
+  if (sessionState === 'ENDED' && sessionSummary) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#0C0C14] flex flex-col items-center justify-center px-8 text-center">
+        {/* Checkmark */}
+        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-400/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center mb-6">
+          <svg className="w-10 h-10 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h2 className="text-2xl font-semibold text-white mb-1">Chat Ended</h2>
+        <p className="text-white/50 text-sm mb-8">Great conversation with {companionName}</p>
+
+        <div className="w-full max-w-xs bg-white/[0.04] border border-white/[0.08] rounded-2xl p-5 mb-8 space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-white/50 text-sm">Duration</span>
+            <span className="text-white font-medium text-sm">{formatDuration(sessionSummary.durationSeconds)}</span>
+          </div>
+          <div className="w-full h-px bg-white/[0.06]" />
+          <div className="flex justify-between items-center">
+            <span className="text-white/50 text-sm">Total charged</span>
+            <span className="text-amber-400 font-semibold">{fmt(sessionSummary.totalCharged)}</span>
           </div>
         </div>
+
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <Link
+            href={`/client/booking/${companionId}`}
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 text-black font-semibold text-sm text-center"
+          >
+            Chat Again
+          </Link>
+          <Link
+            href="/client/browse"
+            className="w-full py-3.5 rounded-2xl bg-white/[0.06] border border-white/[0.08] text-white/70 font-medium text-sm text-center"
+          >
+            Browse Companions
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-[#0C0C14]"
+      style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}
+    >
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div
+        className="flex-shrink-0 flex items-center gap-3 px-4 bg-[#0C0C14]/95 backdrop-blur-xl border-b border-white/[0.07]"
+        style={{ paddingTop: 'max(env(safe-area-inset-top), 12px)', paddingBottom: '12px' }}
+      >
+        <Link
+          href="/client/browse"
+          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/[0.06] transition-colors text-white/60 hover:text-white shrink-0"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </Link>
+
+        {/* Avatar */}
+        <div className="relative shrink-0">
+          {companionAvatar ? (
+            <img src={companionAvatar} alt={companionName}
+              className="w-10 h-10 rounded-full object-cover" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500/30 to-amber-700/20 flex items-center justify-center">
+              <span className="text-sm font-semibold text-amber-300">{companionName[0]}</span>
+            </div>
+          )}
+          {sessionState === 'ACTIVE' && (
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[#0C0C14]" />
+          )}
+        </div>
+
+        {/* Name + status */}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white leading-tight truncate">{companionName}</p>
+          {sessionState === 'ACTIVE' && (
+            <p className="text-xs text-green-400 leading-tight">Active session</p>
+          )}
+          {sessionState === 'PENDING' && (
+            <p className="text-xs text-amber-400 leading-tight">Waiting for response…</p>
+          )}
+          {sessionState === 'NO_SESSION' && (
+            <p className="text-xs text-white/40 leading-tight">No active session</p>
+          )}
+        </div>
+
+        {/* End button */}
         {sessionState === 'ACTIVE' && (
           <button
             onClick={handleEndSession}
-            className="text-xs px-2.5 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+            className="shrink-0 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/20 transition-colors active:scale-95"
           >
-            End Chat
+            End
           </button>
         )}
       </div>
 
-      {/* ── PENDING ─────────────────────────────────────────────────────── */}
-      {sessionState === 'PENDING' && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-amber-500/20 border-2 border-amber-500/40 flex items-center justify-center">
-            <svg className="w-8 h-8 text-amber-400 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
+      {/* ── Billing strip (ACTIVE only — single source of truth) ────────── */}
+      {sessionState === 'ACTIVE' && session && (
+        <div className="flex-shrink-0 relative overflow-hidden">
+          {/* Minute progress fill */}
+          <div
+            className="absolute inset-0 bg-gradient-to-r from-amber-500/8 to-transparent transition-none"
+            style={{ width: `${minuteProgress * 100}%` }}
+          />
+          <div className={`relative flex items-center justify-between px-4 py-2 border-b ${balanceLow ? 'border-amber-500/30 bg-amber-500/5' : 'border-white/[0.06]'}`}>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse shrink-0" />
+              <span className="text-xs font-semibold text-white tabular-nums">
+                {formatDuration(liveSeconds)}
+              </span>
+              <span className="text-white/20 text-xs">·</span>
+              <span className="text-xs text-white/50">{fmt(session.ratePerMinute)}/min</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {balanceLow ? (
+                <Link href="/client/wallet" className="text-xs text-amber-400 font-medium underline underline-offset-2">
+                  Low balance · Add Money
+                </Link>
+              ) : (
+                <span className="text-xs text-white/50">
+                  <span className="text-white font-medium">{fmt(session.totalCharged)}</span> charged
+                </span>
+              )}
+            </div>
           </div>
-          <div>
-            <p className="text-white font-semibold text-lg">Waiting for {companionName}…</p>
-            <p className="text-white/50 text-sm mt-1">
-              Expires in {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
-            </p>
-          </div>
-          <div className="w-full max-w-xs bg-white/10 rounded-full h-1">
+          {/* Thin progress line at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-white/[0.04]">
             <div
-              className="bg-amber-400 h-1 rounded-full transition-all duration-1000"
-              style={{ width: `${Math.min(100, (timeLeft / 180) * 100)}%` }}
+              className="h-full bg-amber-500/40 transition-none"
+              style={{ width: `${minuteProgress * 100}%` }}
             />
           </div>
         </div>
       )}
 
-      {/* ── NO_SESSION ──────────────────────────────────────────────────── */}
+      {/* ── PENDING state ────────────────────────────────────────────────── */}
+      {sessionState === 'PENDING' && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-5 px-8 text-center">
+          <div className="relative">
+            <div className="w-20 h-20 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+              <svg className="w-9 h-9 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <div className="absolute inset-0 rounded-full border-2 border-amber-500/30 animate-ping" />
+          </div>
+          <div>
+            <p className="text-white font-semibold text-lg">Waiting for {companionName}…</p>
+            <p className="text-white/40 text-sm mt-1">
+              Request expires in {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+            </p>
+          </div>
+          <div className="w-48 bg-white/[0.06] rounded-full h-0.5 overflow-hidden">
+            <div
+              className="bg-amber-400/60 h-full rounded-full transition-all duration-1000"
+              style={{ width: `${(timeLeft / 180) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── NO_SESSION ───────────────────────────────────────────────────── */}
       {sessionState === 'NO_SESSION' && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
-          <p className="text-white/60">No active session with {companionName}</p>
+        <div className="flex-1 flex flex-col items-center justify-center gap-5 px-8 text-center">
+          <div className="w-16 h-16 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
+            <svg className="w-7 h-7 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-white/70 font-medium">No active session</p>
+            <p className="text-white/30 text-sm mt-1">Start a chat to connect with {companionName}</p>
+          </div>
           <Link
             href={`/client/booking/${companionId}`}
-            className="px-6 py-2.5 rounded-xl bg-amber-500 text-black font-semibold hover:bg-amber-400 transition-colors"
+            className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 text-black font-semibold text-sm"
           >
             Start Chat
           </Link>
         </div>
       )}
 
-      {/* ── ACTIVE / ENDED — messages + input ──────────────────────────── */}
-      {(sessionState === 'ACTIVE' || sessionState === 'ENDED') && (
+      {/* ── ACTIVE — messages + input ────────────────────────────────────── */}
+      {sessionState === 'ACTIVE' && (
         <>
-          {/* Messages area */}
-          <div className="flex-1 overflow-y-auto px-4 py-4">
-            <div className="flex flex-col gap-2 min-h-full justify-end">
-              {messages.length === 0 && sessionState === 'ACTIVE' && (
-                <p className="text-center text-white/40 text-sm py-8">
-                  Session started — say hello!
-                </p>
+          {/* Messages scroll area */}
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            <div className="flex flex-col gap-1.5">
+              {messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
+                    <span className="text-xl">👋</span>
+                  </div>
+                  <p className="text-white/40 text-sm">Say hello to {companionName}!</p>
+                </div>
               )}
-              {messages.map((msg) => {
+
+              {messages.map((msg, i) => {
                 const isOwn = msg.senderId === userId;
+                const prevMsg = messages[i - 1];
+                const isSameGroup = prevMsg && prevMsg.senderId === msg.senderId;
+
                 return (
-                  <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[70%] px-4 py-2 rounded-2xl text-sm break-words ${
-                      isOwn
-                        ? 'rounded-tr-sm bg-amber-500/20 border border-amber-500/30 text-white'
-                        : 'rounded-tl-sm bg-white/[0.08] border border-white/10 text-white'
-                    }`}>
-                      <p className="leading-relaxed">{msg.content}</p>
-                      <p className={`text-xs mt-1 text-white/30 ${isOwn ? 'text-right' : 'text-left'}`}>
-                        {new Date(msg.createdAt).toLocaleTimeString('en-IN', {
-                          hour: '2-digit', minute: '2-digit', hour12: true,
-                        })}
-                      </p>
+                  <div
+                    key={msg.id}
+                    className={`flex items-end gap-2 ${isOwn ? 'justify-end' : 'justify-start'} ${isSameGroup ? 'mt-0.5' : 'mt-2'}`}
+                  >
+                    {/* Avatar for companion messages */}
+                    {!isOwn && (
+                      <div className="shrink-0 w-7 h-7 mb-0.5">
+                        {!isSameGroup && (
+                          companionAvatar ? (
+                            <img src={companionAvatar} alt={companionName}
+                              className="w-7 h-7 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-500/30 to-amber-700/20 flex items-center justify-center">
+                              <span className="text-xs font-semibold text-amber-300">{companionName[0]}</span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+
+                    <div className={`flex flex-col gap-0.5 max-w-[72%] ${isOwn ? 'items-end' : 'items-start'}`}>
+                      <div className={`px-4 py-2.5 text-sm leading-relaxed break-words ${
+                        isOwn
+                          ? 'bg-gradient-to-br from-amber-500 to-amber-400 text-black font-medium rounded-2xl rounded-br-md shadow-lg shadow-amber-500/10'
+                          : 'bg-white/[0.09] text-white rounded-2xl rounded-bl-md border border-white/[0.07]'
+                      }`}>
+                        {msg.content}
+                      </div>
+                      {/* Timestamp on last message in group or if groups differ */}
+                      {(!messages[i + 1] || messages[i + 1].senderId !== msg.senderId) && (
+                        <span className="text-[10px] text-white/25 px-1">
+                          {new Date(msg.createdAt).toLocaleTimeString('en-IN', {
+                            hour: '2-digit', minute: '2-digit', hour12: true,
+                          })}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
               })}
 
+              {/* Typing indicator */}
               {isTyping && (
-                <div className="flex justify-start">
-                  <div className="px-4 py-3 rounded-2xl rounded-tl-sm bg-white/[0.08] border border-white/10">
+                <div className="flex items-end gap-2 mt-2">
+                  <div className="w-7 h-7 shrink-0">
+                    {companionAvatar ? (
+                      <img src={companionAvatar} alt={companionName}
+                        className="w-7 h-7 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-500/30 to-amber-700/20 flex items-center justify-center">
+                        <span className="text-xs font-semibold text-amber-300">{companionName[0]}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-white/[0.09] border border-white/[0.07] rounded-2xl rounded-bl-md px-4 py-3">
                     <span className="flex gap-1 items-center">
-                      <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-bounce [animation-delay:0ms]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-bounce [animation-delay:150ms]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-bounce [animation-delay:300ms]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce [animation-delay:0ms]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce [animation-delay:150ms]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce [animation-delay:300ms]" />
                     </span>
                   </div>
                 </div>
               )}
+
               <div ref={messagesEndRef} />
             </div>
           </div>
 
-          {/* Input area */}
-          <div className="border-t border-white/10 bg-[#111118] px-4 py-3 shrink-0">
-            {/* Session active banner */}
-            {sessionState === 'ACTIVE' && session && !balanceLow && (
-              <div className="flex items-center justify-between px-3 py-2 mb-2 bg-green-500/10 border border-green-500/20 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                  <span className="text-xs text-green-400">
-                    Live · {fmt(session.ratePerMinute)}/min · {fmt(session.totalCharged)} charged
-                  </span>
-                </div>
-                <button onClick={handleEndSession} className="text-xs text-red-400 hover:text-red-300">
-                  End Chat
-                </button>
-              </div>
-            )}
-            {/* Low balance banner */}
-            {balanceLow && sessionState === 'ACTIVE' && (
-              <div className="flex items-center justify-between px-3 py-2 mb-2 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                <span className="text-xs text-amber-400">⚠ Low balance</span>
-                <Link href="/client/wallet" className="text-xs text-amber-400 underline">
-                  Add Money
-                </Link>
-              </div>
-            )}
-
+          {/* Input bar */}
+          <div
+            className="flex-shrink-0 bg-[#0C0C14]/95 backdrop-blur-xl border-t border-white/[0.07] px-4 pt-3"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}
+          >
             <div className="flex items-end gap-2">
               <textarea
                 ref={inputRef}
                 value={inputText}
                 onChange={handleTyping}
-                placeholder={sessionState === 'ENDED' ? 'Session ended' : 'Type a message…'}
-                disabled={sessionState === 'ENDED' || sending}
+                placeholder="Message…"
+                disabled={sending}
                 rows={1}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -548,15 +683,24 @@ export default function ClientInboxPage() {
                     handleSend();
                   }
                 }}
-                className="flex-1 resize-none bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-amber-500/50 min-h-[44px] max-h-[120px] disabled:opacity-40"
+                className="flex-1 resize-none bg-white/[0.06] border border-white/[0.08] focus:border-amber-500/40 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none transition-colors min-h-[46px] max-h-[120px] disabled:opacity-40"
               />
               <button
                 onClick={handleSend}
-                disabled={!inputText.trim() || sessionState === 'ENDED' || sending}
-                className="w-10 h-10 rounded-full bg-amber-500 hover:bg-amber-400 transition-colors flex items-center justify-center shrink-0 disabled:bg-white/10 disabled:cursor-not-allowed"
+                disabled={!inputText.trim() || sending}
+                className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{
+                  background: inputText.trim()
+                    ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)'
+                    : 'rgba(255,255,255,0.06)',
+                  boxShadow: inputText.trim() ? '0 4px 16px rgba(245,158,11,0.3)' : 'none',
+                }}
               >
-                <svg className="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                <svg
+                  className={`w-5 h-5 transition-colors ${inputText.trim() ? 'text-black' : 'text-white/30'}`}
+                  viewBox="0 0 24 24" fill="currentColor"
+                >
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
                 </svg>
               </button>
             </div>
