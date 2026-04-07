@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { comparePassword, signJWT } from '@/lib/auth';
-import { cookies } from 'next/headers';
 
 export const runtime = 'nodejs';
 
@@ -69,13 +68,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const cookieStore = cookies();
-    cookieStore.set('token', token, {
+    response.cookies.set({
+      name: 'token',
+      value: token,
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      path: '/',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 30, // 30 days — persistent across browser restarts
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30, // 30 days
     });
 
     return response;
