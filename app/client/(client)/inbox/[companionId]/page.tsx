@@ -68,6 +68,9 @@ export default function ClientInboxPage() {
   // Ref to current sessionState for use inside effects without stale closure
   const sessionStateRef = useRef<SessionState>('LOADING');
   useEffect(() => { sessionStateRef.current = sessionState; }, [sessionState]);
+  // Ref to current sessionId so chat:accepted subscription doesn't re-register on session changes
+  const sessionIdRef = useRef<string | null>(null);
+  useEffect(() => { sessionIdRef.current = session?.sessionId ?? null; }, [session?.sessionId]);
 
   const { onChatRequestResponse, onChatEnded, onBalanceLow, sendTyping, onMessage, onTyping, isConnected } =
     useSocket(userId, 'CLIENT');
@@ -218,12 +221,13 @@ export default function ClientInboxPage() {
     }, BILLING_TICK_SECONDS * 1000);
   }, []);
 
-  // Subscribe to chat:accepted
+  // Subscribe to chat:accepted — use ref for sessionId to avoid re-registering on session changes
   useEffect(() => {
+    if (!userId) return;
     return onChatRequestResponse((data) => {
       if (data.status !== 'ACCEPTED') return;
-      if (session?.sessionId && data.sessionId !== session.sessionId) return;
-      const sessionId = data.sessionId ?? session?.sessionId;
+      if (sessionIdRef.current && data.sessionId !== sessionIdRef.current) return;
+      const sessionId = data.sessionId ?? sessionIdRef.current;
       if (!sessionId) return;
       setSession((prev) => prev ? { ...prev, sessionId } : {
         sessionId,
@@ -235,7 +239,7 @@ export default function ClientInboxPage() {
       setSessionState('ACTIVE');
       startTick(sessionId);
     });
-  }, [onChatRequestResponse, session?.sessionId, startTick]);
+  }, [userId, onChatRequestResponse, startTick]);
 
   // Subscribe to chat:ended
   useEffect(() => {

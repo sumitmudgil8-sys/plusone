@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  // Compute totals — billing sessions use companionShare (70% of totalCharged)
+  // Compute totals — billing sessions use companionShare (companion cut of totalCharged)
   const fromChats = allChatSessions._sum.companionShare ?? 0;
   const fromCalls = allCallSessions._sum.companionShare ?? 0;
   const fromBookings = allBookings._sum.totalAmount ?? 0;
@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
     .reduce((sum, w) => sum + w.amount, 0);
   const availableBalance = totalEarned - paidOut;
 
-  // Period breakdowns — all billing figures use companionShare (70% cut)
+  // Period breakdowns — all billing figures use companionShare (companion cut)
   const periods = {
     today: {
       chats: todayChatSessions._sum.companionShare ?? 0,
@@ -185,7 +185,7 @@ export async function GET(request: NextRequest) {
   // Build recent transactions list (merge billing + booking, sort by date, take 20)
   const billingTx = recentBillingSessions.map((s) => ({
     type: s.type === 'VOICE' ? 'CALL' : 'CHAT',
-    amount: s.companionShare,  // 70% companion cut
+    amount: s.companionShare,
     createdAt: s.endedAt ?? s.createdAt,
     durationMinutes: Math.round(s.totalMinutes),
     clientName: s.client.clientProfile?.name ?? 'Client',

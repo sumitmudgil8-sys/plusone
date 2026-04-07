@@ -406,10 +406,10 @@ export default function CompanionChatPage() {
   const isInCall = call.state !== 'idle' && call.state !== 'ended';
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#0A0A0F]">
+    <div className="flex flex-col h-[100dvh] bg-[#0A0A0F]">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#111118] shrink-0">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#111118]">
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => router.push('/companion/inbox')}
@@ -559,13 +559,13 @@ export default function CompanionChatPage() {
       </div>
 
       {/* ── Input area ────────────────────────────────────────────────── */}
-      <div className="border-t border-white/10 bg-[#111118] px-4 py-3 shrink-0">
+      <div className="flex-shrink-0 border-t border-white/10 bg-[#111118] px-4 py-3">
         {chatSessionActive && (
           <div className="flex items-center justify-between px-3 py-2 mb-2 bg-green-500/10 border border-green-500/20 rounded-xl">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
               <span className="text-xs text-green-400">
-                Live · {fmt(chatRatePerMinute)}/min (your share 70%)
+                Live · {fmt(chatRatePerMinute)}/min
               </span>
             </div>
             <button onClick={handleEndChatSession} className="text-xs text-red-400 hover:text-red-300">

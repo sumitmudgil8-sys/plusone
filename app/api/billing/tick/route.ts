@@ -104,8 +104,8 @@ export async function POST(request: NextRequest) {
       throw err;
     }
 
-    // Credit companion wallet — 70% of rate per minute (platform keeps 30%)
-    const companionEarning = Math.floor(ratePerMinute * 0.7);
+    // Credit companion wallet — 40% of rate per minute (platform keeps 60%)
+    const companionEarning = Math.floor(ratePerMinute * 0.4);
     try {
       await creditWallet(
         companionId,

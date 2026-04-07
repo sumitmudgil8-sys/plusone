@@ -30,8 +30,14 @@ export default function BookingPage() {
   const [userId, setUserId] = useState<string | undefined>();
   const [chatRequestStatus, setChatRequestStatus] = useState<ChatRequestStatus>('idle');
   const [chatSessionId, setChatSessionId] = useState<string | null>(null);
+  const chatSessionIdRef = useRef<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(CHAT_REQUEST_TIMEOUT_S);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [insufficientBalanceDetails, setInsufficientBalanceDetails] = useState<{
+    required: number;
+    current: number;
+    ratePerMinute: number;
+  } | null>(null);
 
   // Fetch current user ID for Ably socket
   useEffect(() => {
@@ -61,20 +67,21 @@ export default function BookingPage() {
   // Subscribe to chat accepted/declined events via Ably
   const { onChatRequestResponse } = useSocket(userId, 'CLIENT');
 
+  // Keep ref in sync so the subscription doesn't need to re-register on sessionId changes
+  useEffect(() => { chatSessionIdRef.current = chatSessionId; }, [chatSessionId]);
+
   useEffect(() => {
-    const unsubscribe = onChatRequestResponse((data) => {
-      // Match by sessionId (new billing flow)
-      if (chatSessionId && data.sessionId !== chatSessionId) return;
+    if (!userId) return;
+    return onChatRequestResponse((data) => {
+      if (chatSessionIdRef.current && data.sessionId !== chatSessionIdRef.current) return;
       if (data.status === 'ACCEPTED') {
         setChatRequestStatus('accepted');
-        // Navigate to the new inbox subpage
         setTimeout(() => router.push(`/client/inbox/${companionId}`), 800);
       } else {
         setChatRequestStatus('declined');
       }
     });
-    return unsubscribe;
-  }, [onChatRequestResponse, chatSessionId, companionId, router]);
+  }, [userId, onChatRequestResponse, companionId, router]);
 
   // Countdown timer while waiting
   useEffect(() => {
@@ -111,6 +118,11 @@ export default function BookingPage() {
       const data = await res.json();
       if (!res.ok) {
         if (data.error === 'INSUFFICIENT_BALANCE') {
+          setInsufficientBalanceDetails({
+            required: data.required,
+            current: data.current,
+            ratePerMinute: data.ratePerMinute,
+          });
           setChatRequestStatus('insufficient_balance');
           return;
         }
@@ -322,12 +334,20 @@ export default function BookingPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-white font-semibold">Insufficient balance</p>
-                  <p className="text-white/50 text-sm mt-1">Recharge your wallet to start a chat session</p>
+                  <p className="text-white font-semibold">Insufficient Balance</p>
+                  {insufficientBalanceDetails ? (
+                    <p className="text-white/50 text-sm mt-1">
+                      You need ₹{(insufficientBalanceDetails.required / 100).toFixed(0)} (10 min) to start.{' '}
+                      Current balance: ₹{(insufficientBalanceDetails.current / 100).toFixed(0)}.{' '}
+                      Add ₹{((insufficientBalanceDetails.required - insufficientBalanceDetails.current) / 100).toFixed(0)} to continue.
+                    </p>
+                  ) : (
+                    <p className="text-white/50 text-sm mt-1">Add money to your wallet to start a chat session.</p>
+                  )}
                 </div>
                 <div className="flex gap-2 w-full">
                   <Button variant="outline" onClick={() => setChatRequestStatus('idle')} className="flex-1">Cancel</Button>
-                  <Button onClick={() => router.push('/client/wallet')} className="flex-1">Recharge</Button>
+                  <Button onClick={() => router.push('/client/wallet')} className="flex-1">Add Money</Button>
                 </div>
               </>
             )}

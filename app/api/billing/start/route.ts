@@ -96,21 +96,18 @@ export async function POST(request: NextRequest) {
         : type === 'VOICE'
         ? (companion.companionProfile.callRatePerMinute ?? getRatePerMinute(companion.companionProfile.hourlyRate))
         : getRatePerMinute(companion.companionProfile.hourlyRate);
-    const minimumRequired = ratePerMinute * BILLING_MIN_BALANCE_MINUTES;
+    const minimumRequired = ratePerMinute * 10; // require 10 minutes worth upfront
 
     const wallet = await getOrCreateWallet(user.id);
     if (wallet.balance < minimumRequired) {
       return NextResponse.json(
         {
-          success: false,
           error: 'INSUFFICIENT_BALANCE',
-          data: {
-            balance: wallet.balance,
-            required: minimumRequired,
-            ratePerMinute,
-          },
+          required: minimumRequired,
+          current: wallet.balance,
+          ratePerMinute,
         },
-        { status: 402 }
+        { status: 400 }
       );
     }
 
