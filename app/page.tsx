@@ -1,7 +1,20 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { verifyJWT } from '@/lib/auth';
 
 export default function HomePage() {
+  const cookieStore = cookies();
+  const token = cookieStore.get('token')?.value;
+  if (token) {
+    const user = verifyJWT(token);
+    if (user) {
+      if (user.role === 'CLIENT') redirect('/client/dashboard');
+      if (user.role === 'COMPANION') redirect('/companion/dashboard');
+      if (user.role === 'ADMIN') redirect('/admin/dashboard');
+    }
+  }
   return (
     /*
      * Outer shell: full viewport, black bg (visible on desktop around the card).
