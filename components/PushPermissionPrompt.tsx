@@ -8,8 +8,15 @@ const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export function PushPermissionPrompt() {
   const [visible, setVisible] = useState(false);
-  const { subscribe } = usePushNotifications();
+  const { subscribe, autoSubscribe } = usePushNotifications();
 
+  // Silently refresh subscription on every mount if permission already granted.
+  // Handles stale/expired subscriptions after SW updates or app reinstalls.
+  useEffect(() => {
+    autoSubscribe();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Show prompt only if permission hasn't been decided yet
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!('Notification' in window)) return;
