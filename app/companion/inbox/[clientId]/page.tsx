@@ -2,42 +2,19 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Button } from '@/components/ui/Button';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
 import { useSocket } from '@/hooks/useSocket';
 import { BILLING_TICK_SECONDS } from '@/lib/constants';
 
-interface CurrentUser {
-  id: string;
-  email: string;
-}
+interface CurrentUser { id: string; email: string; }
+interface ClientProfile { name: string | null; avatarUrl: string | null; }
+interface ClientUser { id: string; clientProfile: ClientProfile | null; }
+interface Message { id: string; content: string; senderId: string; senderName: string; senderAvatar: string | null; createdAt: string; }
 
-interface ClientProfile {
-  name: string | null;
-  avatarUrl: string | null;
-}
-
-interface ClientUser {
-  id: string;
-  clientProfile: ClientProfile | null;
-}
-
-interface Message {
-  id: string;
-  content: string;
-  senderId: string;
-  senderName: string;
-  senderAvatar: string | null;
-  createdAt: string;
-}
-
-interface SessionSummary {
-  sessionId: string;
-  totalCharged: number;
-}
-
-function fmt(paise: number) {
-  return `₹${(paise / 100).toFixed(0)}`;
+function formatDuration(seconds: number) {
+  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const s = (seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
 }
 
 function PhoneOffIcon({ className }: { className?: string }) {
@@ -47,7 +24,6 @@ function PhoneOffIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-
 function MicIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -55,7 +31,6 @@ function MicIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-
 function MicOffIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -75,20 +50,18 @@ export default function CompanionChatPage() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [client, setClient] = useState<ClientUser | null>(null);
   const [loading, setLoading] = useState(true);
-
   const [voiceSessionId, setVoiceSessionId] = useState<string | null>(voiceSessionIdParam);
   const [callDuration, setCallDuration] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [blocking, setBlocking] = useState(false);
 
-  // Chat billing session state
+  // Chat session
   const [chatSessionActive, setChatSessionActive] = useState(false);
   const [chatSessionId, setChatSessionId] = useState<string | null>(null);
-  const [chatRatePerMinute, setChatRatePerMinute] = useState(0);
-  const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
-  const summaryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sessionEnded, setSessionEnded] = useState(false);
+  const [sessionSeconds, setSessionSeconds] = useState(0);
 
-  // Inline chat state
+  // Messages
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
@@ -99,90 +72,95 @@ export default function CompanionChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const call = useVoiceCall(voiceSessionId, user?.id ?? '');
+  const { onChatRequestResponse, onChatEnded, onMessage, sendTyping, onTyping } = useSocket(user?.id || undefined, 'COMPANION');
 
-  const {
-    onChatRequestResponse, onChatEnded,
-    onMessage, sendTyping, onTyping,
-  } = useSocket(user?.id || undefined, 'COMPANION');
-
-  // Load user, client, blocked status
+  // Load user, client, block status
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const userRes = await fetch('/api/users/me');
-        if (userRes.ok) {
-          const userData = await userRes.json();
-          setUser(userData.user);
-        }
-
-        const clientRes = await fetch(`/api/users/${clientId}`);
-        if (clientRes.ok) {
-          const clientData = await clientRes.json();
-          setClient(clientData.user);
-        }
-
-        const blockedRes = await fetch('/api/companion/blocked');
+        const [userRes, clientRes, blockedRes] = await Promise.all([
+          fetch('/api/users/me'),
+          fetch(`/api/users/${clientId}`),
+          fetch('/api/companion/blocked'),
+        ]);
+        if (userRes.ok) setUser((await userRes.json()).user);
+        if (clientRes.ok) setClient((await clientRes.json()).user);
         if (blockedRes.ok) {
-          const blockedData = await blockedRes.json();
-          const alreadyBlocked = (blockedData.data?.blocked ?? []).some(
-            (b: { clientId: string }) => b.clientId === clientId
-          );
-          setIsBlocked(alreadyBlocked);
+          const d = await blockedRes.json();
+          setIsBlocked((d.data?.blocked ?? []).some((b: { clientId: string }) => b.clientId === clientId));
         }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
+      } catch { /* non-fatal */ } finally { setLoading(false); }
     };
     fetchData();
   }, [clientId]);
 
-  // Check for active billing session on mount
+  // Check for active billing session
   useEffect(() => {
     if (!user) return;
-    const checkSession = async () => {
-      try {
-        const res = await fetch('/api/companion/active-session');
-        if (!res.ok) return;
-        const d = await res.json();
+    fetch('/api/companion/active-session')
+      .then((r) => r.json())
+      .then((d) => {
         if (d.data?.active && d.data.clientId === clientId) {
           setChatSessionActive(true);
           setChatSessionId(d.data.sessionId);
-          setChatRatePerMinute(d.data.ratePerMinute ?? 0);
         }
-      } catch { /* non-fatal */ }
-    };
-    checkSession();
+      })
+      .catch(() => {});
   }, [user, clientId]);
 
-  // Fetch messages when user + client loaded
-  useEffect(() => {
-    if (!user || !client) return;
-    const fetchMsgs = async () => {
-      try {
-        const res = await fetch(
-          `/api/messages/thread?companionUserId=${user.id}&clientUserId=${clientId}`
-        );
-        const d = await res.json();
-        if (d.success && d.data) {
-          setMessages(d.data.messages);
-          setThreadId(d.data.threadId);
-        }
-      } catch { /* non-fatal */ }
-    };
-    fetchMsgs();
-  }, [user, client, clientId]);
+  // Fetch messages
+  const fetchMessages = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`/api/messages/thread?companionUserId=${user.id}&clientUserId=${clientId}`);
+      const d = await res.json();
+      if (d.success && d.data?.messages) {
+        const serverMsgs: Message[] = d.data.messages;
+        const serverIds = new Set(serverMsgs.map((m) => m.id));
+        setMessages((prev) => {
+          const stillOptimistic = prev.filter((m) => m.id.startsWith('opt-') && !serverIds.has(m.id));
+          return [...serverMsgs, ...stillOptimistic];
+        });
+        if (!threadId && d.data.threadId) setThreadId(d.data.threadId);
+      }
+    } catch { /* non-fatal */ }
+  }, [user, clientId, threadId]);
 
-  // Scroll to bottom on new messages
+  // Initial load
+  useEffect(() => {
+    if (user && client) fetchMessages();
+  }, [user, client]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 0.5s polling while session active
+  useEffect(() => {
+    if (!chatSessionActive || !user) return;
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    pollIntervalRef.current = setInterval(fetchMessages, 500);
+    return () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); };
+  }, [chatSessionActive, user, fetchMessages]);
+
+  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Subscribe to chat:accepted — companion's own accept confirmation
+  // Live session timer
+  useEffect(() => {
+    if (chatSessionActive) {
+      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+      sessionTimerRef.current = setInterval(() => setSessionSeconds((s) => s + 1), 1000);
+    } else {
+      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+    }
+    return () => { if (sessionTimerRef.current) clearInterval(sessionTimerRef.current); };
+  }, [chatSessionActive]);
+
+  // Subscribe to chat:accepted
   useEffect(() => {
     return onChatRequestResponse((data) => {
       if (data.status === 'ACCEPTED' && data.sessionId && data.clientId === clientId) {
@@ -195,32 +173,27 @@ export default function CompanionChatPage() {
   // Subscribe to chat:ended
   useEffect(() => {
     return onChatEnded((data) => {
-      if (!chatSessionId || data.sessionId !== chatSessionId) return;
+      if (chatSessionId && data.sessionId !== chatSessionId) return;
       setChatSessionActive(false);
       setChatSessionId(null);
-      const summary: SessionSummary = { sessionId: data.sessionId, totalCharged: data.totalCharged };
-      setSessionSummary(summary);
-      if (summaryTimerRef.current) clearTimeout(summaryTimerRef.current);
-      summaryTimerRef.current = setTimeout(() => setSessionSummary(null), 60000);
+      setSessionEnded(true);
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
     });
   }, [onChatEnded, chatSessionId]);
 
-  // Subscribe to incoming messages
+  // Ably messages (instant)
   useEffect(() => {
     return onMessage((data) => {
-      setMessages((prev) => [...prev, {
-        id: data.id,
-        content: data.content,
-        senderId: data.senderId,
-        senderName: data.senderName,
-        senderAvatar: data.senderAvatar ?? null,
-        createdAt: data.createdAt,
-      }]);
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === data.id)) return prev;
+        return [...prev, { id: data.id, content: data.content, senderId: data.senderId, senderName: data.senderName, senderAvatar: data.senderAvatar ?? null, createdAt: data.createdAt }];
+      });
       setIsTyping(false);
     });
   }, [onMessage]);
 
-  // Subscribe to typing
+  // Typing
   useEffect(() => {
     return onTyping(() => {
       setIsTyping(true);
@@ -229,22 +202,54 @@ export default function CompanionChatPage() {
     });
   }, [onTyping]);
 
-  // End session handler (companion side)
+  // Voice call billing tick + duration
+  useEffect(() => {
+    if (call.state === 'connected' && voiceSessionId) {
+      durationIntervalRef.current = setInterval(() => setCallDuration((d) => d + 1), 1000);
+      tickIntervalRef.current = setInterval(async () => {
+        try {
+          await fetch('/api/billing/tick', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: voiceSessionId }) });
+        } catch { /* non-fatal */ }
+      }, BILLING_TICK_SECONDS * 1000);
+      return () => {
+        if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
+        if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+      };
+    }
+  }, [call.state, voiceSessionId]);
+
+  useEffect(() => {
+    if (call.state === 'ended' && voiceSessionId) {
+      fetch('/api/billing/end', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: voiceSessionId }) }).catch(() => {});
+      setVoiceSessionId(null);
+      setCallDuration(0);
+    }
+  }, [call.state, voiceSessionId]);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
+      if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, []);
+
   const handleEndChatSession = useCallback(async () => {
     if (!chatSessionId) return;
     const sid = chatSessionId;
     setChatSessionActive(false);
     setChatSessionId(null);
+    setSessionEnded(true);
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
     try {
-      await fetch('/api/billing/end', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: sid }),
-      });
+      await fetch('/api/billing/end', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sid }) });
     } catch { /* non-fatal */ }
   }, [chatSessionId]);
 
-  // Send message
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || !user || sending) return;
     const content = inputText.trim();
@@ -253,14 +258,7 @@ export default function CompanionChatPage() {
     setSending(true);
 
     const optimisticId = `opt-${Date.now()}`;
-    setMessages((prev) => [...prev, {
-      id: optimisticId,
-      content,
-      senderId: user.id,
-      senderName: 'You',
-      senderAvatar: null,
-      createdAt: new Date().toISOString(),
-    }]);
+    setMessages((prev) => [...prev, { id: optimisticId, content, senderId: user.id, senderName: 'You', senderAvatar: null, createdAt: new Date().toISOString() }]);
 
     try {
       const res = await fetch('/api/messages/send', {
@@ -270,80 +268,23 @@ export default function CompanionChatPage() {
       });
       const d = await res.json();
       if (d.success && d.data) {
-        setMessages((prev) =>
-          prev.map((m) => m.id === optimisticId ? { ...m, id: d.data.id } : m)
-        );
+        setMessages((prev) => prev.map((m) => m.id === optimisticId ? { ...m, id: d.data.id } : m));
         if (!threadId && d.data.threadId) setThreadId(d.data.threadId);
       }
-    } catch { /* non-fatal — keep optimistic */ } finally {
-      setSending(false);
-    }
+    } catch { /* keep optimistic */ } finally { setSending(false); }
   }, [inputText, user, sending, clientId, threadId]);
 
   const handleTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);
     e.target.style.height = 'auto';
-    e.target.style.height = e.target.scrollHeight + 'px';
-    if (user && (threadId ?? clientId)) {
-      sendTyping({ threadId: threadId ?? clientId, userId: user.id, receiverId: clientId });
-    }
+    e.target.style.height = `${e.target.scrollHeight}px`;
+    if (user && (threadId ?? clientId)) sendTyping({ threadId: threadId ?? clientId, userId: user.id, receiverId: clientId });
   };
-
-  // Clean up timers on unmount
-  useEffect(() => {
-    return () => {
-      if (summaryTimerRef.current) clearTimeout(summaryTimerRef.current);
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    };
-  }, []);
-
-  // Voice call billing tick + duration counter
-  useEffect(() => {
-    if (call.state === 'connected' && voiceSessionId) {
-      durationIntervalRef.current = setInterval(() => {
-        setCallDuration((d) => d + 1);
-      }, 1000);
-
-      tickIntervalRef.current = setInterval(async () => {
-        try {
-          await fetch('/api/billing/tick', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId: voiceSessionId }),
-          });
-        } catch { /* non-fatal */ }
-      }, BILLING_TICK_SECONDS * 1000);
-
-      return () => {
-        if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
-        if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
-        tickIntervalRef.current = null;
-        durationIntervalRef.current = null;
-      };
-    }
-  }, [call.state, voiceSessionId]);
-
-  // End billing session if voice call ends unexpectedly
-  useEffect(() => {
-    if (call.state === 'ended' && voiceSessionId) {
-      fetch('/api/billing/end', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: voiceSessionId }),
-      }).catch(() => {});
-      setVoiceSessionId(null);
-      setCallDuration(0);
-    }
-  }, [call.state, voiceSessionId]);
 
   const handleEndCall = useCallback(async () => {
     if (!voiceSessionId) return;
     await Promise.allSettled([
-      fetch('/api/billing/end', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: voiceSessionId }),
-      }),
+      fetch('/api/billing/end', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: voiceSessionId }) }),
       call.endCall(),
     ]);
     setVoiceSessionId(null);
@@ -357,246 +298,237 @@ export default function CompanionChatPage() {
         const res = await fetch('/api/companion/blocked');
         if (res.ok) {
           const d = await res.json();
-          const record = (d.data?.blocked ?? []).find(
-            (b: { clientId: string; id: string }) => b.clientId === clientId
-          );
-          if (record) {
-            await fetch(`/api/companion/block/${record.id}`, { method: 'DELETE' });
-            setIsBlocked(false);
-          }
+          const record = (d.data?.blocked ?? []).find((b: { clientId: string; id: string }) => b.clientId === clientId);
+          if (record) { await fetch(`/api/companion/block/${record.id}`, { method: 'DELETE' }); setIsBlocked(false); }
         }
       } else {
-        const res = await fetch('/api/companion/block', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId }),
-        });
+        const res = await fetch('/api/companion/block', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId }) });
         if (res.ok) setIsBlocked(true);
       }
-    } catch { /* non-fatal */ } finally {
-      setBlocking(false);
-    }
+    } catch { /* non-fatal */ } finally { setBlocking(false); }
   };
 
-  const formatCallDuration = (seconds: number) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
+  const callerName = client?.clientProfile?.name ?? 'Client';
+  const callerAvatar = client?.clientProfile?.avatarUrl ?? null;
+  const isInCall = call.state !== 'idle' && call.state !== 'ended';
+  const canSendMessage = !sessionEnded;
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#0A0A0F] flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full" />
+      <div className="fixed inset-0 z-50 bg-[#0C0C14] flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
       </div>
     );
   }
 
   if (!user || !client) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#0A0A0F] flex flex-col items-center justify-center gap-4">
-        <p className="text-white/60">Unable to load chat</p>
-        <Button onClick={() => router.push('/companion/inbox')}>Back to Inbox</Button>
+      <div className="fixed inset-0 z-50 bg-[#0C0C14] flex flex-col items-center justify-center gap-4">
+        <p className="text-white/50 text-sm">Unable to load chat</p>
+        <button onClick={() => router.push('/companion/inbox')} className="px-5 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/70 text-sm">
+          Back to Inbox
+        </button>
       </div>
     );
   }
 
-  const callerName = client.clientProfile?.name ?? 'Client';
-  const callerAvatar = client.clientProfile?.avatarUrl ?? null;
-  const isInCall = call.state !== 'idle' && call.state !== 'ended';
-
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#0A0A0F]">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#0C0C14]">
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#111118]">
-        <div className="flex items-center gap-3 min-w-0">
-          <button
-            onClick={() => router.push('/companion/inbox')}
-            className="text-white/60 hover:text-white transition-colors shrink-0 -ml-1 p-1"
-            aria-label="Back to inbox"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div
+        className="flex-shrink-0 flex items-center gap-3 px-4 bg-[#0C0C14] border-b border-white/[0.06]"
+        style={{ paddingTop: 'max(env(safe-area-inset-top), 14px)', paddingBottom: '12px' }}
+      >
+        <button
+          onClick={() => router.push('/companion/inbox')}
+          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/[0.06] text-white/50 hover:text-white transition-colors shrink-0"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        <div className="relative shrink-0">
           {callerAvatar ? (
-            <img src={callerAvatar} alt={callerName}
-              className="w-9 h-9 rounded-full object-cover shrink-0" />
+            <img src={callerAvatar} alt={callerName} className="w-10 h-10 rounded-full object-cover" />
           ) : (
-            <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-              <span className="text-sm font-medium text-white">{callerName[0]}</span>
+            <div className="w-10 h-10 rounded-full bg-white/[0.08] flex items-center justify-center">
+              <span className="text-sm font-semibold text-white/70">{callerName[0]}</span>
             </div>
           )}
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{callerName}</p>
-            {chatSessionActive && (
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-xs text-green-400">
-                  Session Active · {fmt(chatRatePerMinute)}/min
-                </span>
-              </div>
-            )}
-            {!chatSessionActive && sessionSummary && (
-              <p className="text-xs text-white/50">
-                Session ended · {fmt(sessionSummary.totalCharged)} earned
-              </p>
-            )}
-          </div>
+          {chatSessionActive && (
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[#0C0C14]" />
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white leading-tight truncate">{callerName}</p>
+          {chatSessionActive && (
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse shrink-0" />
+              <span className="text-xs text-white/50 tabular-nums">{formatDuration(sessionSeconds)}</span>
+            </div>
+          )}
+          {sessionEnded && <p className="text-xs text-white/30 leading-tight">Session ended</p>}
+          {!chatSessionActive && !sessionEnded && <p className="text-xs text-white/30 leading-tight">No active session</p>}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
           {chatSessionActive && (
-            <button
-              onClick={handleEndChatSession}
-              className="text-xs px-2.5 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
-            >
-              End Session
+            <button onClick={handleEndChatSession} className="px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/20 active:scale-95 transition-all">
+              End
             </button>
           )}
           <button
             onClick={handleToggleBlock}
             disabled={blocking}
-            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
-              isBlocked
-                ? 'border-green-500/40 text-green-400 hover:bg-green-500/10'
-                : 'border-red-500/30 text-red-400 hover:bg-red-500/10'
-            }`}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-medium transition-all disabled:opacity-40 ${isBlocked ? 'border-green-500/30 text-green-400 hover:bg-green-500/10' : 'border-white/10 text-white/40 hover:text-white/70 hover:border-white/20'}`}
           >
             {blocking ? '…' : isBlocked ? 'Unblock' : 'Block'}
           </button>
         </div>
       </div>
 
-      {/* ── Voice Call Overlay ─────────────────────────────────────────── */}
+      {/* ── Voice Call Overlay ───────────────────────────────────────────── */}
       {isInCall && (
-        <div className="absolute inset-0 z-10 bg-[#0A0A0F]/95 backdrop-blur-sm flex flex-col items-center justify-center gap-6">
-          <div className="text-center">
+        <div className="absolute inset-0 z-10 bg-[#0C0C14]/98 flex flex-col items-center justify-center gap-8">
+          <div className="relative">
             {callerAvatar ? (
-              <img src={callerAvatar} alt={callerName}
-                className="w-24 h-24 rounded-full mx-auto mb-4 object-cover ring-4 ring-amber-500/30" />
+              <img src={callerAvatar} alt={callerName} className="w-28 h-28 rounded-full object-cover ring-4 ring-amber-500/20" />
             ) : (
-              <div className="w-24 h-24 rounded-full mx-auto mb-4 bg-amber-500/20 flex items-center justify-center ring-4 ring-amber-500/30">
-                <span className="text-3xl text-amber-400 font-semibold">{callerName[0]}</span>
+              <div className="w-28 h-28 rounded-full bg-amber-500/10 flex items-center justify-center ring-4 ring-amber-500/20">
+                <span className="text-4xl text-amber-400 font-semibold">{callerName[0]}</span>
               </div>
             )}
-            <h2 className="text-xl font-semibold text-white">{callerName}</h2>
-            <p className="text-white/60 mt-1 text-sm">
-              {call.state === 'connecting' && 'Connecting...'}
+            {call.state === 'connected' && <div className="absolute inset-0 rounded-full ring-4 ring-green-400/20 animate-ping" />}
+          </div>
+          <div className="text-center">
+            <p className="text-xl font-semibold text-white">{callerName}</p>
+            <p className="text-white/50 text-sm mt-1">
+              {call.state === 'connecting' && 'Connecting…'}
               {call.state === 'connected' && (
-                <>
-                  {call.remoteUserJoined ? 'Connected' : 'Waiting for client...'}
-                  <span className="ml-2 font-mono text-amber-400">{formatCallDuration(callDuration)}</span>
-                </>
+                <span>
+                  {call.remoteUserJoined ? 'Connected · ' : 'Waiting… · '}
+                  <span className="text-amber-400 tabular-nums">{formatDuration(callDuration)}</span>
+                </span>
               )}
               {call.state === 'error' && <span className="text-red-400">{call.error}</span>}
             </p>
           </div>
-
-          <div className="flex gap-4 items-center">
-            <button
-              onClick={call.toggleMute}
-              title={call.isMuted ? 'Unmute' : 'Mute'}
-              className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
-                call.isMuted ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
-            >
+          <div className="flex gap-5 items-center">
+            <button onClick={call.toggleMute} className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${call.isMuted ? 'bg-red-500/20 text-red-400' : 'bg-white/[0.08] text-white/70'}`}>
               {call.isMuted ? <MicOffIcon className="w-6 h-6" /> : <MicIcon className="w-6 h-6" />}
             </button>
-            <button
-              onClick={handleEndCall}
-              title="End call"
-              className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white transition-colors"
-            >
+            <button onClick={handleEndCall} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center text-white transition-colors">
               <PhoneOffIcon className="w-7 h-7" />
             </button>
           </div>
         </div>
       )}
 
-      {/* ── Messages area ─────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="flex flex-col gap-2 min-h-full justify-end">
+      {/* ── Messages ────────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+        <div className="flex flex-col gap-1.5">
           {messages.length === 0 && (
-            <p className="text-center text-white/40 text-sm py-8">
-              {chatSessionActive ? 'Session active — say hello!' : 'No messages yet'}
-            </p>
+            <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
+              <span className="text-2xl">👋</span>
+              <p className="text-white/30 text-sm">{chatSessionActive ? `Say hello to ${callerName}!` : 'No messages yet'}</p>
+            </div>
           )}
-          {messages.map((msg) => {
+
+          {messages.map((msg, i) => {
             const isOwn = msg.senderId === user.id;
+            const prevMsg = messages[i - 1];
+            const nextMsg = messages[i + 1];
+            const isSameGroupAbove = prevMsg?.senderId === msg.senderId;
+            const isSameGroupBelow = nextMsg?.senderId === msg.senderId;
+
             return (
-              <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[70%] px-4 py-2 rounded-2xl text-sm break-words ${
-                  isOwn
-                    ? 'rounded-tr-sm bg-amber-500/20 border border-amber-500/30 text-white'
-                    : 'rounded-tl-sm bg-white/[0.08] border border-white/10 text-white'
-                }`}>
-                  <p className="leading-relaxed">{msg.content}</p>
-                  <p className={`text-xs mt-1 text-white/30 ${isOwn ? 'text-right' : 'text-left'}`}>
-                    {new Date(msg.createdAt).toLocaleTimeString('en-IN', {
-                      hour: '2-digit', minute: '2-digit', hour12: true,
-                    })}
-                  </p>
+              <div key={msg.id} className={`flex items-end gap-2 ${isOwn ? 'justify-end' : 'justify-start'} ${isSameGroupAbove ? 'mt-0.5' : 'mt-3'}`}>
+                {!isOwn && (
+                  <div className="w-7 shrink-0 self-end mb-0.5">
+                    {!isSameGroupBelow && (
+                      callerAvatar
+                        ? <img src={callerAvatar} alt={callerName} className="w-7 h-7 rounded-full object-cover" />
+                        : <div className="w-7 h-7 rounded-full bg-white/[0.08] flex items-center justify-center"><span className="text-xs font-semibold text-white/50">{callerName[0]}</span></div>
+                    )}
+                  </div>
+                )}
+
+                <div className={`flex flex-col max-w-[72%] ${isOwn ? 'items-end' : 'items-start'}`}>
+                  <div className={`px-4 py-2.5 text-sm leading-relaxed break-words ${
+                    isOwn
+                      ? `bg-gradient-to-br from-amber-500 to-amber-400 text-black font-medium shadow-lg shadow-amber-500/10 ${isSameGroupAbove ? 'rounded-2xl rounded-tr-md' : 'rounded-2xl rounded-tr-sm'}`
+                      : `bg-white/[0.08] text-white border border-white/[0.06] ${isSameGroupAbove ? 'rounded-2xl rounded-tl-md' : 'rounded-2xl rounded-tl-sm'}`
+                  }`}>
+                    {msg.content}
+                  </div>
+                  {!isSameGroupBelow && (
+                    <span className="text-[10px] text-white/20 px-1 mt-0.5">
+                      {new Date(msg.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                    </span>
+                  )}
                 </div>
               </div>
             );
           })}
 
+          {/* Typing indicator */}
           {isTyping && (
-            <div className="flex justify-start">
-              <div className="px-4 py-3 rounded-2xl rounded-tl-sm bg-white/[0.08] border border-white/10">
-                <span className="flex gap-1 items-center">
+            <div className="flex items-end gap-2 mt-3">
+              <div className="w-7 shrink-0 self-end mb-0.5">
+                {callerAvatar
+                  ? <img src={callerAvatar} alt={callerName} className="w-7 h-7 rounded-full object-cover" />
+                  : <div className="w-7 h-7 rounded-full bg-white/[0.08] flex items-center justify-center"><span className="text-xs font-semibold text-white/50">{callerName[0]}</span></div>
+                }
+              </div>
+              <div className="bg-white/[0.08] border border-white/[0.06] rounded-2xl rounded-tl-sm px-4 py-3.5">
+                <span className="flex gap-1 items-center h-3">
                   <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-bounce [animation-delay:150ms]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-bounce [animation-delay:300ms]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-bounce [animation-delay:160ms]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-bounce [animation-delay:320ms]" />
                 </span>
               </div>
             </div>
           )}
+
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* ── Input area ────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 border-t border-white/10 bg-[#111118] px-4 py-3">
-        {chatSessionActive && (
-          <div className="flex items-center justify-between px-3 py-2 mb-2 bg-green-500/10 border border-green-500/20 rounded-xl">
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-xs text-green-400">
-                Live · {fmt(chatRatePerMinute)}/min
-              </span>
-            </div>
-            <button onClick={handleEndChatSession} className="text-xs text-red-400 hover:text-red-300">
-              End Session
-            </button>
-          </div>
+      {/* ── Input bar ───────────────────────────────────────────────────── */}
+      <div
+        className="flex-shrink-0 bg-[#0C0C14] border-t border-white/[0.06] px-4 pt-3"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 14px)' }}
+      >
+        {sessionEnded && (
+          <p className="text-center text-white/30 text-xs mb-3">Session ended</p>
         )}
-
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2.5">
           <textarea
             ref={inputRef}
             value={inputText}
             onChange={handleTyping}
-            placeholder="Type a message…"
-            disabled={sending}
+            placeholder={sessionEnded ? 'Session ended' : 'Message…'}
+            disabled={!canSendMessage || sending}
             rows={1}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
             }}
-            className="flex-1 resize-none bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-amber-500/50 min-h-[44px] max-h-[120px] disabled:opacity-40"
+            className="flex-1 resize-none bg-white/[0.05] border border-white/[0.09] focus:border-amber-500/40 rounded-3xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none transition-colors min-h-[46px] max-h-[120px] leading-relaxed disabled:opacity-40"
           />
           <button
             onClick={handleSend}
-            disabled={!inputText.trim() || sending}
-            className="w-10 h-10 rounded-full bg-amber-500 hover:bg-amber-400 transition-colors flex items-center justify-center shrink-0 disabled:bg-white/10 disabled:cursor-not-allowed"
+            disabled={!inputText.trim() || !canSendMessage || sending}
+            className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-90 disabled:opacity-25"
+            style={{
+              background: (inputText.trim() && canSendMessage) ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' : 'rgba(255,255,255,0.05)',
+              boxShadow: (inputText.trim() && canSendMessage) ? '0 4px 16px rgba(245,158,11,0.25)' : 'none',
+            }}
           >
-            <svg className="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            <svg className={`w-5 h-5 transition-colors ${(inputText.trim() && canSendMessage) ? 'text-black' : 'text-white/20'}`} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
             </svg>
           </button>
         </div>
