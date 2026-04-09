@@ -163,12 +163,12 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
   }, [chatRoomId, isConnected]);
 
   // ── Publish to room ───────────────────────────────────────────────────────
-  const publishToRoom = useCallback(async (text: string): Promise<string | null> => {
+  const publishToRoom = useCallback(async (text: string, id?: string): Promise<string | null> => {
     const ch = roomChannelRef.current;
     if (!ch || !userId) return null;
-    const id = `${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    await ch.publish('message', { id, text, senderId: userId, createdAt: new Date().toISOString() });
-    return id;
+    const msgId = id ?? `${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    await ch.publish('message', { id: msgId, text, senderId: userId, createdAt: new Date().toISOString() });
+    return msgId;
   }, [userId]);
 
   const publishRoomTyping = useCallback((isTyping: boolean) => {

@@ -29,6 +29,7 @@ interface SessionInfo {
   ratePerMinute: number;
   totalCharged: number;
   durationSeconds: number;
+  startedAt: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -53,9 +54,13 @@ export default function ClientInboxPage() {
   const [sessionSummary, setSessionSummary] = useState<{ totalCharged: number; durationSeconds: number } | null>(null);
   const [liveSeconds, setLiveSeconds] = useState(0);
 
+  // Wall-clock based timer — immune to tab-backgrounding
+  const sessionStartedAtMsRef = useRef<number | null>(null);
   const liveSecondsRef = useRef(0);
   const liveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastTickAtMsRef = useRef<number | null>(null); // tracks when last tick was fired
   const sessionStateRef = useRef<SessionState>('LOADING');
   const sessionIdRef = useRef<string | null>(null);
 
@@ -105,10 +110,24 @@ export default function ClientInboxPage() {
       if (!d.success) { setSessionState('NO_SESSION'); return; }
       const { status } = d.data;
       if (status === 'ACTIVE') {
-        setSession({ sessionId: d.data.sessionId, ratePerMinute: d.data.ratePerMinute, totalCharged: d.data.totalCharged, durationSeconds: d.data.durationSeconds });
+        const durationSeconds: number = d.data.durationSeconds ?? 0;
+        const startedAt: string | null = d.data.startedAt ?? null;
+        setSession({
+          sessionId: d.data.sessionId,
+          ratePerMinute: d.data.ratePerMinute,
+          totalCharged: d.data.totalCharged,
+          durationSeconds,
+          startedAt,
+        });
+        // Set wall-clock start time (prefer server startedAt, fall back to duration offset)
+        if (!sessionStartedAtMsRef.current) {
+          sessionStartedAtMsRef.current = startedAt
+            ? new Date(startedAt).getTime()
+            : Date.now() - durationSeconds * 1000;
+        }
         setSessionState('ACTIVE');
       } else if (status === 'PENDING') {
-        setSession({ sessionId: d.data.sessionId, ratePerMinute: d.data.ratePerMinute, totalCharged: 0, durationSeconds: 0 });
+        setSession({ sessionId: d.data.sessionId, ratePerMinute: d.data.ratePerMinute, totalCharged: 0, durationSeconds: 0, startedAt: null });
         setSessionState('PENDING');
       } else {
         setSessionState('NO_SESSION');
@@ -136,7 +155,10 @@ export default function ClientInboxPage() {
       if (sessionIdRef.current && data.sessionId !== sessionIdRef.current) return;
       const sessionId = data.sessionId ?? sessionIdRef.current;
       if (!sessionId) return;
-      setSession(prev => prev ? { ...prev, sessionId } : { sessionId, ratePerMinute: 0, totalCharged: 0, durationSeconds: 0 });
+      sessionStartedAtMsRef.current = Date.now();
+      setSession(prev => prev
+        ? { ...prev, sessionId }
+        : { sessionId, ratePerMinute: 0, totalCharged: 0, durationSeconds: 0, startedAt: null });
       setSessionState('ACTIVE');
     });
   }, [userId, onChatRequestResponse]);
@@ -156,46 +178,87 @@ export default function ClientInboxPage() {
     return onBalanceLow(() => setBalanceLow(true));
   }, [onBalanceLow]);
 
-  // Live elapsed timer (starts when ACTIVE)
+  // ── Wall-clock live timer (starts when ACTIVE) ────────────────────────────
   useEffect(() => {
     if (sessionState !== 'ACTIVE' || !session) return;
-    liveSecondsRef.current = session.durationSeconds;
-    setLiveSeconds(session.durationSeconds);
+    // Set start ref on first activation
+    if (!sessionStartedAtMsRef.current) {
+      sessionStartedAtMsRef.current = session.startedAt
+        ? new Date(session.startedAt).getTime()
+        : Date.now() - session.durationSeconds * 1000;
+    }
+    const tick = () => {
+      if (!sessionStartedAtMsRef.current) return;
+      const elapsed = Math.floor((Date.now() - sessionStartedAtMsRef.current) / 1000);
+      liveSecondsRef.current = elapsed;
+      setLiveSeconds(elapsed);
+    };
+    tick(); // immediate update
     if (liveTimerRef.current) clearInterval(liveTimerRef.current);
-    liveTimerRef.current = setInterval(() => {
-      liveSecondsRef.current += 1;
-      setLiveSeconds(liveSecondsRef.current);
-    }, 1000);
+    liveTimerRef.current = setInterval(tick, 1000);
     return () => { if (liveTimerRef.current) clearInterval(liveTimerRef.current); };
   }, [sessionState, session?.sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Billing tick every 60s
+  // ── Sync timer + billing tick on tab visibility change ────────────────────
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      // Sync timer immediately
+      if (sessionStateRef.current === 'ACTIVE' && sessionStartedAtMsRef.current) {
+        const elapsed = Math.floor((Date.now() - sessionStartedAtMsRef.current) / 1000);
+        liveSecondsRef.current = elapsed;
+        setLiveSeconds(elapsed);
+      }
+      // Fire billing tick immediately if overdue (tab was backgrounded > 60s)
+      if (
+        sessionStateRef.current === 'ACTIVE' &&
+        sessionIdRef.current &&
+        lastTickAtMsRef.current &&
+        Date.now() - lastTickAtMsRef.current >= BILLING_TICK_SECONDS * 1000
+      ) {
+        fireBillingTick(sessionIdRef.current);
+        // Reset interval
+        if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
+        tickIntervalRef.current = setInterval(() => {
+          if (sessionIdRef.current) fireBillingTick(sessionIdRef.current);
+        }, BILLING_TICK_SECONDS * 1000);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Billing tick every 60s ────────────────────────────────────────────────
+  const fireBillingTick = useCallback(async (sid: string) => {
+    lastTickAtMsRef.current = Date.now();
+    try {
+      const res = await fetch('/api/billing/tick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sid }),
+      });
+      const d = await res.json();
+      if (d.success && d.data) {
+        if (d.data.ended) {
+          if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
+          if (liveTimerRef.current) clearInterval(liveTimerRef.current);
+          setSessionState('ENDED');
+          setSessionSummary({ totalCharged: d.data.totalCharged ?? 0, durationSeconds: liveSecondsRef.current });
+        } else if (d.data.balanceLow) {
+          setBalanceLow(true);
+        }
+      }
+    } catch { /* non-fatal */ }
+  }, []);
+
   useEffect(() => {
     if (sessionState !== 'ACTIVE' || !session?.sessionId) return;
     if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
     const sid = session.sessionId;
-    tickIntervalRef.current = setInterval(async () => {
-      try {
-        const res = await fetch('/api/billing/tick', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: sid }),
-        });
-        const d = await res.json();
-        if (d.success && d.data) {
-          if (d.data.ended) {
-            if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
-            if (liveTimerRef.current) clearInterval(liveTimerRef.current);
-            setSessionState('ENDED');
-            setSessionSummary({ totalCharged: d.data.totalCharged ?? 0, durationSeconds: liveSecondsRef.current });
-          } else if (d.data.balanceLow) {
-            setBalanceLow(true);
-          }
-        }
-      } catch { /* non-fatal */ }
-    }, BILLING_TICK_SECONDS * 1000);
+    lastTickAtMsRef.current = Date.now(); // reset tracking
+    tickIntervalRef.current = setInterval(() => fireBillingTick(sid), BILLING_TICK_SECONDS * 1000);
     return () => { if (tickIntervalRef.current) clearInterval(tickIntervalRef.current); };
-  }, [sessionState, session?.sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionState, session?.sessionId, fireBillingTick]);
 
   const handleEndSession = useCallback(async () => {
     if (!session?.sessionId) return;
@@ -358,7 +421,7 @@ interface ClientChatViewProps {
   liveSeconds: number;
   balanceLow: boolean;
   onEndSession: () => Promise<void>;
-  publishToRoom: (text: string) => Promise<string | null>;
+  publishToRoom: (text: string, id?: string) => Promise<string | null>;
   publishRoomTyping: (isTyping: boolean) => void;
   onRoomMessage: (cb: RoomMessageCallback) => () => void;
   onRoomTyping: (cb: RoomTypingCallback) => () => void;
@@ -387,11 +450,11 @@ function ClientChatView({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Subscribe to room messages
+  // Subscribe to room messages (from the OTHER person; own messages are added optimistically)
   useEffect(() => {
     return onRoomMessage((data) => {
       setMessages(prev => {
-        if (prev.some(m => m.id === data.id)) return prev;
+        if (prev.some(m => m.id === data.id)) return prev; // deduplicate
         return [...prev, {
           id: data.id,
           text: data.text,
@@ -445,12 +508,16 @@ function ClientChatView({
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || sending) return;
     const content = inputText.trim();
+    const now = new Date();
+    const msgId = `${userId}-${now.getTime()}-${Math.random().toString(36).slice(2, 6)}`;
     setInputText('');
     if (inputRef.current) inputRef.current.style.height = 'auto';
     setSending(true);
+    // Optimistic add — show immediately, deduplication handles echo
+    setMessages(prev => [...prev, { id: msgId, text: content, senderId: userId, createdAt: now }]);
     try {
       publishRoomTyping(false);
-      await publishToRoom(content);
+      await publishToRoom(content, msgId);
       // Persist to DB + push notification (fire and forget)
       fetch('/api/messages/send', {
         method: 'POST',
@@ -458,7 +525,9 @@ function ClientChatView({
         body: JSON.stringify({ companionUserId: companionId, clientUserId: userId, content }),
       }).catch(() => {});
     } catch {
-      setInputText(content); // restore text on send failure
+      // Remove optimistic message on failure
+      setMessages(prev => prev.filter(m => m.id !== msgId));
+      setInputText(content);
     } finally {
       setSending(false);
     }

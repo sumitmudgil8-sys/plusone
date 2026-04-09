@@ -69,6 +69,7 @@ function CompanionInboxContent() {
   const [sessionEnded, setSessionEnded] = useState(false);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sessionStartedAtMsRef = useRef<number | null>(null); // wall-clock start
 
   // Chat room ID — drives room subscription in useSocket
   const chatRoomId =
@@ -153,6 +154,7 @@ function CompanionInboxContent() {
     setChatRatePerMinute(0);
     setSessionEnded(false);
     setSessionSeconds(0);
+    sessionStartedAtMsRef.current = null;
     if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
   }, [activeClientId]);
 
@@ -164,9 +166,16 @@ function CompanionInboxContent() {
         const res = await fetch(`/api/billing/session-status?clientId=${activeClientId}`);
         const d = await res.json();
         if (d.data?.status === 'ACTIVE') {
+          const durationSeconds: number = d.data.durationSeconds ?? 0;
+          const startedAt: string | null = d.data.startedAt ?? null;
+          // Compute wall-clock start: prefer server startedAt, fall back to duration offset
+          sessionStartedAtMsRef.current = startedAt
+            ? new Date(startedAt).getTime()
+            : Date.now() - durationSeconds * 1000;
           setChatSessionActive(true);
           setChatSessionId(d.data.sessionId);
           setChatRatePerMinute(d.data.ratePerMinute ?? 0);
+          setSessionSeconds(durationSeconds);
         }
       } catch { /* non-fatal */ }
     };
@@ -180,6 +189,7 @@ function CompanionInboxContent() {
     return onChatRequestResponse((data) => {
       if (data.status !== 'ACCEPTED' || !data.clientId) return;
       if (data.clientId === activeClientId) {
+        sessionStartedAtMsRef.current = Date.now();
         setChatSessionActive(true);
         if (data.sessionId) setChatSessionId(data.sessionId);
       }
@@ -196,14 +206,34 @@ function CompanionInboxContent() {
     });
   }, [onChatEnded, chatSessionId]);
 
-  // ── Session timer ─────────────────────────────────────────────────────────
+  // ── Session timer (wall-clock based — survives tab switches) ─────────────
   useEffect(() => {
     if (!chatSessionActive) {
       if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
       return;
     }
-    sessionTimerRef.current = setInterval(() => setSessionSeconds(s => s + 1), 1000);
+    // Ensure start ref is set (might have been set via Ably accepted event)
+    if (!sessionStartedAtMsRef.current) {
+      sessionStartedAtMsRef.current = Date.now();
+    }
+    const tick = () => {
+      if (!sessionStartedAtMsRef.current) return;
+      setSessionSeconds(Math.floor((Date.now() - sessionStartedAtMsRef.current) / 1000));
+    };
+    tick();
+    sessionTimerRef.current = setInterval(tick, 1000);
     return () => { if (sessionTimerRef.current) clearInterval(sessionTimerRef.current); };
+  }, [chatSessionActive]);
+
+  // Sync timer when tab comes back from background
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === 'visible' && chatSessionActive && sessionStartedAtMsRef.current) {
+        setSessionSeconds(Math.floor((Date.now() - sessionStartedAtMsRef.current) / 1000));
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
   }, [chatSessionActive]);
 
   useEffect(() => () => { if (sessionTimerRef.current) clearInterval(sessionTimerRef.current); }, []);
@@ -382,7 +412,7 @@ interface CompanionChatPanelProps {
   onEndSession: () => Promise<void>;
   onBack: () => void;
   onOwnMessage: (content: string, createdAt: string) => void;
-  publishToRoom: (text: string) => Promise<string | null>;
+  publishToRoom: (text: string, id?: string) => Promise<string | null>;
   publishRoomTyping: (isTyping: boolean) => void;
   onRoomMessage: (cb: RoomMessageCallback) => () => void;
   onRoomTyping: (cb: RoomTypingCallback) => () => void;
@@ -465,13 +495,17 @@ function CompanionChatPanel({
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || sending || sessionEnded) return;
     const content = inputText.trim();
+    const now = new Date();
+    const msgId = `${currentUserId}-${now.getTime()}-${Math.random().toString(36).slice(2, 6)}`;
     setInputText('');
     if (inputRef.current) inputRef.current.style.height = 'auto';
     setSending(true);
     publishRoomTyping(false);
+    // Optimistic add — show immediately, deduplicated if echo arrives
+    setMessages(prev => [...prev, { id: msgId, text: content, senderId: currentUserId, createdAt: now }]);
     try {
-      await publishToRoom(content);
-      onOwnMessage(content, new Date().toISOString());
+      await publishToRoom(content, msgId);
+      onOwnMessage(content, now.toISOString());
       // Fire-and-forget: persist to DB + push notification
       fetch('/api/messages/send', {
         method: 'POST',
@@ -479,6 +513,8 @@ function CompanionChatPanel({
         body: JSON.stringify({ companionUserId: currentUserId, clientUserId: clientId, content }),
       }).catch(() => {});
     } catch {
+      // Remove optimistic message on failure
+      setMessages(prev => prev.filter(m => m.id !== msgId));
       setInputText(content);
     } finally {
       setSending(false);
