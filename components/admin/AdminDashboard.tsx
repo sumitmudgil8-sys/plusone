@@ -152,7 +152,7 @@ export function AdminDashboard() {
 
   const quickActions = [
     { label: 'View Clients', href: '/admin/users', icon: '→' },
-    { label: 'Manage Subscriptions', href: '/admin/subscriptions', icon: '→' },
+    { label: 'Verify Payments', href: '/admin/payments', icon: '→' },
     { label: 'Monitor Chats', href: '/admin/chats', icon: '→' },
     { label: 'Process Payouts', href: '/admin/withdrawals', icon: '→' },
   ];

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 
 interface Transaction {
@@ -10,6 +10,19 @@ interface Transaction {
   balanceAfter: number;
   description: string;
   createdAt: string;
+}
+
+interface PendingPayment {
+  id: string;
+  requestedAmount: number;
+  uniqueAmount: number;
+  status: string;
+  upiId: string;
+  upiUrl: string;
+  expiresAt: string;
+  createdAt: string;
+  resolvedAt: string | null;
+  adminNote: string | null;
 }
 
 const QUICK_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
@@ -27,8 +40,13 @@ export default function WalletPage() {
   const [rechargeAmount, setRechargeAmount] = useState('');
   const [recharging, setRecharging] = useState(false);
   const [rechargeError, setRechargeError] = useState('');
-  const [paymentLink, setPaymentLink] = useState<{ upiLink: string | null; shortUrl: string | null; qrCode: string | null } | null>(null);
   const [showRecharge, setShowRecharge] = useState(false);
+
+  // Manual payment state
+  const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
+  const [countdown, setCountdown] = useState('');
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchWallet = useCallback(async () => {
     try {
@@ -62,9 +80,87 @@ export default function WalletPage() {
     }
   }, []);
 
+  // Check for existing pending payment on mount
+  const checkPendingPayment = useCallback(async () => {
+    try {
+      const res = await fetch('/api/wallet/manual-recharge');
+      const data = await res.json();
+      if (data.success && data.data.payment) {
+        const payment = data.data.payment;
+        if (payment.status === 'PENDING') {
+          setPendingPayment(payment);
+          setPaymentConfirmed(true);
+          setShowRecharge(true);
+        } else if (payment.status === 'APPROVED' && payment.resolvedAt) {
+          // Recently approved — refresh wallet
+          setPendingPayment(payment);
+          fetchWallet();
+        } else if (payment.status === 'REJECTED') {
+          setPendingPayment(payment);
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+  }, [fetchWallet]);
+
   useEffect(() => {
     fetchWallet();
-  }, [fetchWallet]);
+    checkPendingPayment();
+  }, [fetchWallet, checkPendingPayment]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!pendingPayment || pendingPayment.status !== 'PENDING') {
+      setCountdown('');
+      return;
+    }
+
+    const update = () => {
+      const remaining = new Date(pendingPayment.expiresAt).getTime() - Date.now();
+      if (remaining <= 0) {
+        setCountdown('00:00');
+        setPendingPayment((prev) => prev ? { ...prev, status: 'EXPIRED' } : null);
+        return;
+      }
+      const mins = Math.floor(remaining / 60000);
+      const secs = Math.floor((remaining % 60000) / 1000);
+      setCountdown(`${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`);
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [pendingPayment]);
+
+  // Poll for payment status every 15 seconds when waiting
+  useEffect(() => {
+    if (!paymentConfirmed || !pendingPayment || pendingPayment.status !== 'PENDING') {
+      if (pollRef.current) clearInterval(pollRef.current);
+      return;
+    }
+
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/wallet/manual-recharge');
+        const data = await res.json();
+        if (data.success && data.data.payment) {
+          const p = data.data.payment;
+          if (p.status !== 'PENDING') {
+            setPendingPayment(p);
+            if (p.status === 'APPROVED') {
+              fetchWallet();
+            }
+          }
+        }
+      } catch {
+        // non-fatal
+      }
+    };
+
+    pollRef.current = setInterval(poll, 15000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [paymentConfirmed, pendingPayment, fetchWallet]);
 
   const handleRecharge = async () => {
     const amountRupees = parseInt(rechargeAmount);
@@ -79,24 +175,20 @@ export default function WalletPage() {
 
     setRecharging(true);
     setRechargeError('');
-    setPaymentLink(null);
 
     try {
-      const res = await fetch('/api/wallet/recharge', {
+      const res = await fetch('/api/wallet/manual-recharge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: amountRupees * 100 }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setRechargeError(data.error ?? 'Failed to create payment link');
+        setRechargeError(data.error ?? 'Failed to create payment request');
         return;
       }
-      setPaymentLink({
-        upiLink: data.data.upiLink,
-        shortUrl: data.data.shortUrl,
-        qrCode: data.data.qrCode,
-      });
+      setPendingPayment(data.data);
+      setPaymentConfirmed(false);
     } catch {
       setRechargeError('Something went wrong. Please try again.');
     } finally {
@@ -104,16 +196,24 @@ export default function WalletPage() {
     }
   };
 
-  const handlePaymentDone = () => {
-    setPaymentLink(null);
+  const handleIvePaid = () => {
+    setPaymentConfirmed(true);
+  };
+
+  const handleDismiss = () => {
+    setPendingPayment(null);
+    setPaymentConfirmed(false);
     setShowRecharge(false);
     setRechargeAmount('');
-    // Re-fetch wallet after a short delay for webhook processing
-    setTimeout(() => fetchWallet(), 3000);
+    fetchWallet();
   };
 
   const formatAmount = (paise: number) => {
     return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
+  };
+
+  const formatAmountExact = (paise: number) => {
+    return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatDate = (iso: string) => {
@@ -196,7 +296,7 @@ export default function WalletPage() {
             {formatAmount(balance ?? 0)}
           </p>
           <button
-            onClick={() => { setShowRecharge(true); setPaymentLink(null); setRechargeError(''); }}
+            onClick={() => { setShowRecharge(true); setPendingPayment(null); setPaymentConfirmed(false); setRechargeError(''); }}
             className="mt-4 w-full bg-[#C9A96E] text-black text-sm font-semibold py-3 rounded-xl hover:bg-[#d4b87a] transition-colors flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -207,10 +307,53 @@ export default function WalletPage() {
         </div>
       </div>
 
+      {/* Recently approved banner */}
+      {pendingPayment && pendingPayment.status === 'APPROVED' && !showRecharge && (
+        <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-emerald-400">Payment Approved!</p>
+            <p className="text-xs text-white/40 mt-0.5">{formatAmountExact(pendingPayment.uniqueAmount)} added to your wallet</p>
+          </div>
+          <button onClick={() => setPendingPayment(null)} className="text-white/30 hover:text-white">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Recently rejected banner */}
+      {pendingPayment && pendingPayment.status === 'REJECTED' && !showRecharge && (
+        <div className="rounded-2xl bg-red-500/10 border border-red-500/20 p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-400">Payment Rejected</p>
+            <p className="text-xs text-white/40 mt-0.5">
+              {pendingPayment.adminNote || 'Your payment could not be verified. Please try again.'}
+            </p>
+          </div>
+          <button onClick={() => setPendingPayment(null)} className="text-white/30 hover:text-white">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Recharge Panel */}
       {showRecharge && (
         <div className="rounded-2xl bg-[#141414] border border-white/5 p-5 space-y-4 animate-fade-in">
-          {!paymentLink ? (
+          {/* Step 1: Amount selection (no pending payment yet) */}
+          {!pendingPayment && (
             <>
               <div className="flex items-center justify-between">
                 <h3 className="text-white font-semibold text-sm">Add Money</h3>
@@ -269,60 +412,196 @@ export default function WalletPage() {
                 {recharging ? (
                   <>
                     <div className="animate-spin w-4 h-4 border-2 border-black/30 border-t-black rounded-full" />
-                    Creating link…
+                    Processing...
                   </>
                 ) : (
-                  `Pay ₹${parseInt(rechargeAmount) || 0}`
+                  `Proceed to Pay ₹${parseInt(rechargeAmount) || 0}`
                 )}
               </button>
             </>
-          ) : (
-            /* Payment link created — show options */
-            <div className="space-y-4 text-center">
-              <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto">
-                <svg className="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          )}
+
+          {/* Step 2: Payment created — show UPI details (before "I've Paid") */}
+          {pendingPayment && pendingPayment.status === 'PENDING' && !paymentConfirmed && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-white font-semibold text-sm">Pay via UPI</h3>
+                <button onClick={handleDismiss} className="text-white/30 hover:text-white transition-colors">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Unique amount highlight */}
+              <div className="bg-[#C9A96E]/10 border border-[#C9A96E]/30 rounded-xl p-4 text-center">
+                <p className="text-xs text-white/50 mb-1">Pay exactly this amount</p>
+                <p className="text-3xl font-bold text-[#C9A96E]">
+                  {formatAmountExact(pendingPayment.uniqueAmount)}
+                </p>
+                <p className="text-xs text-white/30 mt-2">
+                  The unique amount helps us identify your payment
+                </p>
+              </div>
+
+              {/* UPI ID */}
+              <div className="bg-white/5 rounded-xl p-3 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-white/40">Pay to UPI ID</p>
+                  <p className="text-sm text-white font-mono mt-0.5">{pendingPayment.upiId}</p>
+                </div>
+                <button
+                  onClick={() => navigator.clipboard.writeText(pendingPayment.upiId)}
+                  className="text-[#C9A96E] text-xs font-medium hover:underline"
+                >
+                  Copy
+                </button>
+              </div>
+
+              {/* Open UPI App */}
+              <a
+                href={pendingPayment.upiUrl}
+                className="block w-full bg-[#C9A96E] text-black text-sm font-semibold py-3.5 rounded-xl hover:bg-[#d4b87a] transition-colors text-center"
+              >
+                Open UPI App to Pay
+              </a>
+
+              <button
+                onClick={handleIvePaid}
+                className="w-full border border-white/10 text-white/60 text-sm py-3 rounded-xl hover:border-white/20 hover:text-white transition-colors"
+              >
+                I&apos;ve completed the payment
+              </button>
+
+              <p className="text-center text-xs text-white/20">
+                Payment window expires in {countdown}
+              </p>
+            </div>
+          )}
+
+          {/* Step 3: Waiting for admin verification (after "I've Paid") */}
+          {pendingPayment && pendingPayment.status === 'PENDING' && paymentConfirmed && (
+            <div className="space-y-5 text-center py-2">
+              {/* Timer circle */}
+              <div className="relative w-28 h-28 mx-auto">
+                <svg className="w-28 h-28 -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
+                  <circle
+                    cx="50" cy="50" r="44" fill="none"
+                    stroke="#C9A96E"
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 44}`}
+                    strokeDashoffset={(() => {
+                      const total = 15 * 60 * 1000;
+                      const remaining = Math.max(0, new Date(pendingPayment.expiresAt).getTime() - Date.now());
+                      const ratio = remaining / total;
+                      return (1 - ratio) * 2 * Math.PI * 44;
+                    })()}
+                    className="transition-all duration-1000"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-xl font-bold text-white font-mono">{countdown}</span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-white font-semibold">Verifying your payment</p>
+                <p className="text-white/40 text-xs mt-1.5 max-w-xs mx-auto">
+                  Please wait while we verify your payment of{' '}
+                  <span className="text-[#C9A96E] font-medium">{formatAmountExact(pendingPayment.uniqueAmount)}</span>.
+                  This usually takes a few minutes.
+                </p>
+              </div>
+
+              {/* Pulsing dots */}
+              <div className="flex items-center justify-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-[#C9A96E] animate-pulse" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 rounded-full bg-[#C9A96E] animate-pulse" style={{ animationDelay: '300ms' }} />
+                <div className="w-2 h-2 rounded-full bg-[#C9A96E] animate-pulse" style={{ animationDelay: '600ms' }} />
+              </div>
+
+              <div className="bg-white/5 rounded-xl p-3">
+                <p className="text-xs text-white/30">
+                  If your payment is not verified within 15 minutes, please contact support.
+                </p>
+              </div>
+
+              <button
+                onClick={handleDismiss}
+                className="text-sm text-white/40 hover:text-white/60 transition-colors"
+              >
+                Cancel and go back
+              </button>
+            </div>
+          )}
+
+          {/* Expired state */}
+          {pendingPayment && pendingPayment.status === 'EXPIRED' && (
+            <div className="space-y-4 text-center py-4">
+              <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mx-auto">
+                <svg className="w-7 h-7 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div>
-                <p className="text-white font-semibold">Payment link ready</p>
-                <p className="text-white/40 text-xs mt-1">Complete payment using UPI</p>
+                <p className="text-white font-semibold">Payment window expired</p>
+                <p className="text-white/40 text-xs mt-1">
+                  The 15-minute verification window has ended. Please create a new payment request.
+                </p>
               </div>
-
-              {/* QR Code */}
-              {paymentLink.qrCode && (
-                <div className="bg-white rounded-2xl p-4 mx-auto w-fit">
-                  <img src={paymentLink.qrCode} alt="UPI QR" className="w-44 h-44" />
-                </div>
-              )}
-
-              {/* UPI Deep Link */}
-              {paymentLink.upiLink && (
-                <a
-                  href={paymentLink.upiLink}
-                  className="block w-full bg-[#C9A96E] text-black text-sm font-semibold py-3 rounded-xl hover:bg-[#d4b87a] transition-colors"
-                >
-                  Open UPI App
-                </a>
-              )}
-
-              {/* Short URL fallback */}
-              {paymentLink.shortUrl && (
-                <a
-                  href={paymentLink.shortUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full border border-white/10 text-white/60 text-sm py-3 rounded-xl hover:border-white/20 hover:text-white transition-colors"
-                >
-                  Open Payment Link
-                </a>
-              )}
-
               <button
-                onClick={handlePaymentDone}
-                className="text-sm text-[#C9A96E] font-medium hover:underline"
+                onClick={handleDismiss}
+                className="w-full bg-[#C9A96E] text-black text-sm font-semibold py-3 rounded-xl hover:bg-[#d4b87a] transition-colors"
               >
-                I&apos;ve completed payment
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {/* Approved state (in recharge panel) */}
+          {pendingPayment && pendingPayment.status === 'APPROVED' && showRecharge && (
+            <div className="space-y-4 text-center py-4">
+              <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto">
+                <svg className="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-white font-semibold">Payment Verified!</p>
+                <p className="text-white/40 text-xs mt-1">
+                  {formatAmountExact(pendingPayment.uniqueAmount)} has been added to your wallet.
+                </p>
+              </div>
+              <button
+                onClick={handleDismiss}
+                className="w-full bg-[#C9A96E] text-black text-sm font-semibold py-3 rounded-xl hover:bg-[#d4b87a] transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          )}
+
+          {/* Rejected state (in recharge panel) */}
+          {pendingPayment && pendingPayment.status === 'REJECTED' && showRecharge && (
+            <div className="space-y-4 text-center py-4">
+              <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mx-auto">
+                <svg className="w-7 h-7 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-white font-semibold">Payment Not Verified</p>
+                <p className="text-white/40 text-xs mt-1">
+                  {pendingPayment.adminNote || 'We could not verify your payment. If you made the payment, please contact support.'}
+                </p>
+              </div>
+              <button
+                onClick={handleDismiss}
+                className="w-full bg-[#C9A96E] text-black text-sm font-semibold py-3 rounded-xl hover:bg-[#d4b87a] transition-colors"
+              >
+                Try Again
               </button>
             </div>
           )}

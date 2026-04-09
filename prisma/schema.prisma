@@ -106,6 +106,7 @@ model User {
   clientChatRequests       ChatRequest[]      @relation("ClientChatRequests")
   companionChatRequests    ChatRequest[]      @relation("CompanionChatRequests")
   withdrawalRequests       WithdrawalRequest[]
+  manualPayments           ManualPayment[]
 }
 
 model ClientProfile {
@@ -474,4 +475,22 @@ model WithdrawalRequest {
 
   @@index([companionId])
   @@index([status])
+}
+
+model ManualPayment {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestedAmount Int      // paise — what client wanted (e.g. 50000 = ₹500)
+  uniqueAmount    Int      // paise — adjusted amount client actually pays (e.g. 49996 = ₹499.96)
+  status          String   @default("PENDING") // PENDING | APPROVED | REJECTED | EXPIRED
+  upiId           String   // merchant UPI ID
+  adminNote       String?
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime // 15 minutes from creation
+  resolvedAt      DateTime?
+
+  @@index([userId, status])
+  @@index([uniqueAmount, status])
+  @@index([status, createdAt])
 }
