@@ -105,3 +105,8 @@ input[type="range"]::-webkit-slider-runnable-track {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Safe area inset for bottom nav on notched phones */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

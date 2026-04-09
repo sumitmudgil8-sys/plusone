@@ -34,8 +34,7 @@ export function CompanionCard({ companion, scarcityLabel }: { companion: Compani
   return (
     <Link
       href={companion.accessible ? `/client/booking/${companion.id}` : '/client/subscription'}
-      className="block shrink-0 snap-start group"
-      style={{ width: 172 }}
+      className="block shrink-0 snap-start group w-[42vw] min-w-[140px] max-w-[172px]"
     >
       <div className="relative rounded-2xl overflow-hidden bg-[#121212]" style={{ aspectRatio: '3/4' }}>
         {/* Image */}
