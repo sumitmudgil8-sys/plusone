@@ -320,13 +320,29 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     const fetchPending = async () => {
       try {
-        // First check new BillingSession PENDING
+        // First check new BillingSession PENDING (returns both CHAT and VOICE)
         const billingRes = await fetch('/api/billing/pending');
         const billingData = await billingRes.json();
         if (billingData.success && billingData.data) {
-          setIncomingChatRequest((prev) =>
-            prev ? prev : billingData.data
-          );
+          const d = billingData.data;
+          if (d.type === 'VOICE') {
+            // Route VOICE pending sessions to the incoming call modal
+            setIncomingCall((prev) =>
+              prev ? prev : {
+                sessionId: d.sessionId,
+                clientId: d.clientId,
+                callerName: d.clientName,
+                callerAvatar: d.clientAvatar,
+                channelName: d.channelName,
+                ratePerMinute: d.ratePerMinute,
+              }
+            );
+          } else {
+            // CHAT pending sessions go to the chat request modal
+            setIncomingChatRequest((prev) =>
+              prev ? prev : d
+            );
+          }
           return;
         }
         // Fall back to old ChatRequest model
