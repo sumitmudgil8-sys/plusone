@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { CompanionNav } from '@/components/layout/CompanionNav';
 import { useSocket } from '@/hooks/useSocket';
 import { PushPermissionPrompt } from '@/components/PushPermissionPrompt';
 import { ActiveCallBanner } from '@/components/ActiveCallBanner';
+import { CompanionCallProvider, useCompanionCall } from '@/contexts/CompanionCallContext';
 
 interface IncomingCall {
   sessionId: string;
@@ -268,26 +269,127 @@ function IncomingChatRequestModal({
   );
 }
 
-// ─── Layout ──────────────────────────────────────────────────────────────────
+// ─── Floating call widget ────────────────────────────────────────────────────
+function CompanionFloatingCall({
+  call,
+  pathname,
+  onReturn,
+}: {
+  call: ReturnType<typeof useCompanionCall>;
+  pathname: string;
+  onReturn: () => void;
+}) {
+  const { activeCall, voiceCall, liveSeconds, endCall } = call;
+  if (!activeCall) return null;
+
+  // If user is on the inbox page with this call's voiceSessionId, the full overlay is shown there
+  const isOnCallPage = pathname.startsWith('/companion/inbox') && pathname.includes(activeCall.sessionId);
+  if (isOnCallPage) return null;
+
+  const mins = Math.floor(liveSeconds / 60);
+  const secs = liveSeconds % 60;
+  const timeStr = `${mins}:${String(secs).padStart(2, '0')}`;
+
+  const isConnected = voiceCall.state === 'connected';
+  const statusText = voiceCall.state === 'connecting' ? 'Connecting…' :
+    voiceCall.state === 'error' ? 'Call error' :
+    !voiceCall.remoteUserJoined ? 'Waiting…' : 'In call';
+
+  return (
+    <div className="fixed bottom-20 md:bottom-4 right-4 z-[90] bg-[#1a1a2e] border border-green-500/30 rounded-2xl shadow-2xl shadow-green-500/10 p-3 w-72">
+      <div className="flex items-center gap-3">
+        {activeCall.clientAvatar ? (
+          <img src={activeCall.clientAvatar} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-green-500/30" />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center ring-2 ring-green-500/30">
+            <span className="text-sm font-semibold text-green-400">{activeCall.clientName[0]}</span>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-white truncate">{activeCall.clientName}</p>
+          <div className="flex items-center gap-2">
+            {isConnected && (
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
+              </span>
+            )}
+            <span className="text-xs text-white/50">{statusText}</span>
+            {isConnected && <span className="text-xs font-mono text-green-400">{timeStr}</span>}
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-2 mt-2.5">
+        <button
+          onClick={onReturn}
+          className="flex-1 py-1.5 rounded-lg bg-green-500/20 text-green-400 text-xs font-medium hover:bg-green-500/30 transition-colors"
+        >
+          Return to call
+        </button>
+        <button
+          onClick={() => voiceCall.toggleMute()}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            voiceCall.isMuted ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-white/60 hover:text-white'
+          }`}
+        >
+          {voiceCall.isMuted ? 'Unmute' : 'Mute'}
+        </button>
+        <button
+          onClick={endCall}
+          className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/30 transition-colors"
+        >
+          End
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Layout (outer wrapper — provides call context) ─────────────────────────
 export default function CompanionLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const [userId, setUserId] = useState<string | undefined>();
+
+  useEffect(() => {
+    fetch('/api/users/me')
+      .then((r) => r.json())
+      .then((d) => { if (d.user?.id) setUserId(d.user.id); })
+      .catch(() => {});
+  }, []);
+
+  return (
+    <CompanionCallProvider userId={userId}>
+      <CompanionLayoutInner userId={userId} setUserId={setUserId}>
+        {children}
+      </CompanionLayoutInner>
+    </CompanionCallProvider>
+  );
+}
+
+// ─── Layout inner (uses call context) ────────────────────────────────────────
+function CompanionLayoutInner({ children, userId, setUserId }: {
+  children: React.ReactNode;
+  userId: string | undefined;
+  setUserId: (id: string | undefined) => void;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const companionCall = useCompanionCall();
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [incomingChatRequest, setIncomingChatRequest] = useState<IncomingChatRequest | null>(null);
 
-  // Fetch current user from DB (source of truth — not JWT)
+  // Fetch password state for the current user
   useEffect(() => {
+    if (!userId) return;
     fetch('/api/users/me')
       .then((r) => r.json())
       .then((d) => {
         if (d.user?.id) {
-          setUserId(d.user.id);
           setNeedsPasswordChange(d.user.isTemporaryPassword === true);
         }
       })
       .catch(() => {});
-  }, []);
+  }, [userId]);
 
   // Extend the auth cookie once per app open (sliding 30-day window)
   useEffect(() => {
@@ -370,7 +472,7 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
 
   const handleAcceptCall = useCallback(async () => {
     if (!incomingCall) return;
-    const { clientId, sessionId } = incomingCall;
+    const { clientId, sessionId, callerName, callerAvatar } = incomingCall;
     setIncomingCall(null);
     try {
       await fetch('/api/billing/accept', {
@@ -378,9 +480,16 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId }),
       });
-    } catch { /* non-fatal — navigate anyway */ }
-    router.push(`/companion/inbox/${clientId}?voiceSessionId=${sessionId}`);
-  }, [incomingCall, router]);
+    } catch { /* non-fatal */ }
+    // Start call in context (Agora connects at layout level, persists across pages)
+    companionCall.startCall({
+      sessionId,
+      clientId,
+      clientName: callerName,
+      clientAvatar: callerAvatar,
+    });
+    router.push(`/companion/inbox?active=${clientId}&voiceSessionId=${sessionId}`);
+  }, [incomingCall, router, companionCall]);
 
   const handleDeclineCall = useCallback(async () => {
     if (!incomingCall) return;
@@ -479,7 +588,15 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
 
       <CompanionNav />
       <PushPermissionPrompt />
-      <ActiveCallBanner />
+
+      {/* Floating call widget — visible on all pages when a call is active */}
+      {companionCall.activeCall && companionCall.voiceCall.state !== 'ended' && (
+        <CompanionFloatingCall
+          call={companionCall}
+          pathname={pathname}
+          onReturn={() => router.push(`/companion/inbox?active=${companionCall.activeCall!.clientId}&voiceSessionId=${companionCall.activeCall!.sessionId}`)}
+        />
+      )}
 
       {incomingCall && !needsPasswordChange && (
         <IncomingCallModal

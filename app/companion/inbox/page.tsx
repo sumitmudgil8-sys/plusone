@@ -5,9 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
 import type { RoomMessage } from '@/hooks/useSocket';
-import { useVoiceCall } from '@/hooks/useVoiceCall';
 import type { VoiceCallState } from '@/hooks/useVoiceCall';
-import { ActiveCallBanner } from '@/components/ActiveCallBanner';
+import { useCompanionCall } from '@/contexts/CompanionCallContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,62 +74,30 @@ function CompanionInboxContent() {
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionStartedAtMsRef = useRef<number | null>(null);
 
-  // ── Voice call ────────────────────────────────────────────────────────────
+  // ── Voice call (from layout context — persists across navigation) ─────────
+  const companionCall = useCompanionCall();
   const voiceSessionId = searchParams.get('voiceSessionId');
-  const voiceCall = useVoiceCall(voiceSessionId ?? null, currentUserId ?? '');
-  const [voiceLiveSeconds, setVoiceLiveSeconds] = useState(0);
-  const voiceStartedAtRef = useRef<number | null>(null);
-  const voiceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const voiceCall = companionCall.voiceCall;
+  const voiceLiveSeconds = companionCall.liveSeconds;
 
+  // If we land on this page with voiceSessionId but context has no active call,
+  // start it (e.g. page refresh or direct URL)
   useEffect(() => {
-    if (voiceCall.state !== 'connected') {
-      if (voiceTimerRef.current) clearInterval(voiceTimerRef.current);
-      if (voiceCall.state === 'ended' || voiceCall.state === 'error') {
-        setVoiceLiveSeconds(0);
-        voiceStartedAtRef.current = null;
-      }
-      return;
-    }
-    if (!voiceStartedAtRef.current) voiceStartedAtRef.current = Date.now();
-    const tick = () => {
-      if (!voiceStartedAtRef.current) return;
-      setVoiceLiveSeconds(Math.floor((Date.now() - voiceStartedAtRef.current) / 1000));
-    };
-    tick();
-    voiceTimerRef.current = setInterval(tick, 1000);
-    return () => { if (voiceTimerRef.current) clearInterval(voiceTimerRef.current); };
-  }, [voiceCall.state]);
-
-  useEffect(() => () => { if (voiceTimerRef.current) clearInterval(voiceTimerRef.current); }, []);
-
-  // Active call banner for companion
-  useEffect(() => {
-    if (voiceSessionId && voiceCall.state === 'connected') {
+    if (voiceSessionId && !companionCall.activeCall && activeClientId) {
       const clientInfo = threads.find(t => t.clientId === activeClientId);
-      ActiveCallBanner.set({
+      companionCall.startCall({
         sessionId: voiceSessionId,
-        returnPath: `/companion/inbox?active=${activeClientId}&voiceSessionId=${voiceSessionId}`,
-        peerName: clientInfo?.clientName ?? 'Client',
+        clientId: activeClientId,
+        clientName: clientInfo?.clientName ?? 'Client',
+        clientAvatar: clientInfo?.clientAvatar ?? null,
       });
     }
-    if (voiceCall.state === 'ended' || voiceCall.state === 'error') {
-      ActiveCallBanner.clear();
-    }
-    return () => { ActiveCallBanner.clear(); };
-  }, [voiceSessionId, voiceCall.state, activeClientId]);
+  }, [voiceSessionId, companionCall.activeCall, activeClientId, threads]);
 
   const handleEndVoiceCall = useCallback(async () => {
-    ActiveCallBanner.clear();
-    await voiceCall.endCall();
-    if (voiceSessionId) {
-      fetch('/api/billing/end', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: voiceSessionId }),
-      }).catch(() => {});
-    }
+    await companionCall.endCall();
     router.replace(`/companion/inbox${activeClientId ? `?active=${activeClientId}` : ''}`);
-  }, [voiceCall, voiceSessionId, router, activeClientId]);
+  }, [companionCall, router, activeClientId]);
 
   // Chat room ID — drives room subscription in useSocket
   const chatRoomId =
@@ -442,15 +409,15 @@ function CompanionInboxContent() {
       </div>
 
       {/* ── Voice call overlay ──────────────────────────────────────────── */}
-      {voiceSessionId && (
+      {(voiceSessionId || companionCall.activeCall) && voiceCall.state !== 'idle' && voiceCall.state !== 'ended' && (
         <CompanionVoiceOverlay
           callState={voiceCall.state}
           isMuted={voiceCall.isMuted}
           remoteUserJoined={voiceCall.remoteUserJoined}
           error={voiceCall.error}
           liveSeconds={voiceLiveSeconds}
-          clientName={activeClientInfo?.name ?? 'Client'}
-          clientAvatar={activeClientInfo?.avatar ?? null}
+          clientName={companionCall.activeCall?.clientName ?? activeClientInfo?.name ?? 'Client'}
+          clientAvatar={companionCall.activeCall?.clientAvatar ?? activeClientInfo?.avatar ?? null}
           onToggleMute={voiceCall.toggleMute}
           onEndCall={handleEndVoiceCall}
         />

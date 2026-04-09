@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
@@ -63,13 +62,9 @@ const HABIT_OPTIONS = ['Never', 'Socially', 'Regularly'];
 
 function Toast({ msg, ok }: { msg: string; ok: boolean }) {
   return (
-    <div
-      className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-lg border ${
-        ok
-          ? 'bg-green-500/15 border-green-500/30 text-green-400'
-          : 'bg-red-500/15 border-red-500/30 text-red-400'
-      }`}
-    >
+    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-lg border ${
+      ok ? 'bg-green-500/15 border-green-500/30 text-green-400' : 'bg-red-500/15 border-red-500/30 text-red-400'
+    }`}>
       {msg}
     </div>
   );
@@ -77,31 +72,20 @@ function Toast({ msg, ok }: { msg: string; ok: boolean }) {
 
 // ─── SelectField ─────────────────────────────────────────────────────────────
 
-function SelectField({
-  label,
-  value,
-  onChange,
-  options,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: string[];
-  placeholder?: string;
+function SelectField({ label, value, onChange, options, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void;
+  options: string[]; placeholder?: string;
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-white/80 mb-1.5">{label}</label>
+      <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold"
+        className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pink-500/50 transition-all"
       >
         {placeholder && <option value="">{placeholder}</option>}
-        {options.map((o) => (
-          <option key={o} value={o}>{o}</option>
-        ))}
+        {options.map((o) => (<option key={o} value={o}>{o}</option>))}
       </select>
     </div>
   );
@@ -112,6 +96,7 @@ function SelectField({
 export default function CompanionProfilePage() {
   const [user, setUser] = useState<UserRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'preview' | 'edit'>('preview');
 
   // Avatar
   const [avatarUrl, setAvatarUrl] = useState('');
@@ -148,8 +133,10 @@ export default function CompanionProfilePage() {
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState(false);
-  const [showTempModal, setShowTempModal] = useState(false);
   const securityRef = useRef<HTMLDivElement>(null);
+
+  // Preview card image index
+  const [previewIdx, setPreviewIdx] = useState(0);
 
   useEffect(() => {
     fetchUser();
@@ -170,26 +157,14 @@ export default function CompanionProfilePage() {
         const p = u.companionProfile ?? {};
         setAvatarUrl(p.avatarUrl ?? '');
         setSection1({
-          name: p.name ?? '',
-          bio: p.bio ?? '',
-          tagline: p.tagline ?? '',
-          age: p.age != null ? String(p.age) : '',
-          gender: p.gender ?? '',
-          city: p.city ?? '',
-          languages: p.languages ?? [],
-          education: p.education ?? '',
-          occupation: p.occupation ?? '',
+          name: p.name ?? '', bio: p.bio ?? '', tagline: p.tagline ?? '',
+          age: p.age != null ? String(p.age) : '', gender: p.gender ?? '', city: p.city ?? '',
+          languages: p.languages ?? [], education: p.education ?? '', occupation: p.occupation ?? '',
         });
         setSection2({
-          height: p.height ?? '',
-          weight: p.weight ?? '',
-          bodyType: p.bodyType ?? '',
-          hairColor: p.hairColor ?? '',
-          eyeColor: p.eyeColor ?? '',
-          ethnicity: p.ethnicity ?? '',
-          foodPreference: p.foodPreference ?? '',
-          drinking: p.drinking ?? '',
-          smoking: p.smoking ?? '',
+          height: p.height ?? '', weight: p.weight ?? '', bodyType: p.bodyType ?? '',
+          hairColor: p.hairColor ?? '', eyeColor: p.eyeColor ?? '', ethnicity: p.ethnicity ?? '',
+          foodPreference: p.foodPreference ?? '', drinking: p.drinking ?? '', smoking: p.smoking ?? '',
         });
         setSection3({ personalityTags: p.personalityTags ?? [] });
         setSection4({
@@ -197,34 +172,24 @@ export default function CompanionProfilePage() {
           callRatePerMinute: Math.round((p.callRatePerMinute ?? 3200) / 100),
           hourlyRate: Math.round((p.hourlyRate ?? 200000) / 100),
         });
-        if (u.isTemporaryPassword) setShowTempModal(true);
       }
-    } catch {
-      // non-fatal
-    } finally {
-      setLoading(false);
-    }
+    } catch { /* */ } finally { setLoading(false); }
   };
 
   const fetchImages = async () => {
     try {
       const res = await fetch('/api/companion/images');
-      if (res.ok) {
-        const data = await res.json();
-        setImages(data.data.images);
-      }
-    } catch { /* non-fatal */ }
+      if (res.ok) { const data = await res.json(); setImages(data.data.images); }
+    } catch { /* */ }
   };
 
-  // ── Avatar upload ──────────────────────────────────────────────────────────
-
+  // Avatar upload
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowed.includes(file.type)) { showToast('Only JPG, PNG, WebP allowed', false); return; }
     if (file.size > 5 * 1024 * 1024) { showToast('Image must be under 5 MB', false); return; }
-
     setUploadingAvatar(true);
     const form = new FormData();
     form.append('file', file);
@@ -234,45 +199,36 @@ export default function CompanionProfilePage() {
       if (!res.ok || !data.success) { showToast(data.error ?? 'Upload failed', false); return; }
       setAvatarUrl(data.data.avatarUrl);
       showToast('Avatar updated', true);
-    } catch {
-      showToast('Upload failed', false);
-    } finally {
+    } catch { showToast('Upload failed', false); } finally {
       setUploadingAvatar(false);
       if (avatarInputRef.current) avatarInputRef.current.value = '';
     }
   };
 
-  // ── Section save helper ────────────────────────────────────────────────────
-
+  // Section save helper
   const saveSection = async (key: string, payload: Record<string, unknown>) => {
     setSaving((p) => ({ ...p, [key]: true }));
     try {
       const res = await fetch('/api/companion/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok || !data.success) { showToast(data.error ?? 'Save failed', false); return; }
       showToast('Saved', true);
-    } catch {
-      showToast('Save failed', false);
-    } finally {
+    } catch { showToast('Save failed', false); } finally {
       setSaving((p) => ({ ...p, [key]: false }));
     }
   };
 
-  // ── Gallery handlers ───────────────────────────────────────────────────────
-
+  // Gallery handlers
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowed.includes(file.type)) { setUploadError('Only JPG, PNG, and WebP images are allowed'); return; }
-    if (file.size > 5 * 1024 * 1024) { setUploadError('Image must be under 5 MB'); return; }
-
-    setUploadError('');
-    setUploading(true);
+    if (!allowed.includes(file.type)) { setUploadError('Only JPG, PNG, WebP'); return; }
+    if (file.size > 5 * 1024 * 1024) { setUploadError('Under 5 MB'); return; }
+    setUploadError(''); setUploading(true);
     const form = new FormData();
     form.append('file', file);
     try {
@@ -280,9 +236,7 @@ export default function CompanionProfilePage() {
       const data = await res.json();
       if (!res.ok || !data.success) { setUploadError(data.error ?? 'Upload failed'); return; }
       setImages((prev) => [data.data.image, ...prev]);
-    } catch {
-      setUploadError('Upload failed. Please try again.');
-    } finally {
+    } catch { setUploadError('Upload failed'); } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -292,412 +246,487 @@ export default function CompanionProfilePage() {
     try {
       const res = await fetch(`/api/companion/images/${id}`, { method: 'DELETE' });
       if (res.ok) setImages((prev) => prev.filter((img) => img.id !== id));
-    } catch { /* non-fatal */ }
+    } catch { /* */ }
   };
 
   const handleSetPrimary = async (id: string) => {
     setSettingPrimary(id);
     try {
       const res = await fetch('/api/companion/images/set-primary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: id }),
       });
       if (res.ok) setImages((prev) => prev.map((img) => ({ ...img, isPrimary: img.id === id })));
-    } catch { /* non-fatal */ } finally {
-      setSettingPrimary(null);
-    }
+    } catch { /* */ } finally { setSettingPrimary(null); }
   };
 
-  // ── Password change ────────────────────────────────────────────────────────
-
+  // Password change
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    setPwError('');
-    setPwSuccess(false);
-    if (pwForm.newPassword !== pwForm.confirmPassword) { setPwError('New passwords do not match'); return; }
-    if (pwForm.newPassword.length < 8) { setPwError('New password must be at least 8 characters'); return; }
-
+    setPwError(''); setPwSuccess(false);
+    if (pwForm.newPassword !== pwForm.confirmPassword) { setPwError('Passwords don\'t match'); return; }
+    if (pwForm.newPassword.length < 8) { setPwError('Min 8 characters'); return; }
     setPwLoading(true);
     try {
       const res = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pwForm),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) { setPwError(data.error ?? 'Failed to update password'); return; }
+      if (!res.ok || !data.success) { setPwError(data.error ?? 'Failed'); return; }
       setPwSuccess(true);
       setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setUser((prev) => prev ? { ...prev, isTemporaryPassword: false } : prev);
-    } catch {
-      setPwError('Something went wrong. Please try again.');
-    } finally {
-      setPwLoading(false);
-    }
+    } catch { setPwError('Something went wrong'); } finally { setPwLoading(false); }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-2 border-pink-500 border-t-transparent rounded-full" />
       </div>
     );
   }
 
   const isApproved = user?.companionProfile?.isApproved;
   const isTempPassword = user?.isTemporaryPassword === true;
+  const allImages = images.length > 0 ? images : (avatarUrl ? [{ id: 'avatar', imageUrl: avatarUrl, publicId: null, isPrimary: true, createdAt: '' }] : []);
+  const primaryImage = allImages.find(i => i.isPrimary) ?? allImages[0];
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-lg mx-auto pb-8">
       {toast && <Toast msg={toast.msg} ok={toast.ok} />}
 
-      {/* Temp password modal */}
-      {showTempModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={(e) => e.stopPropagation()}>
-          <div className="w-full max-w-sm bg-[#1C1C1C] border border-red-500/40 rounded-2xl p-7 shadow-2xl">
-            <p className="font-semibold text-white text-sm mb-2">Temporary Password Active</p>
-            <p className="text-sm text-white/70 mb-5">Please update your password immediately to secure your account.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowTempModal(false)} className="flex-1 py-2 rounded-lg border border-[#3A3A3A] text-sm text-white/50 hover:text-white">Later</button>
-              <button
-                onClick={() => { setShowTempModal(false); setTimeout(() => securityRef.current?.scrollIntoView({ behavior: 'smooth' }), 50); }}
-                className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-sm font-semibold"
-              >Change Now</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div>
-        <h1 className="text-2xl font-bold text-white">Profile</h1>
-        <p className="text-white/60">Manage your companion profile</p>
-      </div>
-
+      {/* ── Temp password warning ────────────────────────────────────── */}
       {isTempPassword && (
-        <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+        <div className="mb-4 flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
           <div className="flex-1">
-            <p className="text-sm font-semibold text-red-400">Temporary password in use</p>
-            <p className="text-xs text-white/50 mt-0.5">Please update it immediately.</p>
+            <p className="text-sm font-semibold text-red-400">Update your password</p>
+            <p className="text-xs text-white/40">Temporary password active</p>
           </div>
-          <button onClick={() => securityRef.current?.scrollIntoView({ behavior: 'smooth' })} className="text-xs text-red-400 hover:text-red-300 font-medium whitespace-nowrap">
-            Update now →
+          <button onClick={() => securityRef.current?.scrollIntoView({ behavior: 'smooth' })} className="text-xs text-red-400 font-medium">
+            Change →
           </button>
         </div>
       )}
 
-      {/* Approval status */}
-      <Card className={isApproved ? 'bg-success/10 border-success/30' : 'bg-warning/10 border-warning/30'}>
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isApproved ? 'bg-success/20' : 'bg-warning/20'}`}>
-            <svg className={`w-5 h-5 ${isApproved ? 'text-success' : 'text-warning'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              {isApproved
-                ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />}
-            </svg>
-          </div>
-          <div>
-            <p className="font-medium text-white">{isApproved ? 'Profile Approved' : 'Awaiting Approval'}</p>
-            <p className="text-sm text-white/60">{isApproved ? 'Your profile is visible to clients' : 'An admin will review your profile soon'}</p>
-          </div>
+      {/* ── Approval badge ───────────────────────────────────────────── */}
+      <div className={`mb-4 flex items-center gap-2.5 p-3 rounded-xl ${isApproved ? 'bg-green-500/10 border border-green-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isApproved ? 'bg-green-500/20' : 'bg-amber-500/20'}`}>
+          {isApproved ? (
+            <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+          ) : (
+            <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          )}
         </div>
-      </Card>
-
-      {/* ── Avatar ──────────────────────────────────────────────────────────── */}
-      <Card>
-        <h2 className="font-medium text-white mb-4">Profile Photo</h2>
-        <div className="flex items-center gap-5">
-          <div
-            className="relative w-24 h-24 rounded-full overflow-hidden bg-charcoal-surface cursor-pointer group shrink-0"
-            onClick={() => avatarInputRef.current?.click()}
-          >
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gold/10">
-                <svg className="w-8 h-8 text-gold/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-            )}
-            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span className="text-xs text-white mt-1">Change</span>
-            </div>
-            {uploadingAvatar && (
-              <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
-                <div className="animate-spin w-6 h-6 border-2 border-gold border-t-transparent rounded-full" />
-              </div>
-            )}
-          </div>
-          <div>
-            <p className="text-sm text-white/70">Click the photo to upload a new one</p>
-            <p className="text-xs text-white/40 mt-1">JPG, PNG, WebP · Max 5 MB</p>
-          </div>
+        <div>
+          <p className="text-sm font-medium text-white">{isApproved ? 'Profile Live' : 'Under Review'}</p>
+          <p className="text-xs text-white/40">{isApproved ? 'Clients can see your profile' : 'Pending admin approval'}</p>
         </div>
-        <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarChange} />
-      </Card>
+      </div>
 
-      {/* ── Section 1 — Basic Info ───────────────────────────────────────────── */}
-      <Card>
-        <h2 className="font-medium text-white mb-4">Basic Info</h2>
-        <div className="space-y-4">
-          <Input label="Display Name" value={section1.name} onChange={(e) => setSection1({ ...section1, name: e.target.value })} />
-          <div>
-            <label className="block text-sm font-medium text-white/80 mb-1.5">Bio</label>
-            <textarea
-              value={section1.bio}
-              onChange={(e) => setSection1({ ...section1, bio: e.target.value })}
-              rows={4}
-              className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold"
-              placeholder="Tell clients about yourself..."
+      {/* ── TINDER-STYLE PREVIEW CARD ───────────────────────────────── */}
+      <div className="relative rounded-3xl overflow-hidden bg-[#0f0f1a] mb-6 shadow-2xl">
+        {/* Image carousel */}
+        <div className="relative aspect-[3/4]">
+          {allImages.length > 0 ? (
+            <img
+              src={allImages[previewIdx % allImages.length]?.imageUrl}
+              alt={section1.name}
+              className="w-full h-full object-cover"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-white/80 mb-1.5">Tagline <span className="text-white/30 font-normal">(max 100 chars)</span></label>
-            <input
-              type="text"
-              value={section1.tagline}
-              maxLength={100}
-              onChange={(e) => setSection1({ ...section1, tagline: e.target.value })}
-              className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold"
-              placeholder="A short catchy line about you"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-white/80 mb-1.5">Age</label>
-              <input
-                type="number" min={18} max={99}
-                value={section1.age}
-                onChange={(e) => setSection1({ ...section1, age: e.target.value })}
-                className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold"
-              />
-            </div>
-            <SelectField
-              label="Gender"
-              value={section1.gender}
-              onChange={(v) => setSection1({ ...section1, gender: v })}
-              options={['Male', 'Female', 'Non-binary', 'Prefer not to say']}
-              placeholder="Select gender"
-            />
-          </div>
-          <Input label="City" value={section1.city} onChange={(e) => setSection1({ ...section1, city: e.target.value })} />
-          <Input label="Education" value={section1.education} onChange={(e) => setSection1({ ...section1, education: e.target.value })} placeholder="e.g. B.Tech, Delhi University" />
-          <Input label="Occupation" value={section1.occupation} onChange={(e) => setSection1({ ...section1, occupation: e.target.value })} placeholder="e.g. Freelancer, Student" />
-          <Button
-            className="w-full"
-            isLoading={saving['s1']}
-            onClick={() => saveSection('s1', {
-              name: section1.name,
-              bio: section1.bio,
-              tagline: section1.tagline,
-              age: section1.age ? parseInt(section1.age) : undefined,
-              gender: section1.gender || undefined,
-              city: section1.city || undefined,
-              education: section1.education || undefined,
-              occupation: section1.occupation || undefined,
-            })}
-          >
-            Save Basic Info
-          </Button>
-        </div>
-      </Card>
-
-      {/* ── Section 2 — Physical & Lifestyle ────────────────────────────────── */}
-      <Card>
-        <h2 className="font-medium text-white mb-4">Physical &amp; Lifestyle</h2>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Height" value={section2.height} onChange={(e) => setSection2({ ...section2, height: e.target.value })} placeholder='e.g. 5&apos;8"' />
-            <Input label="Weight (optional)" value={section2.weight} onChange={(e) => setSection2({ ...section2, weight: e.target.value })} placeholder="e.g. 65 kg" />
-          </div>
-          <SelectField label="Body Type" value={section2.bodyType} onChange={(v) => setSection2({ ...section2, bodyType: v })} options={BODY_TYPES} placeholder="Select body type" />
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Hair Color" value={section2.hairColor} onChange={(e) => setSection2({ ...section2, hairColor: e.target.value })} placeholder="e.g. Black" />
-            <Input label="Eye Color" value={section2.eyeColor} onChange={(e) => setSection2({ ...section2, eyeColor: e.target.value })} placeholder="e.g. Brown" />
-          </div>
-          <Input label="Ethnicity" value={section2.ethnicity} onChange={(e) => setSection2({ ...section2, ethnicity: e.target.value })} placeholder="e.g. South Asian" />
-          <SelectField label="Food Preference" value={section2.foodPreference} onChange={(v) => setSection2({ ...section2, foodPreference: v })} options={FOOD_OPTIONS} placeholder="Select preference" />
-          <div className="grid grid-cols-2 gap-4">
-            <SelectField label="Drinking" value={section2.drinking} onChange={(v) => setSection2({ ...section2, drinking: v })} options={HABIT_OPTIONS} placeholder="Select" />
-            <SelectField label="Smoking" value={section2.smoking} onChange={(v) => setSection2({ ...section2, smoking: v })} options={HABIT_OPTIONS} placeholder="Select" />
-          </div>
-          <Button
-            className="w-full"
-            isLoading={saving['s2']}
-            onClick={() => saveSection('s2', {
-              height: section2.height || undefined,
-              weight: section2.weight || undefined,
-              bodyType: section2.bodyType || undefined,
-              hairColor: section2.hairColor || undefined,
-              eyeColor: section2.eyeColor || undefined,
-              ethnicity: section2.ethnicity || undefined,
-              foodPreference: section2.foodPreference || undefined,
-              drinking: section2.drinking || undefined,
-              smoking: section2.smoking || undefined,
-            })}
-          >
-            Save Physical &amp; Lifestyle
-          </Button>
-        </div>
-      </Card>
-
-      {/* ── Section 3 — Personality ──────────────────────────────────────────── */}
-      <Card>
-        <h2 className="font-medium text-white mb-1">Personality</h2>
-        <p className="text-xs text-white/40 mb-4">Pick up to 5 tags that describe you</p>
-        <div className="flex flex-wrap gap-2 mb-5">
-          {PERSONALITY_PRESETS.map((tag) => {
-            const selected = section3.personalityTags.includes(tag);
-            return (
-              <button
-                key={tag}
-                onClick={() => {
-                  setSection3((prev) => {
-                    if (selected) return { personalityTags: prev.personalityTags.filter((t) => t !== tag) };
-                    if (prev.personalityTags.length >= 5) return prev;
-                    return { personalityTags: [...prev.personalityTags, tag] };
-                  });
-                }}
-                className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                  selected
-                    ? 'bg-gold text-black border-gold font-medium'
-                    : 'bg-transparent text-white/60 border-charcoal-border hover:border-gold/50 hover:text-white'
-                }`}
-              >
-                {tag}
-              </button>
-            );
-          })}
-        </div>
-        <Button
-          className="w-full"
-          isLoading={saving['s3']}
-          onClick={() => saveSection('s3', { personalityTags: section3.personalityTags })}
-        >
-          Save Personality
-        </Button>
-      </Card>
-
-      {/* ── Section 4 — Rates ────────────────────────────────────────────────── */}
-      <Card>
-        <h2 className="font-medium text-white mb-4">Rates</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-white/80 mb-1.5">Chat Rate (₹/min)</label>
-            <input
-              type="number" min={0}
-              value={section4.chatRatePerMinute}
-              onChange={(e) => setSection4({ ...section4, chatRatePerMinute: parseInt(e.target.value) || 0 })}
-              className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-white/80 mb-1.5">Call Rate (₹/min)</label>
-            <input
-              type="number" min={0}
-              value={section4.callRatePerMinute}
-              onChange={(e) => setSection4({ ...section4, callRatePerMinute: parseInt(e.target.value) || 0 })}
-              className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-white/80 mb-1.5">Booking Rate (₹/hr)</label>
-            <input
-              type="number" min={0}
-              value={section4.hourlyRate}
-              onChange={(e) => setSection4({ ...section4, hourlyRate: parseInt(e.target.value) || 0 })}
-              className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold"
-            />
-          </div>
-          <Button
-            className="w-full"
-            isLoading={saving['s4']}
-            onClick={() => saveSection('s4', {
-              chatRatePerMinute: section4.chatRatePerMinute * 100,
-              callRatePerMinute: section4.callRatePerMinute * 100,
-              hourlyRate: section4.hourlyRate * 100,
-            })}
-          >
-            Save Rates
-          </Button>
-        </div>
-      </Card>
-
-      {/* ── Section 5 — Gallery ──────────────────────────────────────────────── */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="font-medium text-white">Photos</h2>
-            <p className="text-xs text-white/40 mt-0.5">JPG, PNG, WebP · Max 5 MB each</p>
-          </div>
-          <Button onClick={() => fileInputRef.current?.click()} isLoading={uploading} className="text-sm py-1.5 px-3">
-            + Upload
-          </Button>
-          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageUpload} />
-        </div>
-
-        {uploadError && <p className="text-sm text-red-400 mb-3">{uploadError}</p>}
-
-        {images.length === 0 ? (
-          <p className="text-sm text-white/40 text-center py-8">No photos yet. Upload your first photo.</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {images.map((img) => (
-              <div key={img.id} className={`relative group aspect-square rounded-lg overflow-hidden bg-charcoal-surface ${img.isPrimary ? 'ring-2 ring-gold' : ''}`}>
-                <img src={img.imageUrl} alt="Gallery" className="w-full h-full object-cover" />
-                {img.isPrimary && (
-                  <span className="absolute top-1.5 left-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gold text-black leading-none">Main</span>
-                )}
-                <button
-                  onClick={() => handleDeleteImage(img.id)}
-                  className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-500/20 to-purple-500/20">
+              <div className="text-center">
+                <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-10 h-10 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                </button>
-                {!img.isPrimary && (
-                  <button
-                    onClick={() => handleSetPrimary(img.id)}
-                    disabled={settingPrimary === img.id}
-                    className="absolute bottom-0 inset-x-0 py-1.5 text-[11px] font-medium text-white bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gold hover:text-black disabled:opacity-50"
-                  >
-                    {settingPrimary === img.id ? '…' : 'Set as Main'}
-                  </button>
+                </div>
+                <p className="text-white/40 text-sm">Add photos to preview your card</p>
+              </div>
+            </div>
+          )}
+
+          {/* Image dots */}
+          {allImages.length > 1 && (
+            <div className="absolute top-3 inset-x-3 flex gap-1">
+              {allImages.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setPreviewIdx(i)}
+                  className={`flex-1 h-1 rounded-full transition-all ${i === previewIdx % allImages.length ? 'bg-white' : 'bg-white/30'}`}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Tap zones for carousel */}
+          {allImages.length > 1 && (
+            <>
+              <button className="absolute left-0 top-0 bottom-0 w-1/3" onClick={() => setPreviewIdx(p => Math.max(0, p - 1))} />
+              <button className="absolute right-0 top-0 bottom-0 w-1/3" onClick={() => setPreviewIdx(p => Math.min(allImages.length - 1, p + 1))} />
+            </>
+          )}
+
+          {/* Dark gradient */}
+          <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none" />
+
+          {/* Info overlay */}
+          <div className="absolute bottom-0 inset-x-0 p-5">
+            <div className="flex items-end justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-white leading-tight">
+                  {section1.name || 'Your Name'}{section1.age ? `, ${section1.age}` : ''}
+                </h2>
+                {(section1.city || section1.occupation) && (
+                  <p className="text-sm text-white/70 mt-0.5">
+                    {[section1.occupation, section1.city].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+                {section1.tagline && (
+                  <p className="text-sm text-white/50 mt-1 italic">&ldquo;{section1.tagline}&rdquo;</p>
                 )}
               </div>
-            ))}
+              {isApproved && (
+                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shrink-0 ml-2">
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              )}
+            </div>
+
+            {/* Tags */}
+            {section3.personalityTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {section3.personalityTags.map(tag => (
+                  <span key={tag} className="px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/80 backdrop-blur-sm border border-white/5">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Rates */}
+            <div className="flex gap-3 mt-3">
+              {section4.chatRatePerMinute > 0 && (
+                <span className="text-xs text-pink-300 bg-pink-500/10 px-2.5 py-1 rounded-full border border-pink-500/20">
+                  Chat ₹{section4.chatRatePerMinute}/min
+                </span>
+              )}
+              {section4.callRatePerMinute > 0 && (
+                <span className="text-xs text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
+                  Call ₹{section4.callRatePerMinute}/min
+                </span>
+              )}
+              {section4.hourlyRate > 0 && (
+                <span className="text-xs text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                  Book ₹{section4.hourlyRate}/hr
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Bio below card */}
+        {section1.bio && (
+          <div className="px-5 py-4 border-t border-white/5">
+            <p className="text-sm text-white/70 leading-relaxed">{section1.bio}</p>
           </div>
         )}
-      </Card>
+      </div>
 
-      {/* ── Security ─────────────────────────────────────────────────────────── */}
-      <div ref={securityRef}>
-        <Card className={isTempPassword ? 'border-red-500/40' : ''}>
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 className="font-medium text-white">Security</h2>
-              <p className="text-xs text-white/40 mt-0.5">Update your account password</p>
+      {/* ── Tab switcher ────────────────────────────────────────────── */}
+      <div className="flex gap-1 bg-white/5 rounded-xl p-1 mb-6">
+        {(['preview', 'edit'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              activeTab === tab
+                ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg'
+                : 'text-white/50 hover:text-white'
+            }`}
+          >
+            {tab === 'preview' ? 'Preview' : 'Edit Profile'}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'preview' ? (
+        /* ── PREVIEW TAB ──────────────────────────────────────────────── */
+        <div className="space-y-4">
+          {/* Details grid */}
+          <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
+            <h3 className="text-sm font-semibold text-white/80 mb-4">About</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Height', value: section2.height },
+                { label: 'Body', value: section2.bodyType },
+                { label: 'Hair', value: section2.hairColor },
+                { label: 'Eyes', value: section2.eyeColor },
+                { label: 'Ethnicity', value: section2.ethnicity },
+                { label: 'Food', value: section2.foodPreference },
+                { label: 'Drinking', value: section2.drinking },
+                { label: 'Smoking', value: section2.smoking },
+                { label: 'Education', value: section1.education },
+                { label: 'Gender', value: section1.gender },
+              ].filter(d => d.value).map(d => (
+                <div key={d.label} className="bg-white/5 rounded-xl px-3 py-2.5">
+                  <p className="text-xs text-white/30">{d.label}</p>
+                  <p className="text-sm text-white/80 mt-0.5">{d.value}</p>
+                </div>
+              ))}
             </div>
-            {isTempPassword && (
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-500/15 text-red-400 border border-red-500/25">Temp Password</span>
+          </div>
+
+          {/* Gallery preview */}
+          {images.length > 0 && (
+            <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
+              <h3 className="text-sm font-semibold text-white/80 mb-3">Photos ({images.length})</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {images.map(img => (
+                  <div key={img.id} className={`aspect-square rounded-xl overflow-hidden ${img.isPrimary ? 'ring-2 ring-pink-500' : ''}`}>
+                    <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ── EDIT TAB ─────────────────────────────────────────────────── */
+        <div className="space-y-5">
+
+          {/* Avatar */}
+          <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
+            <h3 className="text-sm font-semibold text-white/80 mb-4">Profile Photo</h3>
+            <div className="flex items-center gap-4">
+              <div
+                className="relative w-20 h-20 rounded-full overflow-hidden bg-white/5 cursor-pointer group shrink-0"
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <svg className="w-8 h-8 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  </svg>
+                </div>
+                {uploadingAvatar && (
+                  <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+                    <div className="animate-spin w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full" />
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-sm text-white/60">Tap to change avatar</p>
+                <p className="text-xs text-white/30 mt-0.5">JPG, PNG, WebP · Max 5 MB</p>
+              </div>
+            </div>
+            <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarChange} />
+          </div>
+
+          {/* Basic Info */}
+          <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
+            <h3 className="text-sm font-semibold text-white/80 mb-4">Basic Info</h3>
+            <div className="space-y-3">
+              <Input label="Display Name" value={section1.name} onChange={(e) => setSection1({ ...section1, name: e.target.value })} />
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Bio</label>
+                <textarea value={section1.bio} onChange={(e) => setSection1({ ...section1, bio: e.target.value })} rows={3}
+                  className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-4 py-3 placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-pink-500/50 transition-all" placeholder="Tell clients about yourself..." />
+              </div>
+              <Input label="Tagline" value={section1.tagline} onChange={(e) => setSection1({ ...section1, tagline: e.target.value })} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Age</label>
+                  <input type="number" min={18} max={99} value={section1.age} onChange={(e) => setSection1({ ...section1, age: e.target.value })}
+                    className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pink-500/50" />
+                </div>
+                <SelectField label="Gender" value={section1.gender} onChange={(v) => setSection1({ ...section1, gender: v })} options={['Male', 'Female', 'Non-binary', 'Prefer not to say']} placeholder="Select" />
+              </div>
+              <Input label="City" value={section1.city} onChange={(e) => setSection1({ ...section1, city: e.target.value })} />
+              <Input label="Education" value={section1.education} onChange={(e) => setSection1({ ...section1, education: e.target.value })} placeholder="e.g. B.Tech, Delhi University" />
+              <Input label="Occupation" value={section1.occupation} onChange={(e) => setSection1({ ...section1, occupation: e.target.value })} placeholder="e.g. Freelancer" />
+              <Button className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 border-0"
+                isLoading={saving['s1']}
+                onClick={() => saveSection('s1', {
+                  name: section1.name, bio: section1.bio, tagline: section1.tagline,
+                  age: section1.age ? parseInt(section1.age) : undefined,
+                  gender: section1.gender || undefined, city: section1.city || undefined,
+                  education: section1.education || undefined, occupation: section1.occupation || undefined,
+                })}>
+                Save Basic Info
+              </Button>
+            </div>
+          </div>
+
+          {/* Physical & Lifestyle */}
+          <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
+            <h3 className="text-sm font-semibold text-white/80 mb-4">Physical &amp; Lifestyle</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="Height" value={section2.height} onChange={(e) => setSection2({ ...section2, height: e.target.value })} placeholder="5'8&quot;" />
+                <Input label="Weight" value={section2.weight} onChange={(e) => setSection2({ ...section2, weight: e.target.value })} placeholder="65 kg" />
+              </div>
+              <SelectField label="Body Type" value={section2.bodyType} onChange={(v) => setSection2({ ...section2, bodyType: v })} options={BODY_TYPES} placeholder="Select" />
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="Hair" value={section2.hairColor} onChange={(e) => setSection2({ ...section2, hairColor: e.target.value })} placeholder="Black" />
+                <Input label="Eyes" value={section2.eyeColor} onChange={(e) => setSection2({ ...section2, eyeColor: e.target.value })} placeholder="Brown" />
+              </div>
+              <Input label="Ethnicity" value={section2.ethnicity} onChange={(e) => setSection2({ ...section2, ethnicity: e.target.value })} />
+              <SelectField label="Food" value={section2.foodPreference} onChange={(v) => setSection2({ ...section2, foodPreference: v })} options={FOOD_OPTIONS} placeholder="Select" />
+              <div className="grid grid-cols-2 gap-3">
+                <SelectField label="Drinking" value={section2.drinking} onChange={(v) => setSection2({ ...section2, drinking: v })} options={HABIT_OPTIONS} placeholder="Select" />
+                <SelectField label="Smoking" value={section2.smoking} onChange={(v) => setSection2({ ...section2, smoking: v })} options={HABIT_OPTIONS} placeholder="Select" />
+              </div>
+              <Button className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 border-0"
+                isLoading={saving['s2']}
+                onClick={() => saveSection('s2', {
+                  height: section2.height || undefined, weight: section2.weight || undefined,
+                  bodyType: section2.bodyType || undefined, hairColor: section2.hairColor || undefined,
+                  eyeColor: section2.eyeColor || undefined, ethnicity: section2.ethnicity || undefined,
+                  foodPreference: section2.foodPreference || undefined, drinking: section2.drinking || undefined,
+                  smoking: section2.smoking || undefined,
+                })}>
+                Save
+              </Button>
+            </div>
+          </div>
+
+          {/* Personality */}
+          <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
+            <h3 className="text-sm font-semibold text-white/80 mb-1">Personality</h3>
+            <p className="text-xs text-white/30 mb-4">Pick up to 5 tags</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {PERSONALITY_PRESETS.map((tag) => {
+                const selected = section3.personalityTags.includes(tag);
+                return (
+                  <button key={tag}
+                    onClick={() => setSection3((prev) => {
+                      if (selected) return { personalityTags: prev.personalityTags.filter((t) => t !== tag) };
+                      if (prev.personalityTags.length >= 5) return prev;
+                      return { personalityTags: [...prev.personalityTags, tag] };
+                    })}
+                    className={`px-3 py-1.5 rounded-full text-sm border transition-all ${
+                      selected ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white border-transparent font-medium' : 'bg-transparent text-white/50 border-white/10 hover:border-pink-500/40 hover:text-white'
+                    }`}>
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+            <Button className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 border-0"
+              isLoading={saving['s3']}
+              onClick={() => saveSection('s3', { personalityTags: section3.personalityTags })}>
+              Save
+            </Button>
+          </div>
+
+          {/* Rates */}
+          <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
+            <h3 className="text-sm font-semibold text-white/80 mb-4">Rates</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Chat ₹/min</label>
+                  <input type="number" min={0} value={section4.chatRatePerMinute} onChange={(e) => setSection4({ ...section4, chatRatePerMinute: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-pink-500/50" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Call ₹/min</label>
+                  <input type="number" min={0} value={section4.callRatePerMinute} onChange={(e) => setSection4({ ...section4, callRatePerMinute: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-pink-500/50" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Book ₹/hr</label>
+                  <input type="number" min={0} value={section4.hourlyRate} onChange={(e) => setSection4({ ...section4, hourlyRate: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-pink-500/50" />
+                </div>
+              </div>
+              <Button className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 border-0"
+                isLoading={saving['s4']}
+                onClick={() => saveSection('s4', {
+                  chatRatePerMinute: section4.chatRatePerMinute * 100,
+                  callRatePerMinute: section4.callRatePerMinute * 100,
+                  hourlyRate: section4.hourlyRate * 100,
+                })}>
+                Save Rates
+              </Button>
+            </div>
+          </div>
+
+          {/* Photos */}
+          <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-white/80">Photos</h3>
+                <p className="text-xs text-white/30 mt-0.5">JPG, PNG, WebP · Max 5 MB</p>
+              </div>
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-500 to-purple-500 text-white text-xs font-medium disabled:opacity-50">
+                {uploading ? '...' : '+ Upload'}
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageUpload} />
+            </div>
+            {uploadError && <p className="text-xs text-red-400 mb-3">{uploadError}</p>}
+            {images.length === 0 ? (
+              <p className="text-sm text-white/30 text-center py-8">No photos yet</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {images.map((img) => (
+                  <div key={img.id} className={`relative group aspect-square rounded-xl overflow-hidden ${img.isPrimary ? 'ring-2 ring-pink-500' : ''}`}>
+                    <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
+                    {img.isPrimary && (
+                      <span className="absolute top-1 left-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-500 text-white leading-none">Main</span>
+                    )}
+                    <button onClick={() => handleDeleteImage(img.id)}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                    {!img.isPrimary && (
+                      <button onClick={() => handleSetPrimary(img.id)} disabled={settingPrimary === img.id}
+                        className="absolute bottom-0 inset-x-0 py-1.5 text-[10px] font-medium text-white bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-pink-500 disabled:opacity-50">
+                        {settingPrimary === img.id ? '...' : 'Set as Main'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-          <form onSubmit={handlePasswordChange} className="space-y-4">
-            <Input label="Current Password" type="password" value={pwForm.currentPassword} onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })} placeholder={isTempPassword ? 'Enter your temporary password' : 'Enter current password'} required />
-            <Input label="New Password" type="password" value={pwForm.newPassword} onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })} placeholder="At least 8 characters" required />
-            <Input label="Confirm New Password" type="password" value={pwForm.confirmPassword} onChange={(e) => setPwForm({ ...pwForm, confirmPassword: e.target.value })} placeholder="Repeat new password" required />
-            {pwError && <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{pwError}</p>}
-            {pwSuccess && <p className="text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">Password updated successfully.</p>}
-            <Button type="submit" className="w-full" isLoading={pwLoading}>Update Password</Button>
-          </form>
-        </Card>
-      </div>
+
+          {/* Security */}
+          <div ref={securityRef} className={`bg-[#0f0f1a] rounded-2xl border p-5 ${isTempPassword ? 'border-red-500/30' : 'border-white/5'}`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-white/80">Security</h3>
+              {isTempPassword && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/25">Temp</span>
+              )}
+            </div>
+            <form onSubmit={handlePasswordChange} className="space-y-3">
+              <Input label="Current Password" type="password" value={pwForm.currentPassword} onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })} placeholder={isTempPassword ? 'Temporary password' : 'Current password'} required />
+              <Input label="New Password" type="password" value={pwForm.newPassword} onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })} placeholder="Min 8 characters" required />
+              <Input label="Confirm" type="password" value={pwForm.confirmPassword} onChange={(e) => setPwForm({ ...pwForm, confirmPassword: e.target.value })} placeholder="Repeat new password" required />
+              {pwError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{pwError}</p>}
+              {pwSuccess && <p className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">Password updated</p>}
+              <Button type="submit" className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 border-0" isLoading={pwLoading}>
+                Update Password
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
