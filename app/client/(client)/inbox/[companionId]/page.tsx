@@ -56,6 +56,7 @@ export default function ClientInboxPage() {
   const [balanceLow, setBalanceLow] = useState(false);
   const [sessionSummary, setSessionSummary] = useState<{ totalCharged: number; durationSeconds: number } | null>(null);
   const [liveSeconds, setLiveSeconds] = useState(0);
+  const [voiceStartError, setVoiceStartError] = useState<string | null>(null);
 
   // Read ?mode=voice from URL on mount (no Suspense needed — window is always available in client components)
   const voiceModeRef = useRef(false);
@@ -157,9 +158,11 @@ export default function ClientInboxPage() {
     return () => clearInterval(interval);
   }, [sessionState, checkSession]);
 
-  // Auto-start voice call when NO_SESSION and mode=voice
+  // Auto-start voice call when NO_SESSION and mode=voice.
+  // voiceModeRef is cleared immediately to prevent infinite retry loops on failure.
   useEffect(() => {
     if (sessionState !== 'NO_SESSION' || !voiceModeRef.current || !userId) return;
+    voiceModeRef.current = false; // prevent re-entry if this attempt fails
     const start = async () => {
       setSessionState('LOADING');
       try {
@@ -170,6 +173,7 @@ export default function ClientInboxPage() {
         });
         const d = await res.json();
         if (d.success) {
+          setVoiceStartError(null);
           setSession({
             sessionId: d.data.sessionId,
             ratePerMinute: d.data.ratePerMinute,
@@ -179,10 +183,15 @@ export default function ClientInboxPage() {
           });
           setSessionType('VOICE');
           setSessionState('PENDING'); // companion must accept before Agora starts
+        } else if (d.error === 'INSUFFICIENT_BALANCE') {
+          setVoiceStartError('insufficient_balance');
+          setSessionState('NO_SESSION');
         } else {
+          setVoiceStartError(d.error ?? 'Failed to start call');
           setSessionState('NO_SESSION');
         }
       } catch {
+        setVoiceStartError('Connection error. Please try again.');
         setSessionState('NO_SESSION');
       }
     };
@@ -434,6 +443,30 @@ export default function ClientInboxPage() {
                   </>
                 )}
               </div>
+            </>
+          ) : voiceStartError === 'insufficient_balance' ? (
+            <>
+              <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-white font-semibold text-lg">Insufficient Balance</p>
+                <p className="text-white/40 text-sm mt-1">Add money to your wallet to make calls</p>
+              </div>
+              <Link href="/client/wallet"
+                className="px-6 py-3 rounded-2xl bg-amber-500 text-black font-semibold text-sm">
+                Add Money
+              </Link>
+            </>
+          ) : voiceStartError ? (
+            <>
+              <p className="text-white/50 text-sm">{voiceStartError}</p>
+              <Link href="/client/browse"
+                className="px-6 py-3 rounded-2xl bg-white/[0.07] border border-white/[0.1] text-white/60 font-medium text-sm">
+                Go Back
+              </Link>
             </>
           ) : (
             <>
