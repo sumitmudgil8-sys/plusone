@@ -11,6 +11,10 @@ const sendSchema = z.object({
   companionUserId: z.string().min(1),
   clientUserId: z.string().min(1),
   content: z.string().min(1).max(2000),
+  // Client-generated Ably message ID — used to publish to the room channel so
+  // the recipient sees the message even if their publishToRoom failed client-side.
+  // Must match the ID the sender passed to publishToRoom so dedup works.
+  ablyMsgId: z.string().min(1).optional(),
 });
 
 // POST /api/messages/send — send a message using explicit client+companion IDs
@@ -30,7 +34,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { companionUserId, clientUserId, content } = parsed.data;
+  const { companionUserId, clientUserId, content, ablyMsgId } = parsed.data;
 
   // Verify caller is one of the participants
   if (user.id !== companionUserId && user.id !== clientUserId) {
@@ -88,9 +92,11 @@ export async function POST(request: NextRequest) {
       message.sender.companionProfile?.avatarUrl ??
       null;
 
-    // Publish to receiver via Ably
+    // Publish via Ably
     try {
       const ably = getAblyClient();
+
+      // 1. Private channel → session event callbacks (call requests, etc.)
       await ably.channels.get(getUserChannelName(receiverId)).publish('message', {
         id: message.id,
         threadId: thread.id,
@@ -100,6 +106,21 @@ export async function POST(request: NextRequest) {
         content,
         createdAt: message.createdAt.toISOString(),
       });
+
+      // 2. Room channel → real-time chat UI on both sides.
+      //    Uses the client-generated ablyMsgId so the dedup in useSocket works:
+      //    if publishToRoom already fired client-side with this ID, the echo is
+      //    dropped; if it failed (e.g. brief disconnect), this server publish
+      //    ensures the recipient still sees the message.
+      if (ablyMsgId) {
+        const roomChannel = `chat-${clientUserId}-${companionUserId}`;
+        await ably.channels.get(roomChannel).publish('message', {
+          id: ablyMsgId,
+          text: content,
+          senderId: user.id,
+          createdAt: message.createdAt.toISOString(),
+        });
+      }
     } catch (err) {
       console.error('Ably publish error (non-fatal):', err);
     }

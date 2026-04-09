@@ -508,7 +508,7 @@ function CompanionChatPanel({
       fetch('/api/messages/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companionUserId: currentUserId, clientUserId: clientId, content }),
+        body: JSON.stringify({ companionUserId: currentUserId, clientUserId: clientId, content, ablyMsgId: msgId }),
       }).catch(() => {});
     } catch {
       setPendingMessages(prev => prev.filter(m => m.id !== msgId));
