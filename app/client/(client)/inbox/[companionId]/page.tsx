@@ -288,7 +288,7 @@ export default function ClientInboxPage() {
   // ── LOADING ───────────────────────────────────────────────────────────────
   if (sessionState === 'LOADING') {
     return (
-      <div className="fixed inset-0 z-50 bg-[#0C0C14] flex items-center justify-center">
+      <div className="fixed inset-0 z-[60] bg-[#0C0C14] flex items-center justify-center">
         <div className="w-12 h-12 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
       </div>
     );
@@ -297,7 +297,7 @@ export default function ClientInboxPage() {
   // ── ENDED ─────────────────────────────────────────────────────────────────
   if (sessionState === 'ENDED' && sessionSummary) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#0C0C14] flex flex-col items-center justify-center px-8 text-center gap-6">
+      <div className="fixed inset-0 z-[60] bg-[#0C0C14] flex flex-col items-center justify-center px-8 text-center gap-6">
         <div className="w-20 h-20 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
           <svg className="w-10 h-10 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
@@ -322,7 +322,7 @@ export default function ClientInboxPage() {
   // ── PENDING / NO_SESSION ──────────────────────────────────────────────────
   if (sessionState === 'PENDING' || sessionState === 'NO_SESSION') {
     return (
-      <div className="fixed inset-0 z-50 bg-[#0C0C14] flex flex-col">
+      <div className="fixed inset-0 z-[60] bg-[#0C0C14] flex flex-col">
         <div className="flex-shrink-0 flex items-center gap-3 px-4 bg-[#0C0C14] border-b border-white/[0.06]"
           style={{ paddingTop: 'max(env(safe-area-inset-top), 14px)', paddingBottom: '12px' }}>
           <Link href="/client/browse"
@@ -379,7 +379,7 @@ export default function ClientInboxPage() {
   // ── ACTIVE ────────────────────────────────────────────────────────────────
   if (!userId || !session) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#0C0C14] flex items-center justify-center">
+      <div className="fixed inset-0 z-[60] bg-[#0C0C14] flex items-center justify-center">
         <div className="w-12 h-12 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
       </div>
     );
@@ -529,7 +529,7 @@ function ClientChatView({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#0C0C14]">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0C0C14]">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center gap-3 px-4 bg-[#0C0C14] border-b border-white/[0.06]"

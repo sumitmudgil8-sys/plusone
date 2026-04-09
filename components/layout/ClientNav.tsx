@@ -16,6 +16,10 @@ const navItems = [
 export function ClientNav() {
   const pathname = usePathname();
 
+  // Hide nav on full-screen chat page — it would overlap the input bar
+  const isFullScreenChat = /^\/client\/inbox\/.+/.test(pathname);
+  if (isFullScreenChat) return null;
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-charcoal-surface border-t border-charcoal-border md:relative md:top-0 md:border-t-0 md:border-b z-50">
       <div className="max-w-7xl mx-auto px-4">
