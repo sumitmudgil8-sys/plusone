@@ -81,10 +81,11 @@ export type RoomMessage = {
  *   There is NO callback-set indirection — this was the root cause of
  *   messages being dropped when child components hadn't mounted yet.
  *
- *   Room subscription does NOT depend on isConnected. Ably queues channel
- *   attach requests internally and resolves them once the connection is up.
- *   Adding isConnected as a dep caused the subscription to tear down/rebuild
- *   on every reconnect, creating message drop windows.
+ *   The room subscription depends on BOTH chatRoomId AND isConnected.
+ *   isConnected is needed so that if chatRoomId is set before the Ably
+ *   connection completes, the subscription is retried once connected.
+ *   A subscribedRoomRef prevents clearing messages on mere reconnections
+ *   (only clears when switching to a DIFFERENT room).
  */
 export function useSocket(userId?: string, _role?: string, chatRoomId?: string) {
   const realtimeRef = useRef<Ably.Realtime | null>(null);
@@ -96,6 +97,10 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
   // This guarantees no message is ever dropped due to subscription/callback timing.
   const [roomMessages, setRoomMessages] = useState<RoomMessage[]>([]);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+
+  // Track which room we're currently subscribed to — survives effect cleanup so
+  // we can distinguish "reconnect to same room" from "switch to different room".
+  const subscribedRoomRef = useRef<string | null>(null);
 
   // Refs used inside Ably handlers to avoid stale closures
   // (refs are always current; listing them as effect deps would cause re-subscription)
@@ -180,35 +185,35 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
 
   // ── Chat room subscription ────────────────────────────────────────────────
   //
-  // KEY FIXES vs previous version:
+  // Depends on BOTH chatRoomId AND isConnected:
   //
-  // 1. NO `isConnected` dependency.
-  //    Ably's channel.subscribe() queues the attach internally. The subscription
-  //    is registered immediately and activated once the WebSocket is up.
-  //    Depending on isConnected caused the subscription to be torn down on every
-  //    reconnect, creating windows where messages were dropped.
+  //   - chatRoomId: when the room changes, tear down old subscription and create new one
+  //   - isConnected: when the connection comes up, retry subscription that failed due
+  //     to the Ably instance not being ready yet
   //
-  // 2. State updated DIRECTLY inside the Ably handler, not via a callback set.
-  //    Previous pattern: Ably fires → iterate over roomMessageCBs Set → each cb
-  //    calls setMessages. If no callbacks registered yet (child hasn't mounted),
-  //    messages were silently dropped. Now Ably fires → setRoomMessages() directly
-  //    → React schedules re-render → UI updates. Zero intermediary.
-  //
-  // 3. Named handler refs for clean per-handler unsubscribe (no side effects on
-  //    other hypothetical subscribers to the same channel).
+  // subscribedRoomRef tracks which room we last subscribed to. This lets us
+  // distinguish "reconnect to the same room" (don't clear messages) from
+  // "switch to a different room" (clear messages).
   //
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!chatRoomId || !realtimeRef.current) return;
 
-    // Clear state from any previous room
-    setRoomMessages([]);
-    setIsOtherTyping(false);
-    if (typingClearRef.current) clearTimeout(typingClearRef.current);
+    // Only clear messages when switching to a DIFFERENT room.
+    // On reconnection to the same room, keep existing messages so the UI
+    // doesn't flash empty. Historical messages from the brief disconnect
+    // window will be loaded from DB by the component's history fetch.
+    const isRoomChange = subscribedRoomRef.current !== chatRoomId;
+    if (isRoomChange) {
+      setRoomMessages([]);
+      setIsOtherTyping(false);
+      if (typingClearRef.current) clearTimeout(typingClearRef.current);
+    }
+
+    subscribedRoomRef.current = chatRoomId;
 
     const ch = realtimeRef.current.channels.get(chatRoomId);
     roomChannelRef.current = ch;
-    console.log('[useSocket] subscribed to room channel:', chatRoomId);
 
     // Direct state update — forced synchronous via flushSync so React 18's
     // scheduler does not defer the render in background/inactive tabs.
@@ -240,14 +245,34 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
     ch.subscribe('message', onMessage);
     ch.subscribe('typing', onTyping);
 
+    // Monitor channel state for debugging — helps trace attachment failures
+    const onStateChange = (stateChange: Ably.ChannelStateChange) => {
+      console.log(`[useSocket] room channel ${chatRoomId}: ${stateChange.previous} → ${stateChange.current}`,
+        stateChange.reason ? `reason: ${stateChange.reason.message}` : '');
+      // If the channel enters a failed/suspended state, try to re-attach
+      if (stateChange.current === 'suspended' || stateChange.current === 'failed') {
+        console.warn(`[useSocket] room channel ${chatRoomId} entered ${stateChange.current}, attempting reattach`);
+        ch.attach().catch((err: Error) => {
+          console.error('[useSocket] reattach failed:', err.message);
+        });
+      }
+    };
+    ch.on(onStateChange);
+
+    console.log('[useSocket] subscribed to room channel:', chatRoomId,
+      isRoomChange ? '(new room)' : '(reconnect)',
+      'connection state:', realtimeRef.current.connection.state);
+
     return () => {
       // Unsubscribe only our specific handlers — safe if channel is shared
       ch.unsubscribe('message', onMessage);
       ch.unsubscribe('typing', onTyping);
+      ch.off(onStateChange);
       roomChannelRef.current = null;
       if (typingClearRef.current) clearTimeout(typingClearRef.current);
+      // Don't clear subscribedRoomRef — needed to detect room changes vs reconnections
     };
-  }, [chatRoomId]); // intentionally omits realtimeRef — it's a ref, always current
+  }, [chatRoomId, isConnected]); // isConnected ensures we retry when the connection comes up
 
   // ── Publish to room ───────────────────────────────────────────────────────
   // Uses refs (not state) so this callback never becomes stale and never needs
