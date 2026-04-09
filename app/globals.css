@@ -110,3 +110,126 @@ input[type="range"]::-webkit-slider-runnable-track {
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* ── Splash Screen ───────────────────────────────────────────── */
+
+/* Ambient gold orbs */
+.splash-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0;
+  animation: splashOrbIn 1.8s ease-out forwards;
+}
+.splash-orb-1 {
+  width: 280px;
+  height: 280px;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(201,168,76,0.18) 0%, transparent 70%);
+  animation-delay: 0.2s;
+}
+.splash-orb-2 {
+  width: 180px;
+  height: 180px;
+  bottom: 25%;
+  left: 20%;
+  background: radial-gradient(circle, rgba(201,168,76,0.10) 0%, transparent 70%);
+  animation-delay: 0.5s;
+}
+.splash-orb-3 {
+  width: 140px;
+  height: 140px;
+  top: 40%;
+  right: 10%;
+  background: radial-gradient(circle, rgba(232,213,163,0.08) 0%, transparent 70%);
+  animation-delay: 0.8s;
+}
+
+@keyframes splashOrbIn {
+  0% { opacity: 0; transform: scale(0.6); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Ring container */
+.splash-ring-container {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  opacity: 0;
+  animation: splashFadeScale 0.8s cubic-bezier(0.16,1,0.3,1) 0.3s forwards;
+}
+
+/* Ring drawing */
+.splash-ring-circle {
+  stroke-dasharray: 327;
+  stroke-dashoffset: 327;
+  animation: splashRingDraw 1.4s cubic-bezier(0.65,0,0.35,1) 0.5s forwards;
+}
+
+@keyframes splashRingDraw {
+  0% { stroke-dashoffset: 327; }
+  100% { stroke-dashoffset: 0; }
+}
+
+/* Ring slow rotation */
+.splash-ring {
+  animation: splashRingSpin 8s linear infinite;
+}
+
+@keyframes splashRingSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Plus icon */
+.splash-plus {
+  opacity: 0;
+  animation: splashFadeScale 0.6s cubic-bezier(0.16,1,0.3,1) 1.0s forwards;
+}
+
+@keyframes splashFadeScale {
+  0% { opacity: 0; transform: scale(0.7); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Wordmark */
+.splash-wordmark {
+  opacity: 0;
+  animation: splashSlideUp 0.7s cubic-bezier(0.16,1,0.3,1) 1.2s forwards;
+}
+
+@keyframes splashSlideUp {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Shimmer track */
+.splash-shimmer-track {
+  width: 64px;
+  height: 2px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 1px;
+  overflow: hidden;
+  opacity: 0;
+  animation: splashFadeIn 0.4s ease 1.6s forwards;
+}
+
+.splash-shimmer {
+  width: 24px;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, #C9A84C, transparent);
+  border-radius: 1px;
+  animation: splashShimmerSlide 1.5s ease-in-out 1.6s infinite;
+}
+
+@keyframes splashFadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes splashShimmerSlide {
+  0% { transform: translateX(-24px); }
+  100% { transform: translateX(64px); }
+}
