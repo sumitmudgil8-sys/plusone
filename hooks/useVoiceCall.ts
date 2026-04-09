@@ -27,11 +27,14 @@ interface VoiceCallHook {
 
 /**
  * Manages an Agora voice call for a billing session.
- * Pass `sessionId` to start — set to null to skip (e.g. not yet started).
  *
- * Usage:
- *   const call = useVoiceCall(sessionId, userId);
- *   // tick billing separately with setInterval → POST /api/billing/tick
+ * Edge cases handled:
+ * - Tab switch / background: Agora keeps the connection alive; audio continues
+ * - Network blip: Agora auto-reconnects; we track connection-state-change
+ * - Remote user leaves: Fires user-left event; UI shows "disconnected"
+ * - Browser close: beforeunload fires endCall to clean up
+ * - Mute: Uses setMuted() which silences without unpublishing
+ * - Token refresh: Not needed — Agora tokens last 24h, calls won't exceed that
  */
 export function useVoiceCall(
   sessionId: string | null,
@@ -46,6 +49,15 @@ export function useVoiceCall(
   const [remoteAudioPlaying, setRemoteAudioPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Refs for cleanup and beforeunload access
+  const stateRef = useRef<VoiceCallState>('idle');
+  const sessionIdRef = useRef<string | null>(null);
+  const isMutedRef = useRef(false);
+
+  useEffect(() => { stateRef.current = state; }, [state]);
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+  useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+
   const cleanup = useCallback(async () => {
     try {
       if (localTrackRef.current) {
@@ -54,14 +66,16 @@ export function useVoiceCall(
         localTrackRef.current = null;
       }
       if (clientRef.current) {
+        clientRef.current.removeAllListeners();
         await clientRef.current.leave();
         clientRef.current = null;
       }
     } catch (err) {
-      console.error('Agora cleanup error:', err);
+      console.error('[useVoiceCall] cleanup error:', err);
     }
   }, []);
 
+  // Main connection effect
   useEffect(() => {
     if (!sessionId || !userId) return;
 
@@ -70,9 +84,11 @@ export function useVoiceCall(
     async function joinCall() {
       setState('connecting');
       setError(null);
+      setRemoteUserJoined(false);
+      setRemoteAudioPlaying(false);
+      setIsMuted(false);
 
       try {
-        // Fetch token from server
         const res = await fetch(`/api/agora/token?sessionId=${sessionId}`);
         const json = await res.json();
 
@@ -89,7 +105,6 @@ export function useVoiceCall(
 
         if (cancelled) return;
 
-        // Dynamic import — agora-rtc-sdk-ng is browser-only
         const AgoraRTCModule = (await import('agora-rtc-sdk-ng')) as {
           default: typeof AgoraRTC;
         };
@@ -100,9 +115,9 @@ export function useVoiceCall(
         const agoraClient = AgoraRTCClient.createClient({ mode: 'rtc', codec: 'vp8' });
         clientRef.current = agoraClient;
 
-        // Remote user handlers
-        // user-joined/user-left track presence; user-published/unpublished track audio
+        // ── Remote user presence ────────────────────────────────────────
         agoraClient.on('user-joined', () => {
+          console.log('[useVoiceCall] remote user joined');
           setRemoteUserJoined(true);
         });
 
@@ -111,6 +126,7 @@ export function useVoiceCall(
             await agoraClient.subscribe(remoteUser, 'audio');
             remoteUser.audioTrack?.play();
             setRemoteAudioPlaying(true);
+            console.log('[useVoiceCall] remote audio subscribed + playing');
           }
         });
 
@@ -121,11 +137,38 @@ export function useVoiceCall(
         });
 
         agoraClient.on('user-left', () => {
+          console.log('[useVoiceCall] remote user left');
           setRemoteUserJoined(false);
           setRemoteAudioPlaying(false);
         });
 
-        // Join the channel (string UID mode)
+        // ── Connection state tracking ───────────────────────────────────
+        // Agora auto-reconnects on network blips. We track state changes
+        // to show "Reconnecting..." in the UI without breaking the call.
+        agoraClient.on('connection-state-change', (curState, prevState, reason) => {
+          console.log(`[useVoiceCall] connection: ${prevState} → ${curState}`, reason ?? '');
+
+          if (curState === 'DISCONNECTED' && prevState === 'CONNECTED') {
+            // Agora lost the connection. If it was a genuine disconnect
+            // (not us calling leave()), it will auto-reconnect.
+            // Only set error if the reason indicates a permanent failure.
+            if (reason === 'LEAVE' || reason === 'UID_BANNED') {
+              setState('ended');
+            }
+            // For NETWORK_ERROR / SERVER_ERROR, Agora retries automatically.
+            // We don't set error — just let it reconnect.
+          }
+
+          if (curState === 'CONNECTED' && prevState === 'RECONNECTING') {
+            console.log('[useVoiceCall] reconnected successfully');
+            // Restore mute state after reconnection
+            if (localTrackRef.current && isMutedRef.current) {
+              localTrackRef.current.setMuted(true);
+            }
+          }
+        });
+
+        // ── Join channel ────────────────────────────────────────────────
         await agoraClient.join(appId, channelName, token, uid);
 
         if (cancelled) {
@@ -133,7 +176,7 @@ export function useVoiceCall(
           return;
         }
 
-        // Create and publish local microphone track
+        // ── Create and publish mic track ────────────────────────────────
         const micTrack = await AgoraRTCClient.createMicrophoneAudioTrack();
         localTrackRef.current = micTrack;
 
@@ -144,9 +187,11 @@ export function useVoiceCall(
 
         await agoraClient.publish(micTrack);
         setState('connected');
+        console.log('[useVoiceCall] connected and publishing audio');
       } catch (err) {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : 'Call failed';
+          console.error('[useVoiceCall] join error:', message);
           setError(message);
           setState('error');
           await cleanup();
@@ -163,11 +208,52 @@ export function useVoiceCall(
     };
   }, [sessionId, userId, cleanup]);
 
+  // ── beforeunload: end billing if browser/tab is closed during call ──
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (stateRef.current !== 'connected' && stateRef.current !== 'connecting') return;
+      const sid = sessionIdRef.current;
+      if (!sid) return;
+
+      // Use sendBeacon — it's non-blocking and guaranteed to fire
+      const payload = JSON.stringify({ sessionId: sid });
+      navigator.sendBeacon(
+        '/api/billing/end',
+        new Blob([payload], { type: 'application/json' })
+      );
+      console.log('[useVoiceCall] beforeunload: sent billing end via beacon');
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // ── Tab visibility: re-play remote audio on return ──────────────────
+  // Some mobile browsers pause audio playback when the tab is backgrounded.
+  // On return, re-subscribe to remote users' audio tracks.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (stateRef.current !== 'connected' || !clientRef.current) return;
+
+      // Re-play any remote users' audio that may have been paused
+      const remoteUsers = clientRef.current.remoteUsers;
+      for (const user of remoteUsers) {
+        if (user.audioTrack && !user.audioTrack.isPlaying) {
+          console.log('[useVoiceCall] re-playing remote audio after tab return');
+          user.audioTrack.play();
+          setRemoteAudioPlaying(true);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
   const toggleMute = useCallback(async () => {
     if (!localTrackRef.current) return;
     const next = !isMuted;
-    // setMuted only silences the audio without unpublishing the track,
-    // so the remote side won't see a user-unpublished event.
     localTrackRef.current.setMuted(next);
     setIsMuted(next);
   }, [isMuted]);

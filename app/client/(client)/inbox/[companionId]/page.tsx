@@ -343,11 +343,27 @@ export default function ClientInboxPage() {
     await handleEndSession();
   }, [voiceCall, handleEndSession]);
 
+  // Clean up intervals on unmount
   useEffect(() => {
     return () => {
       if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
       if (liveTimerRef.current) clearInterval(liveTimerRef.current);
     };
+  }, []);
+
+  // beforeunload: fire billing end if client closes browser mid-session
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const sid = sessionIdRef.current;
+      const st = sessionStateRef.current;
+      if (!sid || (st !== 'ACTIVE' && st !== 'PENDING')) return;
+      navigator.sendBeacon(
+        '/api/billing/end',
+        new Blob([JSON.stringify({ sessionId: sid })], { type: 'application/json' })
+      );
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
   // Active call banner — set when VOICE call is active, clear when ended

@@ -1,10 +1,8 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
-import type { VoiceCallState } from '@/hooks/useVoiceCall';
 import { ActiveCallBanner } from '@/components/ActiveCallBanner';
-import { useEffect, useRef } from 'react';
 
 interface CallInfo {
   sessionId: string;
@@ -32,9 +30,12 @@ export function useCompanionCall() {
 export function CompanionCallProvider({ children, userId }: { children: ReactNode; userId: string | undefined }) {
   const [activeCall, setActiveCall] = useState<CallInfo | null>(null);
 
-  // The Agora hook — connected to activeCall.sessionId
   const voiceSessionId = activeCall?.sessionId ?? null;
   const voiceCall = useVoiceCall(voiceSessionId, userId ?? '');
+
+  // Refs for beforeunload access
+  const activeCallRef = useRef<CallInfo | null>(null);
+  useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
 
   // Live seconds timer
   const [liveSeconds, setLiveSeconds] = useState(0);
@@ -76,11 +77,26 @@ export function CompanionCallProvider({ children, userId }: { children: ReactNod
   // Auto-clear activeCall when call ends
   useEffect(() => {
     if (voiceCall.state === 'ended' || voiceCall.state === 'error') {
-      // Small delay so UI can show "Call ended" before clearing
       const t = setTimeout(() => setActiveCall(null), 2000);
       return () => clearTimeout(t);
     }
   }, [voiceCall.state]);
+
+  // ── beforeunload: end billing if companion closes browser during call ──
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const call = activeCallRef.current;
+      if (!call) return;
+      const payload = JSON.stringify({ sessionId: call.sessionId });
+      navigator.sendBeacon(
+        '/api/billing/end',
+        new Blob([payload], { type: 'application/json' })
+      );
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   const startCall = useCallback((info: CallInfo) => {
     setActiveCall(info);
