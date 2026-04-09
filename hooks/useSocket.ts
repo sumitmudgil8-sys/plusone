@@ -119,12 +119,26 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
   useEffect(() => {
     if (!userId) return;
 
+    console.log(`[useSocket] connecting for clientId=${userId}`);
     const realtime = new Ably.Realtime({ authUrl: '/api/ably/token', clientId: userId });
     realtimeRef.current = realtime;
 
-    realtime.connection.on('connected', () => setIsConnected(true));
-    realtime.connection.on('disconnected', () => setIsConnected(false));
-    realtime.connection.on('closed', () => setIsConnected(false));
+    realtime.connection.on('connected', () => {
+      console.log(`[useSocket] connected — clientId=${userId}`);
+      setIsConnected(true);
+    });
+    realtime.connection.on('disconnected', (stateChange) => {
+      console.warn('[useSocket] disconnected:', stateChange?.reason?.message);
+      setIsConnected(false);
+    });
+    realtime.connection.on('failed', (stateChange) => {
+      console.error('[useSocket] connection FAILED:', stateChange?.reason?.message, stateChange?.reason);
+      setIsConnected(false);
+    });
+    realtime.connection.on('closed', () => {
+      console.log('[useSocket] connection closed');
+      setIsConnected(false);
+    });
 
     const ch = realtime.channels.get(`private:user-${userId}`);
     privateChannelRef.current = ch;
