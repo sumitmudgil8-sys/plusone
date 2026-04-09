@@ -141,7 +141,7 @@ export default function AdminSubscriptionsPage() {
             {premiumUsers.map(user => (
               <div key={user.id} className="py-3 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-charcoal-border flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
                     <span className="text-sm font-semibold text-white">{user.clientProfile?.name?.[0] ?? '?'}</span>
                   </div>
                   <div className="min-w-0">
@@ -183,7 +183,7 @@ export default function AdminSubscriptionsPage() {
             {freeUsers.map(user => (
               <div key={user.id} className="py-3 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-charcoal-border flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
                     <span className="text-sm font-semibold text-white">{user.clientProfile?.name?.[0] ?? '?'}</span>
                   </div>
                   <div className="min-w-0">

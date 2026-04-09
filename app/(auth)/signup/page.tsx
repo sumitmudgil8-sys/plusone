@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Card } from '@/components/ui/Card';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -63,97 +62,102 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-charcoal flex items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-md p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-serif font-bold text-gold mb-2">Plus One</h1>
-          <p className="text-white/60">Apply for membership</p>
+    <div className="min-h-screen bg-charcoal flex items-center justify-center px-4 py-12 relative overflow-hidden">
+      {/* Ambient background glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-gold/[0.04] rounded-full blur-[100px] pointer-events-none" />
+
+      <div className="w-full max-w-[420px] relative animate-fade-in">
+        {/* Logo area */}
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-serif font-bold text-gold-gradient tracking-tight">Plus One</h1>
+          <p className="text-white/40 text-sm mt-2 tracking-wide">Apply for membership</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <Input
-            label="Full Name"
-            type="text"
-            value={form.name}
-            onChange={set('name')}
-            placeholder="Your full name"
-            required
-          />
+        {/* Form card */}
+        <div className="bg-charcoal-surface/80 border border-white/[0.06] rounded-2xl p-7 shadow-card backdrop-blur-sm">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              label="Full Name"
+              type="text"
+              value={form.name}
+              onChange={set('name')}
+              placeholder="Your full name"
+              required
+            />
 
-          <Input
-            label="Email"
-            type="email"
-            value={form.email}
-            onChange={set('email')}
-            placeholder="your@email.com"
-            required
-          />
+            <Input
+              label="Email"
+              type="email"
+              value={form.email}
+              onChange={set('email')}
+              placeholder="your@email.com"
+              required
+            />
 
-          <Input
-            label="Mobile Number"
-            type="tel"
-            value={form.phone}
-            onChange={set('phone')}
-            placeholder="10-digit Indian mobile"
-            required
-          />
+            <Input
+              label="Mobile Number"
+              type="tel"
+              value={form.phone}
+              onChange={set('phone')}
+              placeholder="10-digit Indian mobile"
+              required
+            />
 
-          <Input
-            label="LinkedIn Profile URL"
-            type="url"
-            value={form.linkedInUrl}
-            onChange={set('linkedInUrl')}
-            placeholder="https://linkedin.com/in/yourprofile"
-            required
-          />
+            <Input
+              label="LinkedIn Profile URL"
+              type="url"
+              value={form.linkedInUrl}
+              onChange={set('linkedInUrl')}
+              placeholder="https://linkedin.com/in/yourprofile"
+              required
+            />
 
-          <Input
-            label="Password"
-            type="password"
-            value={form.password}
-            onChange={set('password')}
-            placeholder="At least 8 characters"
-            required
-          />
+            <Input
+              label="Password"
+              type="password"
+              value={form.password}
+              onChange={set('password')}
+              placeholder="At least 8 characters"
+              required
+            />
 
-          <Input
-            label="Confirm Password"
-            type="password"
-            value={form.confirmPassword}
-            onChange={set('confirmPassword')}
-            placeholder="Repeat your password"
-            required
-          />
+            <Input
+              label="Confirm Password"
+              type="password"
+              value={form.confirmPassword}
+              onChange={set('confirmPassword')}
+              placeholder="Repeat your password"
+              required
+            />
 
-          {error && (
-            <div className="p-3 bg-error/10 border border-error/30 rounded-lg text-error text-sm">
-              {error}
-            </div>
-          )}
+            {error && (
+              <div className="p-3 bg-red-500/8 border border-red-500/15 rounded-xl text-red-400 text-sm">
+                {error}
+              </div>
+            )}
 
-          <Button type="submit" className="w-full" isLoading={loading}>
-            Submit Application
-          </Button>
-        </form>
+            <Button type="submit" className="w-full" size="lg" isLoading={loading}>
+              Submit Application
+            </Button>
+          </form>
+        </div>
 
-        <div className="mt-6 text-center">
-          <p className="text-white/60 text-sm">
+        {/* Footer links */}
+        <div className="mt-8 text-center space-y-3">
+          <p className="text-white/35 text-sm">
             Already have an account?{' '}
-            <Link href="/login" className="text-gold hover:underline">
+            <Link href="/login" className="text-gold hover:text-gold-hover transition-colors">
               Sign in
             </Link>
           </p>
-        </div>
-
-        <div className="mt-4 pt-4 border-t border-charcoal-border">
-          <p className="text-xs text-white/40 text-center">
+          <p className="text-white/25 text-xs">
             Want to work as a companion?{' '}
-            <Link href="/companion-signup" className="text-gold hover:underline">
+            <Link href="/companion-signup" className="text-gold/70 hover:text-gold transition-colors">
               Apply here
             </Link>
           </p>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }

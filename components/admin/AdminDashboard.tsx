@@ -179,7 +179,7 @@ export function AdminDashboard() {
               key={card.label}
               {...(wrapperProps as any)}
               className={cn(
-                'relative overflow-hidden rounded-2xl p-5 border border-charcoal-border/50 transition-all duration-300',
+                'relative overflow-hidden rounded-2xl p-5 border border-white/[0.06] transition-all duration-300',
                 'bg-gradient-to-br', card.gradient,
                 card.href && 'hover:border-white/20 hover:scale-[1.02] cursor-pointer',
                 'group'
@@ -212,7 +212,7 @@ export function AdminDashboard() {
           <Link
             key={action.label}
             href={action.href}
-            className="flex items-center justify-between px-4 py-3 rounded-xl bg-charcoal-surface border border-charcoal-border/50 hover:border-gold/30 hover:bg-gold/5 transition-all duration-200 group"
+            className="flex items-center justify-between px-4 py-3 rounded-xl bg-charcoal-surface border border-white/[0.06] hover:border-gold/30 hover:bg-gold/5 transition-all duration-200 group"
           >
             <span className="text-sm text-white/70 group-hover:text-white transition-colors">{action.label}</span>
             <span className="text-gold opacity-0 group-hover:opacity-100 transition-opacity text-sm">{action.icon}</span>
@@ -223,14 +223,14 @@ export function AdminDashboard() {
       {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Recent Users */}
-        <div className="bg-charcoal-surface border border-charcoal-border/50 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-charcoal-border/50 flex items-center justify-between">
+        <div className="bg-charcoal-surface border border-white/[0.06] rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Recent Users</h3>
             <Link href="/admin/users" className="text-xs text-gold hover:text-gold/80 transition-colors">
               View all
             </Link>
           </div>
-          <div className="divide-y divide-charcoal-border/30">
+          <div className="divide-y divide-white/[0.04]">
             {recentUsers.length === 0 ? (
               <div className="px-5 py-8 text-center text-white/30 text-sm">No users yet</div>
             ) : (
@@ -269,14 +269,14 @@ export function AdminDashboard() {
         </div>
 
         {/* Recent Bookings */}
-        <div className="bg-charcoal-surface border border-charcoal-border/50 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-charcoal-border/50 flex items-center justify-between">
+        <div className="bg-charcoal-surface border border-white/[0.06] rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Recent Bookings</h3>
             <Link href="/admin/bookings" className="text-xs text-gold hover:text-gold/80 transition-colors">
               View all
             </Link>
           </div>
-          <div className="divide-y divide-charcoal-border/30">
+          <div className="divide-y divide-white/[0.04]">
             {recentBookings.length === 0 ? (
               <div className="px-5 py-8 text-center text-white/30 text-sm">No bookings yet</div>
             ) : (

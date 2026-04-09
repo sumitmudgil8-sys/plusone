@@ -75,7 +75,7 @@ export default function BookingsPage() {
               px-4 py-2 rounded-full text-sm font-medium transition-colors
               ${filter === f
                 ? 'bg-gold text-charcoal'
-                : 'bg-charcoal-surface text-white/70 hover:bg-charcoal-border'
+                : 'bg-charcoal-surface text-white/70 hover:bg-white/[0.06]'
               }
             `}
           >

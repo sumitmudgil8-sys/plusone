@@ -1,8 +1,8 @@
 export default function RefundPolicyPage() {
   return (
-    <div className="min-h-screen bg-[#1C1C1C] text-white">
+    <div className="min-h-screen bg-charcoal text-white">
       <div className="max-w-3xl mx-auto px-4 py-16">
-        <h1 className="text-3xl font-bold text-[#D4AF37] mb-2">Refund Policy</h1>
+        <h1 className="text-3xl font-bold text-gold mb-2">Refund Policy</h1>
         <p className="text-white/50 text-sm mb-10">Last updated: April 2026</p>
 
         <div className="space-y-8 text-white/80 leading-relaxed">
@@ -27,19 +27,19 @@ export default function RefundPolicyPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-white mb-3">3. Unused Wallet Balance</h2>
-            <p>Wallet balances do not expire. If you wish to withdraw your unused wallet balance, you may contact us at <span className="text-[#D4AF37]">support@plusone.app</span>. Withdrawal requests are subject to identity verification and a processing fee of 5% or ₹50 (whichever is higher) to cover payment gateway costs. Processing takes 5–10 business days.</p>
+            <p>Wallet balances do not expire. If you wish to withdraw your unused wallet balance, you may contact us at <span className="text-gold">support@plusone.app</span>. Withdrawal requests are subject to identity verification and a processing fee of 5% or ₹50 (whichever is higher) to cover payment gateway costs. Processing takes 5–10 business days.</p>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold text-white mb-3">4. Failed Payments</h2>
-            <p>If a payment fails at the Razorpay gateway (e.g., card declined, net banking timeout), no amount is deducted. If you believe you were charged for a failed transaction, contact your bank and also write to us at <span className="text-[#D4AF37]">support@plusone.app</span> with your transaction ID.</p>
+            <p>If a payment fails at the Razorpay gateway (e.g., card declined, net banking timeout), no amount is deducted. If you believe you were charged for a failed transaction, contact your bank and also write to us at <span className="text-gold">support@plusone.app</span> with your transaction ID.</p>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold text-white mb-3">5. Refund Process</h2>
             <p>To request a refund:</p>
             <ol className="list-decimal pl-5 space-y-1 mt-2">
-              <li>Email <span className="text-[#D4AF37]">support@plusone.app</span> with your registered email and order/transaction ID</li>
+              <li>Email <span className="text-gold">support@plusone.app</span> with your registered email and order/transaction ID</li>
               <li>Describe the issue clearly with any relevant screenshots</li>
               <li>Our team will review your request within 3–5 business days</li>
               <li>Approved refunds are credited to the original payment source within 5–10 business days</li>
@@ -53,7 +53,7 @@ export default function RefundPolicyPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-white mb-3">7. Contact Us</h2>
-            <p>For refund requests or payment disputes: <span className="text-[#D4AF37]">support@plusone.app</span></p>
+            <p>For refund requests or payment disputes: <span className="text-gold">support@plusone.app</span></p>
             <p className="mt-2 text-white/50 text-sm">We aim to resolve all valid disputes fairly and promptly.</p>
           </section>
         </div>

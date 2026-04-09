@@ -1,8 +1,8 @@
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-[#1C1C1C] text-white">
+    <div className="min-h-screen bg-charcoal text-white">
       <div className="max-w-3xl mx-auto px-4 py-16">
-        <h1 className="text-3xl font-bold text-[#D4AF37] mb-2">Privacy Policy</h1>
+        <h1 className="text-3xl font-bold text-gold mb-2">Privacy Policy</h1>
         <p className="text-white/50 text-sm mb-10">Last updated: April 2026</p>
 
         <div className="space-y-8 text-white/80 leading-relaxed">
@@ -76,7 +76,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-white mb-3">8. Contact</h2>
-            <p>For privacy-related requests or questions: <span className="text-[#D4AF37]">privacy@plusone.app</span></p>
+            <p>For privacy-related requests or questions: <span className="text-gold">privacy@plusone.app</span></p>
           </section>
         </div>
 

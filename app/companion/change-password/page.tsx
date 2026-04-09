@@ -58,10 +58,10 @@ export default function ChangePasswordPage() {
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-[#2A2A2A] border border-[#3A3A3A] rounded-2xl p-8 shadow-xl">
+      <div className="w-full max-w-md bg-charcoal-elevated border border-white/[0.08] rounded-2xl p-8 shadow-xl">
         <div className="text-center mb-7">
-          <div className="w-14 h-14 rounded-full bg-yellow-400/10 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-7 h-7 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-14 h-14 rounded-full bg-gold/10 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
@@ -83,7 +83,7 @@ export default function ChangePasswordPage() {
               placeholder="Enter your temporary password"
               required
               autoFocus
-              className="w-full bg-[#1C1C1C] border border-[#3A3A3A] text-white rounded-lg px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+              className="w-full bg-white/[0.04] border border-white/[0.08] text-white rounded-xl px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold/50"
             />
           </div>
 
@@ -96,7 +96,7 @@ export default function ChangePasswordPage() {
               onChange={handleChange}
               placeholder="At least 8 characters"
               required
-              className="w-full bg-[#1C1C1C] border border-[#3A3A3A] text-white rounded-lg px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+              className="w-full bg-white/[0.04] border border-white/[0.08] text-white rounded-xl px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold/50"
             />
           </div>
 
@@ -109,7 +109,7 @@ export default function ChangePasswordPage() {
               onChange={handleChange}
               placeholder="Repeat new password"
               required
-              className="w-full bg-[#1C1C1C] border border-[#3A3A3A] text-white rounded-lg px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+              className="w-full bg-white/[0.04] border border-white/[0.08] text-white rounded-xl px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold/50"
             />
           </div>
 
@@ -122,7 +122,7 @@ export default function ChangePasswordPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full py-2.5 rounded-xl bg-gold hover:bg-gold-hover text-black font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? 'Updating…' : 'Update Password'}
           </button>

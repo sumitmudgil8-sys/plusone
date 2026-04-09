@@ -84,7 +84,7 @@ export function ReviewSection({ companionId, averageRating, reviewCount }: Revie
             <div key={review.id} className="bg-charcoal border border-charcoal-border rounded-xl p-4">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-charcoal-border overflow-hidden">
+                  <div className="w-10 h-10 rounded-full bg-white/[0.08] overflow-hidden">
                     {review.reviewer?.clientProfile?.avatarUrl ? (
                       <img
                         src={review.reviewer.clientProfile.avatarUrl}

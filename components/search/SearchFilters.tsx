@@ -126,7 +126,7 @@ export function SearchFilters({ filters, onChange }: SearchFiltersProps) {
                   step="500"
                   value={localFilters.maxPrice}
                   onChange={(e) => setLocalFilters((prev) => ({ ...prev, maxPrice: parseInt(e.target.value) }))}
-                  className="w-full h-2 bg-charcoal-border rounded-lg appearance-none cursor-pointer accent-gold"
+                  className="w-full h-2 bg-white/[0.08] rounded-lg appearance-none cursor-pointer accent-gold"
                 />
               </div>
 
@@ -162,7 +162,7 @@ export function SearchFilters({ filters, onChange }: SearchFiltersProps) {
                     max="60"
                     value={localFilters.minAge}
                     onChange={(e) => setLocalFilters((prev) => ({ ...prev, minAge: parseInt(e.target.value) }))}
-                    className="flex-1 h-2 bg-charcoal-border rounded-lg appearance-none cursor-pointer accent-gold"
+                    className="flex-1 h-2 bg-white/[0.08] rounded-lg appearance-none cursor-pointer accent-gold"
                   />
                   <input
                     type="range"
@@ -170,7 +170,7 @@ export function SearchFilters({ filters, onChange }: SearchFiltersProps) {
                     max="60"
                     value={localFilters.maxAge}
                     onChange={(e) => setLocalFilters((prev) => ({ ...prev, maxAge: parseInt(e.target.value) }))}
-                    className="flex-1 h-2 bg-charcoal-border rounded-lg appearance-none cursor-pointer accent-gold"
+                    className="flex-1 h-2 bg-white/[0.08] rounded-lg appearance-none cursor-pointer accent-gold"
                   />
                 </div>
               </div>

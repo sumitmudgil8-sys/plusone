@@ -60,7 +60,7 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
           ref={ref}
           className={cn(
             'relative w-full bg-charcoal-surface rounded-2xl shadow-2xl',
-            'border border-charcoal-border',
+            'border border-white/[0.06]',
             'transform transition-all duration-200',
             isClosing ? 'scale-95 opacity-0' : 'scale-100 opacity-100',
             sizes[size],
@@ -70,7 +70,7 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
         >
           {/* Header */}
           {(title || showCloseButton) && (
-            <div className="flex items-center justify-between p-6 border-b border-charcoal-border">
+            <div className="flex items-center justify-between p-6 border-b border-white/[0.06]">
               {title && (
                 <h3 className="text-xl font-semibold text-white">{title}</h3>
               )}

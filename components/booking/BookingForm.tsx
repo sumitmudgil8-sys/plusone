@@ -112,7 +112,7 @@ export function BookingForm({
                 max="8"
                 value={duration}
                 onChange={(e) => setDuration(parseInt(e.target.value))}
-                className="w-full h-2 bg-charcoal-border rounded-lg appearance-none cursor-pointer accent-gold"
+                className="w-full h-2 bg-white/[0.08] rounded-lg appearance-none cursor-pointer accent-gold"
               />
               <div className="flex justify-between text-xs text-white/50 mt-1">
                 <span>1 hour</span>

@@ -193,7 +193,7 @@ export default function CompanionDashboard() {
           className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-colors disabled:opacity-50 ${
             isOnline
               ? 'bg-green-500/15 border-green-500/40 text-green-400 hover:bg-green-500/25'
-              : 'bg-charcoal-surface border-charcoal-border text-white/50 hover:text-white hover:border-white/30'
+              : 'bg-charcoal-surface border-white/[0.06] text-white/50 hover:text-white hover:border-white/20'
           }`}
         >
           <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-400 animate-pulse' : 'bg-white/30'}`} />
@@ -236,7 +236,7 @@ export default function CompanionDashboard() {
             { icon: '📞', label: 'Calls', value: today?.calls ?? 0 },
             { icon: '📅', label: 'Bookings', value: today?.bookings ?? 0 },
           ].map(({ icon, label, value }) => (
-            <div key={label} className="rounded-xl p-3 bg-charcoal-surface border border-charcoal-border text-center">
+            <div key={label} className="rounded-xl p-3 bg-charcoal-surface border border-white/[0.06] text-center">
               <p className="text-base mb-0.5">{icon}</p>
               <p className="text-sm font-bold text-white">{fmt(value)}</p>
               <p className="text-xs text-white/40">{label}</p>
@@ -306,7 +306,7 @@ export default function CompanionDashboard() {
           {sessions.length === 0 ? (
             <p className="text-white/50 text-center py-6 text-sm">No sessions yet</p>
           ) : (
-            <div className="divide-y divide-charcoal-border">
+            <div className="divide-y divide-white/[0.06]">
               {sessions.map((s) => (
                 <div key={s.id} className="py-3 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -314,7 +314,7 @@ export default function CompanionDashboard() {
                       <img src={s.clientAvatar} alt={s.clientName}
                         className="w-9 h-9 rounded-full object-cover shrink-0" />
                     ) : (
-                      <div className="w-9 h-9 rounded-full bg-charcoal-border flex items-center justify-center shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
                         <span className="text-sm font-medium text-white">{s.clientName[0]}</span>
                       </div>
                     )}

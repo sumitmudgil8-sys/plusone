@@ -101,7 +101,7 @@ export function CompanionProfile({
   return (
     <div className="space-y-6">
       {/* Image Carousel */}
-      <div className="relative rounded-2xl overflow-hidden bg-charcoal-border">
+      <div className="relative rounded-2xl overflow-hidden bg-white/[0.08]">
         <div className="aspect-[3/4]">
           {images.length > 0 ? (
             <img

@@ -183,7 +183,7 @@ export default function BrowsePage() {
 
         {/* Nearby toggle — only show if location is available or requestable */}
         {('geolocation' in (typeof navigator !== 'undefined' ? navigator : {})) && (
-          <div className="flex items-center gap-1 shrink-0 bg-charcoal-surface border border-charcoal-border rounded-full p-1">
+          <div className="flex items-center gap-1 shrink-0 bg-charcoal-surface border border-white/[0.06] rounded-full p-1">
             <button
               onClick={() => handleNearbyToggle(false)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${

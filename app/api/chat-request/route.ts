@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
       title: `Chat request from ${clientName}`,
       body: 'Tap to accept and start chatting',
       url: '/companion/dashboard',
+      type: 'CHAT_REQUEST',
     });
   } catch (err) {
     console.error('Push notification error (non-fatal):', err);

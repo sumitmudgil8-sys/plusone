@@ -81,7 +81,7 @@ export function UserTable({
                       className="w-10 h-10 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-charcoal-border flex items-center justify-center text-white font-medium">
+                    <div className="w-10 h-10 rounded-full bg-white/[0.08] flex items-center justify-center text-white font-medium">
                       {getName(user).charAt(0)}
                     </div>
                   )}

@@ -59,7 +59,7 @@ export function BookingCard({ booking, role, onStatusChange }: BookingCardProps)
               className="w-12 h-12 rounded-full object-cover"
             />
           ) : (
-            <div className="w-12 h-12 rounded-full bg-charcoal-border flex items-center justify-center text-white font-medium">
+            <div className="w-12 h-12 rounded-full bg-white/[0.08] flex items-center justify-center text-white font-medium">
               {profile?.name.charAt(0) || '?'}
             </div>
           )}

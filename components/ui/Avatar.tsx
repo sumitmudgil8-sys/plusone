@@ -29,7 +29,7 @@ const Avatar = forwardRef<HTMLImageElement, AvatarProps>(
       return (
         <div
           className={cn(
-            'rounded-full bg-charcoal-border flex items-center justify-center',
+            'rounded-full bg-white/[0.08] flex items-center justify-center',
             'text-white font-medium text-sm',
             sizes[size],
             className

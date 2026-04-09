@@ -229,7 +229,7 @@ function ClientsSection() {
 
               return (
                 <div key={client.id} className="py-4 flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-charcoal-border flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
                     <span className="text-sm font-semibold text-white">{name[0]}</span>
                   </div>
                   <div className="flex-1 min-w-0 space-y-1">
@@ -464,7 +464,7 @@ function CompanionsSection() {
                             className="w-10 h-10 rounded-full object-cover"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-full bg-charcoal-border flex items-center justify-center text-white font-medium">
+                          <div className="w-10 h-10 rounded-full bg-white/[0.08] flex items-center justify-center text-white font-medium">
                             {companion.companionProfile?.name.charAt(0)}
                           </div>
                         )}

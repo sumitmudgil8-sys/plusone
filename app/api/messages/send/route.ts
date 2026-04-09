@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
         title: `New message from ${senderName}`,
         body: content.slice(0, 100),
         url: inboxPath,
+        type: 'CHAT_MESSAGE',
       });
     } catch { /* non-fatal */ }
 

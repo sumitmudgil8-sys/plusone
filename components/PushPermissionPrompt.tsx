@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useFcm } from '@/hooks/useFcm';
 
 const DISMISS_KEY = 'push_prompt_dismissed_at';
 const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -9,11 +10,13 @@ const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export function PushPermissionPrompt() {
   const [visible, setVisible] = useState(false);
   const { subscribe, autoSubscribe } = usePushNotifications();
+  const { requestPermission: requestFcm, autoRegister: autoRegisterFcm } = useFcm();
 
-  // Silently refresh subscription on every mount if permission already granted.
-  // Handles stale/expired subscriptions after SW updates or app reinstalls.
+  // Silently refresh both VAPID and FCM subscriptions on every mount
+  // if permission is already granted.
   useEffect(() => {
     autoSubscribe();
+    autoRegisterFcm();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show prompt only if permission hasn't been decided yet
@@ -34,7 +37,11 @@ export function PushPermissionPrompt() {
 
   const handleEnable = async () => {
     setVisible(false);
-    await subscribe();
+    // Register both channels — VAPID for broad browser support, FCM for Android reliability
+    await Promise.all([
+      subscribe(),
+      requestFcm(),
+    ]);
   };
 
   const handleDismiss = () => {
@@ -45,7 +52,7 @@ export function PushPermissionPrompt() {
   return (
     <div className="fixed bottom-0 inset-x-0 z-50 flex justify-center pointer-events-none">
       <div
-        className="pointer-events-auto w-full max-w-md mx-4 mb-20 md:mb-6 bg-charcoal-surface border border-charcoal-border rounded-2xl px-6 py-5 shadow-2xl animate-slide-up"
+        className="pointer-events-auto w-full max-w-md mx-4 mb-20 md:mb-6 bg-charcoal-surface border border-white/[0.06] rounded-2xl px-6 py-5 shadow-2xl animate-slide-up"
       >
         <div className="flex items-start gap-4">
           <div className="shrink-0 w-10 h-10 rounded-full bg-gold/15 flex items-center justify-center">

@@ -267,7 +267,7 @@ export default function WalletPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin h-8 w-8 border-2 border-[#C9A96E] border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -284,14 +284,14 @@ export default function WalletPage() {
       </Link>
 
       {/* Balance Card */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1a1a1a] to-[#111] border border-white/5 p-6">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-[#C9A96E]/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-charcoal-elevated to-charcoal border border-white/5 p-6">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gold/5 rounded-full -translate-y-1/2 translate-x-1/2" />
         <div className="relative">
           <p className="text-white/40 text-xs uppercase tracking-wider font-medium">Available Balance</p>
           <p className="text-3xl font-bold text-white mt-2">{fmt(balance ?? 0)}</p>
           <button
             onClick={openAddMoney}
-            className="mt-4 w-full bg-[#C9A96E] text-black text-sm font-semibold py-3 rounded-xl hover:bg-[#d4b87a] transition-colors flex items-center justify-center gap-2"
+            className="mt-4 w-full bg-gold text-black text-sm font-semibold py-3 rounded-xl hover:bg-gold-hover transition-colors flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -323,7 +323,7 @@ export default function WalletPage() {
 
       {/* ─── Recharge Panel ─────────────────────────────────────── */}
       {showRecharge && (
-        <div className="rounded-2xl bg-[#141414] border border-white/5 p-5 space-y-4">
+        <div className="rounded-2xl bg-charcoal-surface border border-white/5 p-5 space-y-4">
 
           {/* STEP: Amount Selection */}
           {step === 'amount' && (
@@ -340,7 +340,7 @@ export default function WalletPage() {
                     onClick={() => { setRechargeAmount(String(amt)); setRechargeError(''); }}
                     className={`py-2.5 rounded-xl text-sm font-medium transition-all border ${
                       rechargeAmount === String(amt)
-                        ? 'bg-[#C9A96E]/15 border-[#C9A96E]/40 text-[#C9A96E]'
+                        ? 'bg-gold/15 border-gold/40 text-gold'
                         : 'bg-white/5 border-white/5 text-white/60 hover:border-white/15'
                     }`}
                   >
@@ -361,7 +361,7 @@ export default function WalletPage() {
                     placeholder="100 - 50,000"
                     min={100}
                     max={50000}
-                    className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-8 pr-4 py-3 text-sm placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-[#C9A96E]/50 focus:border-transparent"
+                    className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-8 pr-4 py-3 text-sm placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -375,7 +375,7 @@ export default function WalletPage() {
               <button
                 onClick={handleProceedToPay}
                 disabled={recharging || !rechargeAmount}
-                className="w-full bg-[#C9A96E] text-black text-sm font-semibold py-3 rounded-xl hover:bg-[#d4b87a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-gold text-black text-sm font-semibold py-3 rounded-xl hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {recharging ? (
                   <>
@@ -398,12 +398,12 @@ export default function WalletPage() {
               </div>
 
               {/* Unique amount — prominent */}
-              <div className="bg-[#C9A96E]/10 border border-[#C9A96E]/30 rounded-xl p-4 text-center">
+              <div className="bg-gold/10 border border-gold/30 rounded-xl p-4 text-center">
                 <p className="text-xs text-white/50 mb-1">Pay exactly this amount</p>
-                <p className="text-3xl font-bold text-[#C9A96E]">{fmtExact(payment.uniqueAmount)}</p>
+                <p className="text-3xl font-bold text-gold">{fmtExact(payment.uniqueAmount)}</p>
                 <button
                   onClick={() => copyToClipboard((payment.uniqueAmount / 100).toFixed(2), 'amount')}
-                  className="mt-2 text-xs text-[#C9A96E]/70 hover:text-[#C9A96E] transition-colors"
+                  className="mt-2 text-xs text-gold/70 hover:text-gold transition-colors"
                 >
                   {copied === 'amount' ? 'Copied!' : 'Tap to copy amount'}
                 </button>
@@ -417,7 +417,7 @@ export default function WalletPage() {
                 </div>
                 <button
                   onClick={() => copyToClipboard(payment.upiId, 'upi')}
-                  className="text-[#C9A96E] text-xs font-medium px-3 py-1.5 rounded-lg bg-[#C9A96E]/10 hover:bg-[#C9A96E]/20 transition-colors"
+                  className="text-gold text-xs font-medium px-3 py-1.5 rounded-lg bg-gold/10 hover:bg-gold/20 transition-colors"
                 >
                   {copied === 'upi' ? 'Copied!' : 'Copy'}
                 </button>
@@ -426,7 +426,7 @@ export default function WalletPage() {
               {/* Pay Now button — opens UPI intent */}
               <button
                 onClick={handleOpenUpi}
-                className="w-full bg-[#C9A96E] text-black text-sm font-semibold py-3.5 rounded-xl hover:bg-[#d4b87a] transition-colors flex items-center justify-center gap-2"
+                className="w-full bg-gold text-black text-sm font-semibold py-3.5 rounded-xl hover:bg-gold-hover transition-colors flex items-center justify-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -445,7 +445,7 @@ export default function WalletPage() {
               {/* I've paid */}
               <button
                 onClick={handleIvePaid}
-                className="w-full border border-white/10 text-white text-sm py-3 rounded-xl hover:border-[#C9A96E]/30 hover:text-[#C9A96E] transition-colors font-medium"
+                className="w-full border border-white/10 text-white text-sm py-3 rounded-xl hover:border-gold/30 hover:text-gold transition-colors font-medium"
               >
                 I&apos;ve completed the payment
               </button>
@@ -486,7 +486,7 @@ export default function WalletPage() {
                 <p className="text-white font-semibold">Verifying your payment</p>
                 <p className="text-white/40 text-xs mt-1.5 max-w-xs mx-auto">
                   We&apos;re checking for your payment of{' '}
-                  <span className="text-[#C9A96E] font-medium">{fmtExact(payment.uniqueAmount)}</span>.
+                  <span className="text-gold font-medium">{fmtExact(payment.uniqueAmount)}</span>.
                   This usually takes a few minutes.
                 </p>
               </div>
@@ -494,14 +494,14 @@ export default function WalletPage() {
               {/* Pulsing dots */}
               <div className="flex items-center justify-center gap-1.5">
                 {[0, 300, 600].map(delay => (
-                  <div key={delay} className="w-2 h-2 rounded-full bg-[#C9A96E] animate-pulse" style={{ animationDelay: `${delay}ms` }} />
+                  <div key={delay} className="w-2 h-2 rounded-full bg-gold animate-pulse" style={{ animationDelay: `${delay}ms` }} />
                 ))}
               </div>
 
               {/* Go back to payment details */}
               <button
                 onClick={() => setStep('pay')}
-                className="text-sm text-[#C9A96E] font-medium hover:underline"
+                className="text-sm text-gold font-medium hover:underline"
               >
                 View payment details again
               </button>
@@ -538,14 +538,14 @@ export default function WalletPage() {
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-white font-semibold text-sm">Recent Transactions</h3>
           {transactions.length > 0 && allTransactions.length === 0 && (
-            <button onClick={() => fetchTransactions(1)} className="text-[#C9A96E] text-xs font-medium hover:underline">
+            <button onClick={() => fetchTransactions(1)} className="text-gold text-xs font-medium hover:underline">
               View all
             </button>
           )}
         </div>
 
         {displayTx.length === 0 ? (
-          <div className="rounded-2xl bg-[#141414] border border-white/5 py-12 text-center">
+          <div className="rounded-2xl bg-charcoal-surface border border-white/5 py-12 text-center">
             <svg className="w-10 h-10 text-white/10 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
@@ -553,7 +553,7 @@ export default function WalletPage() {
             <p className="text-white/20 text-xs mt-1">Add money to get started</p>
           </div>
         ) : (
-          <div className="rounded-2xl bg-[#141414] border border-white/5 divide-y divide-white/5 overflow-hidden">
+          <div className="rounded-2xl bg-charcoal-surface border border-white/5 divide-y divide-white/5 overflow-hidden">
             {displayTx.map((tx) => (
               <div key={tx.id} className="flex items-center gap-3 px-4 py-3.5">
                 {txIcon(tx.type)}
@@ -655,7 +655,7 @@ function ResultScreen({ payment, fmtExact, onDismiss }: {
         </div>
         <p className="text-white font-semibold">Payment Verified!</p>
         <p className="text-white/40 text-xs">{fmtExact(payment.uniqueAmount)} has been added to your wallet.</p>
-        <button onClick={onDismiss} className="w-full bg-[#C9A96E] text-black text-sm font-semibold py-3 rounded-xl hover:bg-[#d4b87a] transition-colors">
+        <button onClick={onDismiss} className="w-full bg-gold text-black text-sm font-semibold py-3 rounded-xl hover:bg-gold-hover transition-colors">
           Done
         </button>
       </div>
@@ -672,7 +672,7 @@ function ResultScreen({ payment, fmtExact, onDismiss }: {
         </div>
         <p className="text-white font-semibold">Payment Not Verified</p>
         <p className="text-white/40 text-xs">{payment.adminNote || 'We could not verify your payment. If you already paid, please contact support.'}</p>
-        <button onClick={onDismiss} className="w-full bg-[#C9A96E] text-black text-sm font-semibold py-3 rounded-xl hover:bg-[#d4b87a] transition-colors">
+        <button onClick={onDismiss} className="w-full bg-gold text-black text-sm font-semibold py-3 rounded-xl hover:bg-gold-hover transition-colors">
           Try Again
         </button>
       </div>
@@ -689,7 +689,7 @@ function ResultScreen({ payment, fmtExact, onDismiss }: {
       </div>
       <p className="text-white font-semibold">Payment window expired</p>
       <p className="text-white/40 text-xs">The 15-minute window has ended. Please start a new payment.</p>
-      <button onClick={onDismiss} className="w-full bg-[#C9A96E] text-black text-sm font-semibold py-3 rounded-xl hover:bg-[#d4b87a] transition-colors">
+      <button onClick={onDismiss} className="w-full bg-gold text-black text-sm font-semibold py-3 rounded-xl hover:bg-gold-hover transition-colors">
         Try Again
       </button>
     </div>

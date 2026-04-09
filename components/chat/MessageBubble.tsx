@@ -33,7 +33,7 @@ export function MessageBubble({
             className="w-8 h-8 rounded-full object-cover"
           />
         ) : (
-          <div className="w-8 h-8 rounded-full bg-charcoal-border flex items-center justify-center text-white text-xs font-medium">
+          <div className="w-8 h-8 rounded-full bg-white/[0.08] flex items-center justify-center text-white text-xs font-medium">
             {senderName.charAt(0)}
           </div>
         )}
@@ -50,7 +50,7 @@ export function MessageBubble({
             'px-4 py-2 rounded-2xl',
             isOwn
               ? 'bg-gold text-charcoal'
-              : 'bg-charcoal-border text-white'
+              : 'bg-white/[0.08] text-white'
           )}
         >
           <p className="text-sm">{content}</p>

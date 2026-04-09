@@ -219,7 +219,7 @@ export default function AdminPaymentsPage() {
                 <div key={payment.id} className="py-4 space-y-3">
                   <div className="flex items-start gap-3">
                     {/* Avatar */}
-                    <div className="w-10 h-10 rounded-full bg-charcoal-border flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
                       <span className="text-sm font-semibold text-white">{name[0].toUpperCase()}</span>
                     </div>
 

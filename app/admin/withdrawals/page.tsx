@@ -80,7 +80,7 @@ function ActionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={onClose}>
-      <div className="w-full max-w-md bg-[#1C1C1C] border border-charcoal-border rounded-2xl p-7 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-charcoal-elevated border border-charcoal-border rounded-2xl p-7 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-white mb-1">{titles[action]}</h2>
         <p className="text-sm text-white/50 mb-5">
           Companion: <span className="text-white">{withdrawal.companion.companionProfile?.name ?? withdrawal.companion.email}</span>
@@ -238,7 +238,7 @@ export default function AdminWithdrawalsPage() {
                   {avatarUrl ? (
                     <img src={avatarUrl} alt={companionName} className="w-10 h-10 rounded-full object-cover shrink-0" />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-charcoal-border flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
                       <span className="text-sm font-medium text-white">{companionName[0]}</span>
                     </div>
                   )}

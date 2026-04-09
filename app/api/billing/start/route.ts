@@ -176,6 +176,9 @@ export async function POST(request: NextRequest) {
             ? `Chat session at ₹${Math.round(ratePerMinute * 0.4 / 100)}/min`
             : `Voice call at ₹${Math.round(ratePerMinute * 0.4 / 100)}/min`,
         url: `/companion/inbox/${user.id}`,
+        type: type === 'VOICE' ? 'INCOMING_CALL' : 'CHAT_REQUEST',
+        tag: `session-${session.id}`,
+        extra: { sessionId: session.id },
       });
     } catch (pushErr) {
       console.error('Billing start push error (non-fatal):', pushErr);

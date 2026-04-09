@@ -293,7 +293,7 @@ export default function BookingPage() {
                   <p className="text-white font-semibold text-lg">Waiting for {companion.name}…</p>
                   <p className="text-white/50 text-sm mt-1">Request expires in {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}</p>
                 </div>
-                <div className="w-full bg-charcoal-border rounded-full h-1">
+                <div className="w-full bg-white/[0.08] rounded-full h-1">
                   <div
                     className="bg-gold h-1 rounded-full transition-all duration-1000"
                     style={{ width: `${(timeLeft / CHAT_REQUEST_TIMEOUT_S) * 100}%` }}

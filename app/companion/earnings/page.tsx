@@ -116,7 +116,7 @@ function WithdrawalModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={onClose}>
-      <div className="w-full max-w-md bg-[#1C1C1C] border border-charcoal-border rounded-2xl p-7 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-charcoal-elevated border border-charcoal-border rounded-2xl p-7 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-white mb-1">Request Withdrawal</h2>
         <p className="text-sm text-white/50 mb-5">Available: <span className="text-green-400 font-semibold">{fmt(availableBalance)}</span></p>
 

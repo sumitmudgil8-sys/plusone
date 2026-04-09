@@ -167,7 +167,7 @@ export default function ProfilePage() {
         <div className="flex items-center gap-4 mb-5">
           <button
             onClick={handleAvatarClick}
-            className="relative shrink-0 w-20 h-20 rounded-full overflow-hidden bg-charcoal-border border-2 border-charcoal-border hover:border-gold/40 transition-colors group"
+            className="relative shrink-0 w-20 h-20 rounded-full overflow-hidden bg-white/[0.08] border-2 border-white/[0.06] hover:border-gold/40 transition-colors group"
           >
             {avatarUrl ? (
               <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />

@@ -19,7 +19,7 @@ export function MessageLockBanner({ messageCount, limit, isLocked }: MessageLock
           <span className="text-xs text-white/60">{messageCount}/{limit} messages used</span>
           <span className="text-xs text-gold">{limit - messageCount} remaining</span>
         </div>
-        <div className="h-1.5 bg-charcoal-border rounded-full overflow-hidden">
+        <div className="h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
           <div
             className="h-full bg-gold transition-all duration-300"
             style={{ width: `${(messageCount / limit) * 100}%` }}

@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/client/dashboard', label: 'Home', icon: HomeIcon },
-  { href: '/client/browse', label: 'Explore', icon: SearchIcon, isExplore: true },
+  { href: '/client/browse', label: 'Explore', icon: SearchIcon },
   { href: '/client/inbox', label: 'Chats', icon: ChatIcon },
   { href: '/client/bookings', label: 'Bookings', icon: CalendarIcon },
   { href: '/client/profile', label: 'Profile', icon: UserIcon },
@@ -19,33 +19,30 @@ export function ClientNav() {
   if (isFullScreenChat) return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#111111] border-t border-white/[0.06] safe-area-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 glass-strong border-t border-white/[0.06] safe-area-bottom">
       <ul className="flex items-center justify-around max-w-lg mx-auto py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const isExplore = 'isExplore' in item && item.isExplore;
 
           return (
             <li key={item.href}>
               <Link
                 href={item.href}
                 className={cn(
-                  'flex flex-col items-center gap-0.5 px-3 py-1 transition-colors',
+                  'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200',
                   isActive
-                    ? 'text-[#C9A96E]'
-                    : 'text-white/40 active:text-white/60'
+                    ? 'text-gold'
+                    : 'text-white/30 active:text-white/50'
                 )}
               >
                 <item.icon className={cn(
-                  isExplore ? 'w-6 h-6' : 'w-[22px] h-[22px]',
-                  isActive && 'fill-current'
+                  'w-[22px] h-[22px] transition-transform duration-200',
+                  isActive && 'scale-110'
                 )} />
-                <span className={cn(
-                  'font-medium',
-                  isExplore ? 'text-[10px]' : 'text-[10px]'
-                )}>
-                  {item.label}
-                </span>
+                <span className="text-[10px] font-medium">{item.label}</span>
+                {isActive && (
+                  <span className="absolute -bottom-0.5 w-5 h-0.5 bg-gold rounded-full" />
+                )}
               </Link>
             </li>
           );

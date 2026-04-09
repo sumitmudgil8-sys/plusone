@@ -82,7 +82,7 @@ function SelectField({ label, value, onChange, options, placeholder }: {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pink-500/50 transition-all"
+        className="w-full bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold/50 transition-all"
       >
         {placeholder && <option value="">{placeholder}</option>}
         {options.map((o) => (<option key={o} value={o}>{o}</option>))}
@@ -549,14 +549,14 @@ export default function CompanionProfilePage() {
               <div>
                 <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Bio</label>
                 <textarea value={section1.bio} onChange={(e) => setSection1({ ...section1, bio: e.target.value })} rows={3}
-                  className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-4 py-3 placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-pink-500/50 transition-all" placeholder="Tell clients about yourself..." />
+                  className="w-full bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 py-3 placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-gold/50 transition-all" placeholder="Tell clients about yourself..." />
               </div>
               <Input label="Tagline" value={section1.tagline} onChange={(e) => setSection1({ ...section1, tagline: e.target.value })} />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Age</label>
                   <input type="number" min={18} max={99} value={section1.age} onChange={(e) => setSection1({ ...section1, age: e.target.value })}
-                    className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pink-500/50" />
+                    className="w-full bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold/50" />
                 </div>
                 <SelectField label="Gender" value={section1.gender} onChange={(v) => setSection1({ ...section1, gender: v })} options={['Male', 'Female', 'Non-binary', 'Prefer not to say']} placeholder="Select" />
               </div>
@@ -646,17 +646,17 @@ export default function CompanionProfilePage() {
                 <div>
                   <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Chat ₹/min</label>
                   <input type="number" min={0} value={section4.chatRatePerMinute} onChange={(e) => setSection4({ ...section4, chatRatePerMinute: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-pink-500/50" />
+                    className="w-full bg-white/[0.04] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-gold/50" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Call ₹/min</label>
                   <input type="number" min={0} value={section4.callRatePerMinute} onChange={(e) => setSection4({ ...section4, callRatePerMinute: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-pink-500/50" />
+                    className="w-full bg-white/[0.04] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-gold/50" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Book ₹/hr</label>
                   <input type="number" min={0} value={section4.hourlyRate} onChange={(e) => setSection4({ ...section4, hourlyRate: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-[#1a1a2e] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-pink-500/50" />
+                    className="w-full bg-white/[0.04] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-gold/50" />
                 </div>
               </div>
               <Button className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 border-0"

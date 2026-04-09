@@ -13,26 +13,27 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const variants = {
-      primary: 'bg-gold hover:bg-gold-hover text-charcoal font-semibold',
+      primary:
+        'bg-gold hover:bg-gold-hover text-charcoal font-semibold shadow-gold-sm hover:shadow-gold-md active:scale-[0.98]',
       outline:
-        'border-2 border-gold text-gold hover:bg-gold hover:text-charcoal',
-      ghost: 'text-gold hover:bg-gold/10',
-      danger: 'bg-error hover:bg-red-600 text-white',
+        'border border-gold/30 text-gold hover:bg-gold/10 hover:border-gold/50 active:scale-[0.98]',
+      ghost: 'text-gold hover:bg-gold/8',
+      danger: 'bg-red-500/90 hover:bg-red-500 text-white active:scale-[0.98]',
     };
 
     const sizes = {
-      sm: 'px-3 py-1.5 text-sm',
-      md: 'px-4 py-2.5 text-base',
-      lg: 'px-6 py-3 text-lg',
+      sm: 'px-3.5 py-1.5 text-sm rounded-lg',
+      md: 'px-5 py-2.5 text-sm rounded-xl',
+      lg: 'px-6 py-3 text-base rounded-xl',
     };
 
     return (
       <button
         ref={ref}
         className={cn(
-          'inline-flex items-center justify-center rounded-lg transition-all duration-200',
-          'focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-charcoal',
-          'disabled:opacity-50 disabled:cursor-not-allowed',
+          'inline-flex items-center justify-center font-medium transition-all duration-200',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-charcoal',
+          'disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100',
           variants[variant],
           sizes[size],
           className

@@ -80,7 +80,7 @@ export function CompanionCard({
         onMouseLeave={() => setIsHovered(false)}
       >
         {/* Image */}
-        <div className="relative aspect-[3/4] bg-charcoal-border overflow-hidden">
+        <div className="relative aspect-[3/4] bg-charcoal-surface overflow-hidden">
           {displayImage ? (
             <img
               src={displayImage}

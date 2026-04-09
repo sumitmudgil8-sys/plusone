@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Card } from '@/components/ui/Card';
 import { useLocation } from '@/hooks/useLocation';
 
 export default function LoginPage() {
@@ -13,7 +12,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div className="min-h-screen bg-charcoal flex items-center justify-center">
-          <div className="animate-spin h-8 w-8 border-2 border-[#C9A96E] border-t-transparent rounded-full" />
+          <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
         </div>
       }
     >
@@ -125,59 +124,67 @@ function LoginForm() {
   if (restoring) {
     return (
       <div className="min-h-screen bg-charcoal flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-2 border-[#C9A96E] border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-charcoal flex items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-md p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-serif font-bold text-gold mb-2">Plus One</h1>
-          <p className="text-white/60">Welcome back</p>
+    <div className="min-h-screen bg-charcoal flex items-center justify-center px-4 py-12 relative overflow-hidden">
+      {/* Ambient background glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-gold/[0.04] rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-gold/[0.02] rounded-full blur-[80px] pointer-events-none" />
+
+      <div className="w-full max-w-[420px] relative animate-fade-in">
+        {/* Logo area */}
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-serif font-bold text-gold-gradient tracking-tight">Plus One</h1>
+          <p className="text-white/40 text-sm mt-2 tracking-wide">Welcome back</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Input
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter your email"
-            required
-          />
+        {/* Form card */}
+        <div className="bg-charcoal-surface/80 border border-white/[0.06] rounded-2xl p-7 shadow-card backdrop-blur-sm">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <Input
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              required
+            />
 
-          <Input
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter your password"
-            required
-          />
+            <Input
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              required
+            />
 
-          {error && (
-            <div className="p-3 bg-error/10 border border-error/30 rounded-lg text-error text-sm">
-              {error}
-            </div>
-          )}
+            {error && (
+              <div className="p-3 bg-red-500/8 border border-red-500/15 rounded-xl text-red-400 text-sm">
+                {error}
+              </div>
+            )}
 
-          <Button type="submit" className="w-full" isLoading={loading}>
-            Sign In
-          </Button>
-        </form>
+            <Button type="submit" className="w-full" size="lg" isLoading={loading}>
+              Sign In
+            </Button>
+          </form>
+        </div>
 
-        <div className="mt-6 text-center">
-          <p className="text-white/60">
+        {/* Footer links */}
+        <div className="mt-8 text-center">
+          <p className="text-white/35 text-sm">
             Don&apos;t have an account?{' '}
-            <Link href="/signup" className="text-gold hover:underline">
+            <Link href="/signup" className="text-gold hover:text-gold-hover transition-colors">
               Sign up
             </Link>
           </p>
         </div>
-
-      </Card>
+      </div>
     </div>
   );
 }

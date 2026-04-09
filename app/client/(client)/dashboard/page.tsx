@@ -67,7 +67,7 @@ export default function ClientHome() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin h-8 w-8 border-2 border-[#C9A96E] border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -79,21 +79,21 @@ export default function ClientHome() {
       {/* Hero */}
       <div className="relative rounded-2xl overflow-hidden">
         {/* Ambient glow */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#C9A96E]/[0.08] via-[#C9A96E]/[0.03] to-transparent" />
-        <div className="absolute top-0 right-0 w-48 h-48 bg-[#C9A96E]/[0.06] rounded-full blur-3xl -translate-y-1/3 translate-x-1/4" />
+        <div className="absolute inset-0 bg-gold-subtle" />
+        <div className="absolute top-0 right-0 w-48 h-48 bg-gold/[0.05] rounded-full blur-3xl -translate-y-1/3 translate-x-1/4" />
 
         <div className="relative px-5 pt-8 pb-6">
-          <p className="text-white/40 text-sm font-medium tracking-wide">{getGreeting()}, {firstName}</p>
+          <p className="text-white/35 text-sm font-medium tracking-wide">{getGreeting()}, {firstName}</p>
           <h1 className="text-[26px] font-bold text-white mt-1.5 leading-[1.2]">
             Find your perfect<br />
-            <span className="text-[#C9A96E]">companion</span> tonight
+            <span className="text-gold-gradient">companion</span> tonight
           </h1>
-          <p className="text-white/30 text-[13px] mt-2.5 leading-relaxed max-w-[280px]">
+          <p className="text-white/25 text-[13px] mt-3 leading-relaxed max-w-[280px]">
             Verified profiles, real connections. Browse and connect instantly.
           </p>
           <Link
             href="/client/browse"
-            className="inline-flex items-center gap-2 mt-5 bg-[#C9A96E] text-black text-[13px] font-bold px-6 py-3 rounded-full hover:bg-[#d4b87a] active:scale-[0.97] transition-all shadow-lg shadow-[#C9A96E]/20"
+            className="inline-flex items-center gap-2 mt-5 bg-gold text-charcoal text-[13px] font-bold px-6 py-3 rounded-full hover:bg-gold-hover active:scale-[0.97] transition-all shadow-gold-md"
           >
             Explore All
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -106,12 +106,7 @@ export default function ClientHome() {
       {/* Today's Picks */}
       {todaysPicks.length > 0 && (
         <section>
-          <div className="flex items-baseline justify-between mb-3.5">
-            <h2 className="text-white font-semibold text-[15px]">Today&apos;s Picks</h2>
-            <Link href="/client/browse" className="text-[#C9A96E] text-xs font-medium">
-              See all &rarr;
-            </Link>
-          </div>
+          <SectionHeader title="Today's Picks" href="/client/browse" />
           <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
             {todaysPicks.map((c, i) => (
               <CompanionCard
@@ -128,14 +123,14 @@ export default function ClientHome() {
       {availableNow.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3.5">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
               </span>
               <h2 className="text-white font-semibold text-[15px]">Available Now</h2>
             </div>
-            <span className="text-white/25 text-xs">{availableNow.length} online</span>
+            <span className="text-white/20 text-xs">{availableNow.length} online</span>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
             {availableNow.map((c) => (
@@ -148,9 +143,7 @@ export default function ClientHome() {
       {/* Recommended */}
       {recommended.length > 0 && (
         <section>
-          <div className="flex items-baseline justify-between mb-3.5">
-            <h2 className="text-white font-semibold text-[15px]">Recommended</h2>
-          </div>
+          <SectionHeader title="Recommended" />
           <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
             {recommended.map((c) => (
               <CompanionCard key={c.id} companion={c} />
@@ -162,16 +155,16 @@ export default function ClientHome() {
       {/* Premium CTA */}
       {!isSubscribed && (
         <section>
-          <div className="relative rounded-2xl overflow-hidden border border-[#C9A96E]/15">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#C9A96E]/[0.06] to-transparent" />
+          <div className="relative rounded-2xl overflow-hidden border border-gold/10 gold-border-glow">
+            <div className="absolute inset-0 bg-gold-subtle" />
             <div className="relative flex items-center justify-between gap-4 p-5">
               <div>
-                <p className="text-[13px] font-bold text-white">Unlock all companions</p>
-                <p className="text-[11px] text-white/35 mt-0.5">Premium — unlimited profiles & priority access</p>
+                <p className="text-sm font-bold text-white">Unlock all companions</p>
+                <p className="text-[11px] text-white/30 mt-0.5">Premium — unlimited profiles & priority access</p>
               </div>
               <Link
                 href="/client/subscription"
-                className="shrink-0 bg-[#C9A96E] text-black text-[11px] font-bold px-4 py-2.5 rounded-full hover:bg-[#d4b87a] active:scale-[0.96] transition-all"
+                className="shrink-0 bg-gold text-charcoal text-[11px] font-bold px-4 py-2.5 rounded-full hover:bg-gold-hover active:scale-[0.96] transition-all shadow-gold-sm"
               >
                 Upgrade
               </Link>
@@ -182,12 +175,25 @@ export default function ClientHome() {
 
       {/* Trust strip */}
       <section className="pt-2">
-        <div className="flex items-center justify-center gap-6 py-4 border-t border-white/[0.04]">
-          <TrustItem icon="shield" label="Verified" />
-          <TrustItem icon="lock" label="Secure" />
+        <div className="flex items-center justify-center gap-8 py-5 border-t border-white/[0.04]">
+          <TrustItem icon="shield" label="Verified Profiles" />
+          <TrustItem icon="lock" label="Secure Payments" />
           <TrustItem icon="support" label="24/7 Support" />
         </div>
       </section>
+    </div>
+  );
+}
+
+function SectionHeader({ title, href }: { title: string; href?: string }) {
+  return (
+    <div className="flex items-baseline justify-between mb-3.5">
+      <h2 className="text-white font-semibold text-[15px]">{title}</h2>
+      {href && (
+        <Link href={href} className="text-gold/70 hover:text-gold text-xs font-medium transition-colors">
+          See all &rarr;
+        </Link>
+      )}
     </div>
   );
 }
@@ -200,11 +206,11 @@ function TrustItem({ icon, label }: { icon: 'shield' | 'lock' | 'support'; label
   };
 
   return (
-    <div className="flex items-center gap-1.5">
-      <svg className="w-3.5 h-3.5 text-[#C9A96E]/60" viewBox="0 0 20 20" fill="currentColor">
+    <div className="flex items-center gap-2">
+      <svg className="w-3.5 h-3.5 text-gold/40" viewBox="0 0 20 20" fill="currentColor">
         {icons[icon]}
       </svg>
-      <span className="text-white/20 text-[10px] font-medium">{label}</span>
+      <span className="text-white/20 text-[10px] font-medium tracking-wide">{label}</span>
     </div>
   );
 }

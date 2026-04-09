@@ -87,7 +87,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com https://www.gstatic.com",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https:",
               "font-src 'self'",
@@ -101,6 +101,8 @@ const nextConfig = {
                 "https://api.razorpay.com https://lumberjack.razorpay.com",
                 // Cloudinary (image uploads)
                 "https://api.cloudinary.com https://res.cloudinary.com",
+                // Firebase (FCM push notifications)
+                "https://fcm.googleapis.com https://fcmregistrations.googleapis.com https://firebaseinstallations.googleapis.com",
               ].join(' '),
               "media-src 'self'",
               "frame-src https://api.razorpay.com",

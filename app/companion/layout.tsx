@@ -7,6 +7,8 @@ import { useSocket } from '@/hooks/useSocket';
 import { PushPermissionPrompt } from '@/components/PushPermissionPrompt';
 import { ActiveCallBanner } from '@/components/ActiveCallBanner';
 import { CompanionCallProvider, useCompanionCall } from '@/contexts/CompanionCallContext';
+import { useFcm } from '@/hooks/useFcm';
+import { ForegroundNotification } from '@/components/ForegroundNotification';
 
 interface IncomingCall {
   sessionId: string;
@@ -82,10 +84,10 @@ function ForcePasswordModal({ onSuccess }: { onSuccess: () => void }) {
       // Prevent any click from reaching content underneath
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="w-full max-w-md mx-4 bg-[#1C1C1C] border border-[#3A3A3A] rounded-2xl p-8 shadow-2xl">
+      <div className="w-full max-w-md mx-4 bg-charcoal-elevated border border-white/[0.08] rounded-2xl p-8 shadow-2xl">
         <div className="text-center mb-7">
-          <div className="w-14 h-14 rounded-full bg-yellow-400/10 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-7 h-7 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-14 h-14 rounded-full bg-gold/10 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
@@ -107,7 +109,7 @@ function ForcePasswordModal({ onSuccess }: { onSuccess: () => void }) {
               placeholder="Enter your temporary password"
               required
               autoFocus
-              className="w-full bg-[#2A2A2A] border border-[#3A3A3A] text-white rounded-lg px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+              className="w-full bg-white/[0.04] border border-white/[0.08] text-white rounded-lg px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold/50"
             />
           </div>
 
@@ -120,7 +122,7 @@ function ForcePasswordModal({ onSuccess }: { onSuccess: () => void }) {
               onChange={handleChange}
               placeholder="At least 8 characters"
               required
-              className="w-full bg-[#2A2A2A] border border-[#3A3A3A] text-white rounded-lg px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+              className="w-full bg-white/[0.04] border border-white/[0.08] text-white rounded-lg px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold/50"
             />
           </div>
 
@@ -133,7 +135,7 @@ function ForcePasswordModal({ onSuccess }: { onSuccess: () => void }) {
               onChange={handleChange}
               placeholder="Repeat new password"
               required
-              className="w-full bg-[#2A2A2A] border border-[#3A3A3A] text-white rounded-lg px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+              className="w-full bg-white/[0.04] border border-white/[0.08] text-white rounded-lg px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold/50"
             />
           </div>
 
@@ -146,7 +148,7 @@ function ForcePasswordModal({ onSuccess }: { onSuccess: () => void }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+            className="w-full py-2.5 rounded-lg bg-gold hover:bg-gold-hover text-black font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed mt-2"
           >
             {loading ? 'Updating…' : 'Update Password'}
           </button>
@@ -168,13 +170,13 @@ function IncomingCallModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-sm mx-4 bg-[#1C1C1C] border border-[#3A3A3A] rounded-2xl p-8 shadow-2xl text-center space-y-5">
+      <div className="w-full max-w-sm mx-4 bg-charcoal-elevated border border-white/[0.08] rounded-2xl p-8 shadow-2xl text-center space-y-5">
         {call.callerAvatar ? (
           <img src={call.callerAvatar} alt={call.callerName}
-            className="w-20 h-20 rounded-full mx-auto object-cover ring-4 ring-yellow-400/30" />
+            className="w-20 h-20 rounded-full mx-auto object-cover ring-4 ring-gold/30" />
         ) : (
-          <div className="w-20 h-20 rounded-full mx-auto bg-yellow-400/20 flex items-center justify-center ring-4 ring-yellow-400/30">
-            <span className="text-2xl text-yellow-400 font-semibold">{call.callerName[0]}</span>
+          <div className="w-20 h-20 rounded-full mx-auto bg-gold/20 flex items-center justify-center ring-4 ring-gold/30">
+            <span className="text-2xl text-gold font-semibold">{call.callerName[0]}</span>
           </div>
         )}
         <div>
@@ -185,11 +187,11 @@ function IncomingCallModal({
         </div>
         <div className="flex gap-3">
           <button onClick={onDecline}
-            className="flex-1 py-2.5 rounded-lg border border-[#3A3A3A] text-white/70 hover:text-white hover:border-white/30 transition-colors">
+            className="flex-1 py-2.5 rounded-lg border border-white/[0.08] text-white/70 hover:text-white hover:border-white/30 transition-colors">
             Decline
           </button>
           <button onClick={onAccept}
-            className="flex-1 py-2.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black font-semibold transition-colors">
+            className="flex-1 py-2.5 rounded-lg bg-gold hover:bg-gold-hover text-black font-semibold transition-colors">
             Accept
           </button>
         </div>
@@ -226,13 +228,13 @@ function IncomingChatRequestModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-sm mx-4 bg-[#1C1C1C] border border-[#3A3A3A] rounded-2xl p-8 shadow-2xl text-center space-y-5">
+      <div className="w-full max-w-sm mx-4 bg-charcoal-elevated border border-white/[0.08] rounded-2xl p-8 shadow-2xl text-center space-y-5">
         {request.clientAvatar ? (
           <img src={request.clientAvatar} alt={request.clientName}
-            className="w-20 h-20 rounded-full mx-auto object-cover ring-4 ring-yellow-400/30" />
+            className="w-20 h-20 rounded-full mx-auto object-cover ring-4 ring-gold/30" />
         ) : (
-          <div className="w-20 h-20 rounded-full mx-auto bg-yellow-400/20 flex items-center justify-center ring-4 ring-yellow-400/30">
-            <span className="text-2xl text-yellow-400 font-semibold">{request.clientName[0]}</span>
+          <div className="w-20 h-20 rounded-full mx-auto bg-gold/20 flex items-center justify-center ring-4 ring-gold/30">
+            <span className="text-2xl text-gold font-semibold">{request.clientName[0]}</span>
           </div>
         )}
         <div>
@@ -247,20 +249,20 @@ function IncomingChatRequestModal({
           )}
         </div>
         {request.expiresAt && (
-          <div className="w-full bg-[#3A3A3A] rounded-full h-1">
+          <div className="w-full bg-white/[0.08] rounded-full h-1">
             <div
-              className="bg-yellow-400 h-1 rounded-full transition-all duration-1000"
+              className="bg-gold h-1 rounded-full transition-all duration-1000"
               style={{ width: `${Math.min(100, (timeLeft / 180) * 100)}%` }}
             />
           </div>
         )}
         <div className="flex gap-3">
           <button onClick={onDecline}
-            className="flex-1 py-2.5 rounded-lg border border-[#3A3A3A] text-white/70 hover:text-white hover:border-white/30 transition-colors">
+            className="flex-1 py-2.5 rounded-lg border border-white/[0.08] text-white/70 hover:text-white hover:border-white/30 transition-colors">
             Decline
           </button>
           <button onClick={onAccept}
-            className="flex-1 py-2.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black font-semibold transition-colors">
+            className="flex-1 py-2.5 rounded-lg bg-gold hover:bg-gold-hover text-black font-semibold transition-colors">
             Accept
           </button>
         </div>
@@ -296,7 +298,7 @@ function CompanionFloatingCall({
     !voiceCall.remoteUserJoined ? 'Waiting…' : 'In call';
 
   return (
-    <div className="fixed bottom-20 md:bottom-4 right-4 z-[90] bg-[#1a1a2e] border border-green-500/30 rounded-2xl shadow-2xl shadow-green-500/10 p-3 w-72">
+    <div className="fixed bottom-20 md:bottom-4 right-4 z-[90] bg-charcoal-surface border border-green-500/30 rounded-2xl shadow-2xl shadow-green-500/10 p-3 w-72">
       <div className="flex items-center gap-3">
         {activeCall.clientAvatar ? (
           <img src={activeCall.clientAvatar} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-green-500/30" />
@@ -374,9 +376,17 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
   const router = useRouter();
   const pathname = usePathname();
   const companionCall = useCompanionCall();
+  const { foregroundNotification, dismissNotification, requestPermission: requestFcmPermission } = useFcm();
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [incomingChatRequest, setIncomingChatRequest] = useState<IncomingChatRequest | null>(null);
+
+  // Auto-request FCM notification permission for companions on login.
+  // Companions need push notifications for incoming calls and chat requests.
+  useEffect(() => {
+    if (!userId) return;
+    requestFcmPermission();
+  }, [userId, requestFcmPermission]);
 
   // Fetch password state for the current user
   useEffect(() => {
@@ -585,7 +595,7 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
         <ForcePasswordModal onSuccess={handlePasswordChangeSuccess} />
       )}
 
-      <header className="bg-charcoal-surface border-b border-charcoal-border sticky top-0 z-40">
+      <header className="glass-strong border-b border-white/[0.06] sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-serif font-bold text-gold">Plus One</h1>
@@ -595,7 +605,7 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
             onClick={async () => {
               localStorage.removeItem('_pone_rt');
               sessionStorage.removeItem('_session_ok');
-              await fetch('/api/auth/logout', { method: 'POST' });
+              try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* proceed */ }
               window.location.href = '/login?logged_out=1';
             }}
             className="text-sm text-white/60 hover:text-white"
@@ -611,6 +621,7 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
 
       <CompanionNav />
       <PushPermissionPrompt />
+      <ForegroundNotification notification={foregroundNotification} onDismiss={dismissNotification} />
 
       {/* Floating call widget — visible on all pages when a call is active */}
       {companionCall.activeCall && companionCall.voiceCall.state !== 'ended' && (

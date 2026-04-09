@@ -28,8 +28,10 @@ export function AdminNav() {
   }, []);
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    window.location.href = '/login';
+    localStorage.removeItem('_pone_rt');
+    sessionStorage.removeItem('_session_ok');
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* proceed */ }
+    window.location.href = '/login?logged_out=1';
   };
 
   const isActive = (href: string) => {
@@ -47,7 +49,7 @@ export function AdminNav() {
   return (
     <>
       {/* Top Header Bar */}
-      <header className="fixed top-0 left-0 right-0 bg-charcoal-surface/80 backdrop-blur-xl border-b border-charcoal-border/50 z-50">
+      <header className="fixed top-0 left-0 right-0 glass-strong border-b border-white/[0.06] z-50">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-2.5">
@@ -76,7 +78,7 @@ export function AdminNav() {
       </header>
 
       {/* Bottom Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-charcoal-surface/95 backdrop-blur-xl border-t border-charcoal-border/50 z-50 safe-area-bottom">
+      <nav className="fixed bottom-0 left-0 right-0 glass-strong border-t border-white/[0.06] z-50 safe-area-bottom">
         <div className="max-w-lg mx-auto">
           <ul className="flex items-center justify-around px-2 py-1">
             {navItems.map((item) => {
