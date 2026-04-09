@@ -6,8 +6,8 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/client/dashboard', label: 'Home', icon: HomeIcon },
-  { href: '/client/inbox', label: 'Chats', icon: ChatIcon },
   { href: '/client/browse', label: 'Explore', icon: SearchIcon, isExplore: true },
+  { href: '/client/inbox', label: 'Chats', icon: ChatIcon },
   { href: '/client/bookings', label: 'Bookings', icon: CalendarIcon },
   { href: '/client/profile', label: 'Profile', icon: UserIcon },
 ];

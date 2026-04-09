@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { debitWallet, creditWallet } from '@/lib/wallet';
 import { getAblyClient, getUserChannelName } from '@/lib/ably';
-import { BILLING_TICK_SECONDS, BILLING_MIN_BALANCE_MINUTES } from '@/lib/constants';
+import { BILLING_TICK_SECONDS, BILLING_MIN_BALANCE_MINUTES, PLATFORM_COMMISSION_RATE } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Anti-double-billing: reject tick if too soon after last tick
-    const minTickMs = (BILLING_TICK_SECONDS - 10) * 1000; // 50s minimum
+    const minTickMs = (BILLING_TICK_SECONDS - 5) * 1000; // 55s minimum — tight window to prevent double-billing
     const msSinceLastTick = Date.now() - session.lastTickAt.getTime();
     if (msSinceLastTick < minTickMs) {
       return NextResponse.json(
@@ -104,8 +104,8 @@ export async function POST(request: NextRequest) {
       throw err;
     }
 
-    // Credit companion wallet — 40% of rate per minute (platform keeps 60%)
-    const companionEarning = Math.floor(ratePerMinute * 0.4);
+    // Credit companion wallet after platform commission
+    const companionEarning = Math.round(ratePerMinute * (1 - PLATFORM_COMMISSION_RATE));
     try {
       await creditWallet(
         companionId,

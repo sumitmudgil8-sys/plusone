@@ -50,7 +50,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const ably = getAblyClient();
-    await ably.channels.get(getUserChannelName(session.clientId)).publish('chat:declined', {
+    const eventName = session.type === 'VOICE' ? 'call:declined' : 'chat:declined';
+    await ably.channels.get(getUserChannelName(session.clientId)).publish(eventName, {
       sessionId,
     });
   } catch (err) {

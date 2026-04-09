@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { BILLING_GRACE_SECONDS } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
 // GET /api/billing/session-status?companionId=<User.id>
 // CLIENT: pass companionId — returns PENDING or ACTIVE session with that companion
 // COMPANION: pass clientId — returns PENDING or ACTIVE session with that client
-// Also auto-expires stale PENDING sessions past their expiresAt.
+// Also auto-expires stale PENDING sessions and orphaned ACTIVE sessions.
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['CLIENT', 'COMPANION']);
   if (auth.user === null) return auth.response;
@@ -60,6 +61,18 @@ export async function GET(request: NextRequest) {
       data: { status: 'EXPIRED' },
     });
     return NextResponse.json({ success: true, data: { status: 'EXPIRED', sessionId: session.id } });
+  }
+
+  // Auto-end orphaned ACTIVE sessions (no tick for > grace period)
+  if (session.status === 'ACTIVE' && session.lastTickAt) {
+    const graceThreshold = new Date(Date.now() - BILLING_GRACE_SECONDS * 1000);
+    if (session.lastTickAt < graceThreshold) {
+      await prisma.billingSession.update({
+        where: { id: session.id },
+        data: { status: 'ENDED', endedAt: new Date() },
+      });
+      return NextResponse.json({ success: true, data: { status: 'ENDED', sessionId: session.id } });
+    }
   }
 
   return NextResponse.json({

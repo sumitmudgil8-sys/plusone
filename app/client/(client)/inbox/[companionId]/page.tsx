@@ -234,9 +234,19 @@ export default function ClientInboxPage() {
     return onBalanceLow(() => setBalanceLow(true));
   }, [onBalanceLow]);
 
+  // Voice call — only pass sessionId once session is ACTIVE (companion has accepted).
+  // Passing it while PENDING causes a 409 from /api/agora/token since billing hasn't started yet.
+  const voiceSessionId = sessionType === 'VOICE' && sessionState === 'ACTIVE' && session?.sessionId ? session.sessionId : null;
+  const voiceCall = useVoiceCall(voiceSessionId, userId ?? '');
+
   // ── Wall-clock timer ──────────────────────────────────────────────────────
+  // For VOICE calls, timer starts when companion joins Agora (matches billing start).
+  // For CHAT calls, timer starts immediately when session goes ACTIVE.
+  const canStartTimer = sessionState === 'ACTIVE' && session &&
+    (sessionType !== 'VOICE' || voiceCall.remoteUserJoined);
+
   useEffect(() => {
-    if (sessionState !== 'ACTIVE' || !session) return;
+    if (!canStartTimer || !session) return;
     if (!sessionStartedAtMsRef.current) {
       sessionStartedAtMsRef.current = session.startedAt
         ? new Date(session.startedAt).getTime()
@@ -252,7 +262,7 @@ export default function ClientInboxPage() {
     if (liveTimerRef.current) clearInterval(liveTimerRef.current);
     liveTimerRef.current = setInterval(tick, 1000);
     return () => { if (liveTimerRef.current) clearInterval(liveTimerRef.current); };
-  }, [sessionState, session?.sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [canStartTimer, session?.sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync timer + billing tick on tab visibility change ────────────────────
   useEffect(() => {
@@ -303,19 +313,20 @@ export default function ClientInboxPage() {
     } catch { /* non-fatal */ }
   }, []);
 
+  // Billing tick — for VOICE calls, delay until companion actually joins Agora RTC
+  // so the client isn't billed for the Agora connection setup time.
+  // For CHAT sessions, start ticks immediately when session goes ACTIVE.
+  const canStartTicks = sessionState === 'ACTIVE' && session?.sessionId &&
+    (sessionType !== 'VOICE' || voiceCall.remoteUserJoined);
+
   useEffect(() => {
-    if (sessionState !== 'ACTIVE' || !session?.sessionId) return;
+    if (!canStartTicks || !session?.sessionId) return;
     if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
     const sid = session.sessionId;
     lastTickAtMsRef.current = Date.now();
     tickIntervalRef.current = setInterval(() => fireBillingTick(sid), BILLING_TICK_SECONDS * 1000);
     return () => { if (tickIntervalRef.current) clearInterval(tickIntervalRef.current); };
-  }, [sessionState, session?.sessionId, fireBillingTick]);
-
-  // Voice call — only pass sessionId once session is ACTIVE (companion has accepted).
-  // Passing it while PENDING causes a 409 from /api/agora/token since billing hasn't started yet.
-  const voiceSessionId = sessionType === 'VOICE' && sessionState === 'ACTIVE' && session?.sessionId ? session.sessionId : null;
-  const voiceCall = useVoiceCall(voiceSessionId, userId ?? '');
+  }, [canStartTicks, session?.sessionId, fireBillingTick]);
 
   const handleEndSession = useCallback(async () => {
     if (!session?.sessionId) return;

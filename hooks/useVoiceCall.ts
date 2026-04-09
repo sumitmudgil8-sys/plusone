@@ -34,7 +34,7 @@ interface VoiceCallHook {
  * - Remote user leaves: Fires user-left event; UI shows "disconnected"
  * - Browser close: beforeunload fires endCall to clean up
  * - Mute: Uses setMuted() which silences without unpublishing
- * - Token refresh: Not needed — Agora tokens last 24h, calls won't exceed that
+ * - Token refresh: Not needed — Agora tokens last 1h, calls won't exceed that
  */
 export function useVoiceCall(
   sessionId: string | null,
@@ -170,6 +170,27 @@ export function useVoiceCall(
 
         // ── Join channel ────────────────────────────────────────────────
         await agoraClient.join(appId, channelName, token, uid);
+
+        if (cancelled) {
+          await cleanup();
+          return;
+        }
+
+        // ── Verify session is still active after Agora join ───────────
+        // Handles race: companion declined while we were mid-join on Agora.
+        // Re-request an Agora token — the endpoint returns 409 if session
+        // is no longer ACTIVE (e.g. DECLINED, EXPIRED).
+        try {
+          const verifyRes = await fetch(`/api/agora/token?sessionId=${sessionId}`);
+          if (!verifyRes.ok) {
+            console.log('[useVoiceCall] session no longer active after Agora join, tearing down');
+            setState('ended');
+            await cleanup();
+            return;
+          }
+        } catch {
+          // Non-fatal — if we can't verify, continue with the call
+        }
 
         if (cancelled) {
           await cleanup();

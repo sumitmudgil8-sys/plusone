@@ -171,6 +171,14 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
         status: 'DECLINED',
       }));
     });
+    // Voice call declined — route through same callback set as chat:declined
+    ch.subscribe('call:declined', (msg) => {
+      const d = msg.data as Record<string, unknown>;
+      chatRequestResponseCBs.current.forEach(cb => cb({
+        sessionId: d.sessionId as string | undefined,
+        status: 'DECLINED',
+      }));
+    });
     ch.subscribe('chat:ended', (msg) => chatEndedCBs.current.forEach(cb => cb(msg.data)));
     ch.subscribe('chat:balance_low', (msg) => balanceLowCBs.current.forEach(cb => cb(msg.data)));
 
