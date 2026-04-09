@@ -1,10 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
 import type { RoomMessage } from '@/hooks/useSocket';
+import { useVoiceCall } from '@/hooks/useVoiceCall';
+import type { VoiceCallState } from '@/hooks/useVoiceCall';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +56,7 @@ function fmt(paise: number) {
 
 function CompanionInboxContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [threads, setThreads] = useState<Thread[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -70,6 +73,46 @@ function CompanionInboxContent() {
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionStartedAtMsRef = useRef<number | null>(null);
+
+  // ── Voice call ────────────────────────────────────────────────────────────
+  const voiceSessionId = searchParams.get('voiceSessionId');
+  const voiceCall = useVoiceCall(voiceSessionId ?? null, currentUserId ?? '');
+  const [voiceLiveSeconds, setVoiceLiveSeconds] = useState(0);
+  const voiceStartedAtRef = useRef<number | null>(null);
+  const voiceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (voiceCall.state !== 'connected') {
+      if (voiceTimerRef.current) clearInterval(voiceTimerRef.current);
+      if (voiceCall.state === 'ended' || voiceCall.state === 'error') {
+        setVoiceLiveSeconds(0);
+        voiceStartedAtRef.current = null;
+      }
+      return;
+    }
+    if (!voiceStartedAtRef.current) voiceStartedAtRef.current = Date.now();
+    const tick = () => {
+      if (!voiceStartedAtRef.current) return;
+      setVoiceLiveSeconds(Math.floor((Date.now() - voiceStartedAtRef.current) / 1000));
+    };
+    tick();
+    voiceTimerRef.current = setInterval(tick, 1000);
+    return () => { if (voiceTimerRef.current) clearInterval(voiceTimerRef.current); };
+  }, [voiceCall.state]);
+
+  useEffect(() => () => { if (voiceTimerRef.current) clearInterval(voiceTimerRef.current); }, []);
+
+  const handleEndVoiceCall = useCallback(async () => {
+    await voiceCall.endCall();
+    if (voiceSessionId) {
+      fetch('/api/billing/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: voiceSessionId }),
+      }).catch(() => {});
+    }
+    router.replace(`/companion/inbox${activeClientId ? `?active=${activeClientId}` : ''}`);
+  }, [voiceCall, voiceSessionId, router, activeClientId]);
 
   // Chat room ID — drives room subscription in useSocket
   const chatRoomId =
@@ -380,6 +423,21 @@ function CompanionInboxContent() {
         )}
       </div>
 
+      {/* ── Voice call overlay ──────────────────────────────────────────── */}
+      {voiceSessionId && (
+        <CompanionVoiceOverlay
+          callState={voiceCall.state}
+          isMuted={voiceCall.isMuted}
+          remoteUserJoined={voiceCall.remoteUserJoined}
+          error={voiceCall.error}
+          liveSeconds={voiceLiveSeconds}
+          clientName={activeClientInfo?.name ?? 'Client'}
+          clientAvatar={activeClientInfo?.avatar ?? null}
+          onToggleMute={voiceCall.toggleMute}
+          onEndCall={handleEndVoiceCall}
+        />
+      )}
+
     </div>
   );
 }
@@ -671,6 +729,89 @@ function CompanionChatPanel({
         </div>
       </div>
 
+    </div>
+  );
+}
+
+// ─── Companion voice overlay ──────────────────────────────────────────────────
+
+interface CompanionVoiceOverlayProps {
+  callState: VoiceCallState;
+  isMuted: boolean;
+  remoteUserJoined: boolean;
+  error: string | null;
+  liveSeconds: number;
+  clientName: string;
+  clientAvatar: string | null;
+  onToggleMute: () => Promise<void>;
+  onEndCall: () => Promise<void>;
+}
+
+function CompanionVoiceOverlay({
+  callState, isMuted, remoteUserJoined, error,
+  liveSeconds, clientName, clientAvatar,
+  onToggleMute, onEndCall,
+}: CompanionVoiceOverlayProps) {
+  const statusText =
+    callState === 'connecting' ? 'Connecting…' :
+    callState === 'error' ? (error ?? 'Call error') :
+    callState === 'ended' ? 'Call ended' :
+    !remoteUserJoined ? 'Waiting for client…' :
+    'In call';
+
+  return (
+    <div className="fixed inset-0 z-[80] flex flex-col items-center justify-between bg-[#0A0A12] px-8"
+      style={{ paddingTop: 'max(env(safe-area-inset-top), 48px)', paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}>
+
+      {/* Top: name + status */}
+      <div className="flex flex-col items-center gap-2 mt-8">
+        {clientAvatar
+          ? <img src={clientAvatar} alt={clientName} className="w-24 h-24 rounded-full object-cover ring-4 ring-amber-500/20" />
+          : <div className="w-24 h-24 rounded-full bg-amber-500/10 border-2 border-amber-500/20 flex items-center justify-center">
+              <span className="text-3xl font-semibold text-amber-300">{clientName[0]}</span>
+            </div>}
+        <p className="text-xl font-semibold text-white mt-3">{clientName}</p>
+        <p className="text-sm text-white/50">{statusText}</p>
+        {callState === 'connected' && remoteUserJoined && (
+          <p className="text-2xl font-mono text-white/70 mt-1">{formatDuration(liveSeconds)}</p>
+        )}
+        {callState === 'connected' && !remoteUserJoined && (
+          <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse mt-2" />
+        )}
+      </div>
+
+      {/* Bottom: controls */}
+      <div className="flex items-center justify-center gap-8">
+        {/* Mute */}
+        <button
+          onClick={onToggleMute}
+          disabled={callState !== 'connected'}
+          className="flex flex-col items-center gap-2 disabled:opacity-40"
+        >
+          <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${isMuted ? 'bg-white/20' : 'bg-white/10'}`}>
+            {isMuted ? (
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            ) : (
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+            )}
+          </div>
+          <span className="text-xs text-white/50">{isMuted ? 'Unmute' : 'Mute'}</span>
+        </button>
+
+        {/* End call */}
+        <button onClick={onEndCall} className="flex flex-col items-center gap-2">
+          <div className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center shadow-lg shadow-red-500/30 hover:bg-red-400 transition-colors active:scale-95">
+            <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
+            </svg>
+          </div>
+          <span className="text-xs text-white/50">End</span>
+        </button>
+      </div>
     </div>
   );
 }

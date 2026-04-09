@@ -272,7 +272,7 @@ export function CompanionProfile({
 
               {/* Call */}
               <a
-                href={`/client/inbox/${companion.id}`}
+                href={`/client/inbox/${companion.id}?mode=voice`}
                 onClick={(e) => {
                   if (callDisabled) e.preventDefault();
                 }}

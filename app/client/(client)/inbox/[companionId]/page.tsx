@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useSocket } from '@/hooks/useSocket';
 import type { RoomMessage } from '@/hooks/useSocket';
+import { useVoiceCall } from '@/hooks/useVoiceCall';
+import type { VoiceCallState } from '@/hooks/useVoiceCall';
 import { BILLING_TICK_SECONDS } from '@/lib/constants';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,9 +52,16 @@ export default function ClientInboxPage() {
   const [companion, setCompanion] = useState<CompanionInfo | null>(null);
   const [sessionState, setSessionState] = useState<SessionState>('LOADING');
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const [sessionType, setSessionType] = useState<'CHAT' | 'VOICE' | null>(null);
   const [balanceLow, setBalanceLow] = useState(false);
   const [sessionSummary, setSessionSummary] = useState<{ totalCharged: number; durationSeconds: number } | null>(null);
   const [liveSeconds, setLiveSeconds] = useState(0);
+
+  // Read ?mode=voice from URL on mount (no Suspense needed — window is always available in client components)
+  const voiceModeRef = useRef(false);
+  useEffect(() => {
+    voiceModeRef.current = new URLSearchParams(window.location.search).get('mode') === 'voice';
+  }, []);
 
   const sessionStartedAtMsRef = useRef<number | null>(null);
   const liveSecondsRef = useRef(0);
@@ -119,6 +128,7 @@ export default function ClientInboxPage() {
           durationSeconds,
           startedAt,
         });
+        setSessionType(d.data.type ?? 'CHAT');
         if (!sessionStartedAtMsRef.current) {
           sessionStartedAtMsRef.current = startedAt
             ? new Date(startedAt).getTime()
@@ -145,6 +155,39 @@ export default function ClientInboxPage() {
     const interval = setInterval(checkSession, 3000);
     return () => clearInterval(interval);
   }, [sessionState, checkSession]);
+
+  // Auto-start voice call when NO_SESSION and mode=voice
+  useEffect(() => {
+    if (sessionState !== 'NO_SESSION' || !voiceModeRef.current || !userId) return;
+    const start = async () => {
+      setSessionState('LOADING');
+      try {
+        const res = await fetch('/api/billing/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ companionId, type: 'VOICE' }),
+        });
+        const d = await res.json();
+        if (d.success) {
+          sessionStartedAtMsRef.current = Date.now();
+          setSession({
+            sessionId: d.data.sessionId,
+            ratePerMinute: d.data.ratePerMinute,
+            totalCharged: 0,
+            durationSeconds: 0,
+            startedAt: new Date().toISOString(),
+          });
+          setSessionType('VOICE');
+          setSessionState('ACTIVE');
+        } else {
+          setSessionState('NO_SESSION');
+        }
+      } catch {
+        setSessionState('NO_SESSION');
+      }
+    };
+    start();
+  }, [sessionState, userId, companionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ably: companion accepted
   useEffect(() => {
@@ -255,6 +298,10 @@ export default function ClientInboxPage() {
     return () => { if (tickIntervalRef.current) clearInterval(tickIntervalRef.current); };
   }, [sessionState, session?.sessionId, fireBillingTick]);
 
+  // Voice call — passes null when not a voice session so the hook stays idle
+  const voiceSessionId = sessionType === 'VOICE' && session?.sessionId ? session.sessionId : null;
+  const voiceCall = useVoiceCall(voiceSessionId, userId ?? '');
+
   const handleEndSession = useCallback(async () => {
     if (!session?.sessionId) return;
     const sid = session.sessionId;
@@ -274,6 +321,11 @@ export default function ClientInboxPage() {
       }
     } catch { /* keep local summary */ }
   }, [session]);
+
+  const handleEndVoiceCall = useCallback(async () => {
+    await voiceCall.endCall();
+    await handleEndSession();
+  }, [voiceCall, handleEndSession]);
 
   useEffect(() => {
     return () => {
@@ -296,6 +348,7 @@ export default function ClientInboxPage() {
 
   // ── ENDED ─────────────────────────────────────────────────────────────────
   if (sessionState === 'ENDED' && sessionSummary) {
+    const isVoiceEnded = sessionType === 'VOICE';
     return (
       <div className="fixed inset-0 z-[60] bg-[#0C0C14] flex flex-col items-center justify-center px-8 text-center gap-6">
         <div className="w-20 h-20 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
@@ -304,12 +357,12 @@ export default function ClientInboxPage() {
           </svg>
         </div>
         <div>
-          <h2 className="text-2xl font-semibold text-white mb-1">Chat Ended</h2>
+          <h2 className="text-2xl font-semibold text-white mb-1">{isVoiceEnded ? 'Call Ended' : 'Chat Ended'}</h2>
           <p className="text-white/40 text-sm">{formatDuration(sessionSummary.durationSeconds)} with {companionName}</p>
         </div>
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <Link href={`/client/booking/${companionId}`} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 text-black font-semibold text-sm text-center">
-            Chat Again
+            {isVoiceEnded ? 'Call Again' : 'Chat Again'}
           </Link>
           <Link href="/client/browse" className="w-full py-3.5 rounded-2xl bg-white/[0.05] border border-white/[0.08] text-white/60 font-medium text-sm text-center">
             Browse
@@ -382,6 +435,23 @@ export default function ClientInboxPage() {
       <div className="fixed inset-0 z-[60] bg-[#0C0C14] flex items-center justify-center">
         <div className="w-12 h-12 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
       </div>
+    );
+  }
+
+  // VOICE session: show voice call overlay
+  if (sessionType === 'VOICE') {
+    return (
+      <ClientVoiceOverlay
+        callState={voiceCall.state}
+        isMuted={voiceCall.isMuted}
+        remoteUserJoined={voiceCall.remoteUserJoined}
+        error={voiceCall.error}
+        liveSeconds={liveSeconds}
+        companionName={companionName}
+        companionAvatar={companionAvatar}
+        onToggleMute={voiceCall.toggleMute}
+        onEndCall={handleEndVoiceCall}
+      />
     );
   }
 
@@ -689,6 +759,98 @@ function ClientChatView({
         </div>
       </div>
 
+    </div>
+  );
+}
+
+// ─── Client voice overlay ─────────────────────────────────────────────────────
+
+interface ClientVoiceOverlayProps {
+  callState: VoiceCallState;
+  isMuted: boolean;
+  remoteUserJoined: boolean;
+  error: string | null;
+  liveSeconds: number;
+  companionName: string;
+  companionAvatar: string | null;
+  onToggleMute: () => Promise<void>;
+  onEndCall: () => Promise<void>;
+}
+
+function ClientVoiceOverlay({
+  callState, isMuted, remoteUserJoined, error,
+  liveSeconds, companionName, companionAvatar,
+  onToggleMute, onEndCall,
+}: ClientVoiceOverlayProps) {
+  const statusText =
+    callState === 'connecting' ? `Calling ${companionName}…` :
+    callState === 'error' ? (error ?? 'Call failed') :
+    callState === 'ended' ? 'Call ended' :
+    !remoteUserJoined ? `Waiting for ${companionName} to join…` :
+    `In call with ${companionName}`;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-between bg-[#0A0A12] px-8"
+      style={{ paddingTop: 'max(env(safe-area-inset-top), 48px)', paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}>
+
+      {/* Top: avatar + name + status */}
+      <div className="flex flex-col items-center gap-2 mt-8">
+        <div className="relative">
+          {companionAvatar
+            ? <img src={companionAvatar} alt={companionName} className="w-28 h-28 rounded-full object-cover ring-4 ring-amber-500/20" />
+            : <div className="w-28 h-28 rounded-full bg-amber-500/10 border-2 border-amber-500/20 flex items-center justify-center">
+                <span className="text-4xl font-semibold text-amber-300">{companionName[0]}</span>
+              </div>}
+          {callState === 'connected' && remoteUserJoined && (
+            <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-green-400 border-2 border-[#0A0A12]" />
+          )}
+        </div>
+        <p className="text-2xl font-semibold text-white mt-3">{companionName}</p>
+        <p className="text-sm text-white/50 text-center max-w-[240px]">{statusText}</p>
+        {callState === 'connected' && remoteUserJoined && (
+          <p className="text-3xl font-mono text-white/70 mt-2">{formatDuration(liveSeconds)}</p>
+        )}
+        {(callState === 'connecting' || (callState === 'connected' && !remoteUserJoined)) && (
+          <div className="flex gap-1.5 mt-3">
+            {[0, 200, 400].map(delay => (
+              <span key={delay} className="w-2 h-2 rounded-full bg-amber-400/60 animate-bounce" style={{ animationDelay: `${delay}ms` }} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom: controls */}
+      <div className="flex items-center justify-center gap-10">
+        {/* Mute toggle */}
+        <button
+          onClick={onToggleMute}
+          disabled={callState !== 'connected'}
+          className="flex flex-col items-center gap-2 disabled:opacity-40"
+        >
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${isMuted ? 'bg-white/25' : 'bg-white/10'}`}>
+            {isMuted ? (
+              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            ) : (
+              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+            )}
+          </div>
+          <span className="text-xs text-white/50">{isMuted ? 'Unmute' : 'Mute'}</span>
+        </button>
+
+        {/* End call */}
+        <button onClick={onEndCall} className="flex flex-col items-center gap-2">
+          <div className="w-18 h-18 w-[72px] h-[72px] rounded-full bg-red-500 flex items-center justify-center shadow-lg shadow-red-500/30 hover:bg-red-400 transition-colors active:scale-95">
+            <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
+            </svg>
+          </div>
+          <span className="text-xs text-white/50">End Call</span>
+        </button>
+      </div>
     </div>
   );
 }

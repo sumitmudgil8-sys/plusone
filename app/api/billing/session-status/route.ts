@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
     success: true,
     data: {
       status: session.status,
+      type: session.type,
       sessionId: session.id,
       ratePerMinute: session.ratePerMinute,
       totalCharged: session.totalCharged,

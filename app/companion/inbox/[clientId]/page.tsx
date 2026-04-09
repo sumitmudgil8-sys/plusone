@@ -8,7 +8,10 @@ export default function CompanionChatRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(`/companion/inbox?active=${clientId}`);
+    const params = new URLSearchParams(window.location.search);
+    const voiceSessionId = params.get('voiceSessionId');
+    const url = `/companion/inbox?active=${clientId}${voiceSessionId ? `&voiceSessionId=${voiceSessionId}` : ''}`;
+    router.replace(url);
   }, [clientId, router]);
 
   return (
