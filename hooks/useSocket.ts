@@ -198,7 +198,7 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
   //
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!chatRoomId || !realtimeRef.current) return;
+    if (!chatRoomId || !realtimeRef.current || !isConnected) return;
 
     // Clear state from any previous room
     setRoomMessages([]);
@@ -241,7 +241,7 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
       roomChannelRef.current = null;
       if (typingClearRef.current) clearTimeout(typingClearRef.current);
     };
-  }, [chatRoomId]); // intentionally omits realtimeRef — it's a ref, always current
+  }, [chatRoomId, isConnected]); // isConnected ensures room sub runs after connection is up
 
   // ── Publish to room ───────────────────────────────────────────────────────
   // Uses refs (not state) so this callback never becomes stale and never needs
