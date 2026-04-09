@@ -129,6 +129,14 @@ export default function ClientInboxPage() {
     if (sessionStateRef.current === 'PENDING') checkSession();
   }, [isConnected, checkSession]);
 
+  // Periodic polling while PENDING — catches the case where Ably chat:accepted
+  // is missed (subscription not yet ready when companion accepts)
+  useEffect(() => {
+    if (sessionState !== 'PENDING') return;
+    const interval = setInterval(checkSession, 3000);
+    return () => clearInterval(interval);
+  }, [sessionState, checkSession]);
+
   // Fetch messages (used for initial load + polling)
   const fetchMessages = useCallback(async () => {
     if (!userId) return;

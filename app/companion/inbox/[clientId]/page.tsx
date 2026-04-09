@@ -99,19 +99,24 @@ export default function CompanionChatPage() {
     fetchData();
   }, [clientId]);
 
-  // Check for active billing session
+  // Poll for active billing session until found (handles race where accept API
+  // hasn't completed yet when this page first loads)
   useEffect(() => {
-    if (!user) return;
-    fetch('/api/companion/active-session')
-      .then((r) => r.json())
-      .then((d) => {
+    if (!user || chatSessionActive || sessionEnded) return;
+    const checkActiveSession = async () => {
+      try {
+        const res = await fetch('/api/companion/active-session');
+        const d = await res.json();
         if (d.data?.active && d.data.clientId === clientId) {
           setChatSessionActive(true);
           setChatSessionId(d.data.sessionId);
         }
-      })
-      .catch(() => {});
-  }, [user, clientId]);
+      } catch { /* non-fatal */ }
+    };
+    checkActiveSession();
+    const interval = setInterval(checkActiveSession, 2000);
+    return () => clearInterval(interval);
+  }, [user, clientId, chatSessionActive, sessionEnded]);
 
   // Fetch messages
   const fetchMessages = useCallback(async () => {

@@ -360,9 +360,8 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
     if (!incomingChatRequest) return;
     const { requestId, sessionId, clientId } = incomingChatRequest;
     setIncomingChatRequest(null);
-    // Navigate immediately — don't wait for API round-trip
-    router.push(`/companion/inbox/${clientId}`);
-    // Accept in background; [clientId] page picks up session via chat:accepted Ably event
+    // Complete the accept API call FIRST so the session is ACTIVE in DB
+    // before the companion chat page loads and polls /api/companion/active-session.
     try {
       if (sessionId) {
         await fetch('/api/billing/accept', {
@@ -378,8 +377,9 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
         });
       }
     } catch {
-      // Non-fatal
+      // Non-fatal — chat page will retry via polling
     }
+    router.push(`/companion/inbox/${clientId}`);
   }, [incomingChatRequest, router]);
 
   const handleDeclineChatRequest = useCallback(async () => {
