@@ -102,6 +102,7 @@ export async function GET(request: NextRequest) {
           id: companion.id,
           name: profile.name,
           bio: profile.bio,
+          tagline: profile.tagline,
           // Pricing — all in paise
           hourlyRatePaise: profile.hourlyRate,
           chatRatePerMinute: profile.chatRatePerMinute,
@@ -118,10 +119,14 @@ export async function GET(request: NextRequest) {
           lat: profile.lat,
           lng: profile.lng,
           availability: JSON.parse(profile.availability || '[]'),
+          availabilityStatus: profile.availabilityStatus,
           gender: profile.gender,
           age: profile.age,
+          city: profile.city,
           languages: JSON.parse(profile.languages || '[]'),
           interests: JSON.parse(profile.interests || '[]'),
+          tags: JSON.parse(profile.tags || '[]'),
+          personalityTags: JSON.parse(profile.personalityTags || '[]'),
           distance,
           isFavorited: companion.favorites.length > 0,
         };

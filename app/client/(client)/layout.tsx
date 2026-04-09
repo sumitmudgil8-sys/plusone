@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { ClientNav } from '@/components/layout/ClientNav';
 import { PushPermissionPrompt } from '@/components/PushPermissionPrompt';
 import { ActiveCallBanner } from '@/components/ActiveCallBanner';
@@ -33,13 +34,22 @@ export default function ClientLayout({
   };
 
   return (
-    <div className="min-h-screen bg-charcoal flex flex-col">
-      <header className="bg-charcoal-surface border-b border-charcoal-border sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-serif font-bold text-gold">Plus One</h1>
-          <button onClick={handleLogout} className="text-sm text-white/60 hover:text-white">
-            Logout
-          </button>
+    <div className="min-h-screen bg-[#0B0B0B] flex flex-col">
+      <header className="bg-[#0B0B0B] border-b border-white/5 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <h1 className="text-xl font-serif font-bold text-[#C9A96E]">Plus One</h1>
+          <div className="flex items-center gap-3">
+            <Link href="/client/wallet" className="text-white/50 hover:text-white transition-colors">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 110-6h5.25A2.25 2.25 0 0121 6v6zm0 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18V6a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 6" />
+              </svg>
+            </Link>
+            <button onClick={handleLogout} className="text-white/40 hover:text-white transition-colors">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 

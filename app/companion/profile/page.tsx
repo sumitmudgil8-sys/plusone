@@ -156,17 +156,22 @@ export default function CompanionProfilePage() {
         setUser(u);
         const p = u.companionProfile ?? {};
         setAvatarUrl(p.avatarUrl ?? '');
+
+        // languages and personalityTags come from Prisma as JSON strings — parse them
+        const parsedLangs = typeof p.languages === 'string' ? JSON.parse(p.languages || '[]') : (p.languages ?? []);
+        const parsedPTags = typeof p.personalityTags === 'string' ? JSON.parse(p.personalityTags || '[]') : (p.personalityTags ?? []);
+
         setSection1({
           name: p.name ?? '', bio: p.bio ?? '', tagline: p.tagline ?? '',
           age: p.age != null ? String(p.age) : '', gender: p.gender ?? '', city: p.city ?? '',
-          languages: p.languages ?? [], education: p.education ?? '', occupation: p.occupation ?? '',
+          languages: parsedLangs, education: p.education ?? '', occupation: p.occupation ?? '',
         });
         setSection2({
           height: p.height ?? '', weight: p.weight ?? '', bodyType: p.bodyType ?? '',
           hairColor: p.hairColor ?? '', eyeColor: p.eyeColor ?? '', ethnicity: p.ethnicity ?? '',
           foodPreference: p.foodPreference ?? '', drinking: p.drinking ?? '', smoking: p.smoking ?? '',
         });
-        setSection3({ personalityTags: p.personalityTags ?? [] });
+        setSection3({ personalityTags: parsedPTags });
         setSection4({
           chatRatePerMinute: Math.round((p.chatRatePerMinute ?? 2000) / 100),
           callRatePerMinute: Math.round((p.callRatePerMinute ?? 3200) / 100),

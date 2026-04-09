@@ -1,48 +1,40 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { CompanionCard } from '@/components/CompanionCard';
+import type { CompanionCardData } from '@/components/CompanionCard';
 
-interface RecentlyViewedItem {
-  companionId: string;
-  name: string;
-  primaryImage: string | null;
-  hourlyRatePaise: number;
-  viewedAt: string;
+interface Companion extends CompanionCardData {
+  distance: number;
+  isFavorited: boolean;
 }
 
-export default function ClientDashboard() {
-  const [user, setUser] = useState<any>(null);
-  const [favorites, setFavorites] = useState<any[]>([]);
-  const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedItem[]>([]);
+const SCARCITY_LABELS = ['Just joined', 'High demand', 'Top rated', 'Rising star', 'Popular'];
+
+export default function ClientHome() {
+  const [user, setUser] = useState<{ clientProfile?: { name?: string }; subscriptionStatus?: string } | null>(null);
+  const [companions, setCompanions] = useState<Companion[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [userRes, favRes, viewedRes] = await Promise.all([
+        const [userRes, companionsRes] = await Promise.all([
           fetch('/api/users/me'),
-          fetch('/api/favorites'),
-          fetch('/api/client/recently-viewed'),
+          fetch('/api/companions'),
         ]);
 
         if (userRes.ok) {
           const userData = await userRes.json();
           setUser(userData.user);
         }
-        if (favRes.ok) {
-          const favData = await favRes.json();
-          setFavorites(favData.favorites ?? []);
-        }
-        if (viewedRes.ok) {
-          const viewedData = await viewedRes.json();
-          setRecentlyViewed(viewedData.data ?? []);
+        if (companionsRes.ok) {
+          const data = await companionsRes.json();
+          setCompanions(data.companions ?? []);
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error fetching home data:', error);
       } finally {
         setLoading(false);
       }
@@ -53,154 +45,163 @@ export default function ClientDashboard() {
 
   const isSubscribed = user?.subscriptionStatus === 'ACTIVE';
 
+  // Curate sections from the companion list
+  const { todaysPicks, availableNow, recommended } = useMemo(() => {
+    const accessible = companions.filter((c) => c.accessible);
+    const online = companions.filter((c) => c.availabilityStatus === 'AVAILABLE');
+    const topRated = [...companions].sort((a, b) => b.averageRating - a.averageRating);
+
+    // Today's Picks — mix of top rated + accessible, max 6
+    const picks = accessible.length > 0 ? accessible.slice(0, 6) : companions.slice(0, 6);
+
+    // Available Now — online companions, max 6
+    const available = online.slice(0, 6);
+
+    // Recommended — top rated, excluding duplicates from picks, max 6
+    const pickIds = new Set(picks.map((p) => p.id));
+    const recs = topRated.filter((c) => !pickIds.has(c.id)).slice(0, 6);
+
+    return { todaysPicks: picks, availableNow: available, recommended: recs };
+  }, [companions]);
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
+      <div className="flex items-center justify-center h-screen bg-[#0B0B0B]">
+        <div className="animate-spin h-8 w-8 border-2 border-[#C9A96E] border-t-transparent rounded-full" />
       </div>
     );
   }
 
+  const firstName = user?.clientProfile?.name?.split(' ')[0] || 'there';
+
   return (
-    <div className="space-y-6">
-      {/* Welcome */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">
-            Welcome back, {user?.clientProfile?.name || 'Guest'}
+    <div className="space-y-8 -mx-4 -mt-6">
+      {/* Hero Section */}
+      <div className="relative px-5 pt-8 pb-6">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#C9A96E]/8 to-transparent pointer-events-none" />
+        <div className="relative">
+          <p className="text-white/50 text-sm">Good evening, {firstName}</p>
+          <h1 className="text-2xl font-bold text-white mt-1 leading-tight">
+            Find your perfect<br />
+            <span className="text-[#C9A96E]">companion</span> tonight
           </h1>
-          <p className="text-white/60">Ready to find your perfect companion?</p>
+          <p className="text-white/40 text-sm mt-2 max-w-xs">
+            Hand-picked profiles, verified and ready to connect.
+          </p>
+          <Link
+            href="/client/browse"
+            className="inline-flex items-center gap-2 mt-4 bg-[#C9A96E] text-black text-sm font-semibold px-5 py-2.5 rounded-full hover:bg-[#d4b87a] transition-colors"
+          >
+            Explore All
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
         </div>
-        <Badge
-          variant={isSubscribed ? 'gold' : 'outline'}
-          className="text-sm"
-        >
-          {isSubscribed ? 'Subscribed' : 'Free'}
-        </Badge>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Card className="text-center">
-          <p className="text-3xl font-bold text-white">{favorites.length}</p>
-          <p className="text-sm text-white/60">Favorites</p>
-        </Card>
-        <Card className="text-center">
-          <p className="text-3xl font-bold text-white">{recentlyViewed.length}</p>
-          <p className="text-sm text-white/60">Profiles Viewed</p>
-        </Card>
-        <Card className="text-center col-span-2 md:col-span-1">
-          <p className="text-3xl font-bold text-gold">{isSubscribed ? '∞' : String(6)}</p>
-          <p className="text-sm text-white/60">Companions Access</p>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <Card>
-        <h2 className="font-medium text-white mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link href="/client/browse">
-            <Button variant="outline" className="w-full">
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              Browse
-            </Button>
-          </Link>
-          <Link href="/client/bookings">
-            <Button variant="outline" className="w-full">
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Bookings
-            </Button>
-          </Link>
-          <Link href="/client/favorites">
-            <Button variant="outline" className="w-full">
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-              Favorites
-            </Button>
-          </Link>
-          <Link href="/client/profile">
-            <Button variant="outline" className="w-full">
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              Profile
-            </Button>
-          </Link>
-        </div>
-      </Card>
-
-      {/* Recently Viewed */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-medium text-white">Recently Viewed</h2>
-          <Link href="/client/browse" className="text-sm text-gold hover:underline">
-            Browse All
-          </Link>
-        </div>
-
-        {recentlyViewed.length === 0 ? (
-          <Card className="text-center py-8">
-            <p className="text-white/50 text-sm">No profiles viewed yet</p>
-            <Link href="/client/browse" className="mt-3 inline-block">
-              <Button size="sm">Browse Companions</Button>
+      {/* Today's Picks */}
+      {todaysPicks.length > 0 && (
+        <section className="px-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-white font-semibold text-base">Today&apos;s Picks</h2>
+              <p className="text-white/30 text-xs mt-0.5">Curated just for you</p>
+            </div>
+            <Link href="/client/browse" className="text-[#C9A96E] text-xs font-medium">
+              See all
             </Link>
-          </Card>
-        ) : (
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth -mx-4 px-4">
-            {recentlyViewed.map((item) => (
-              <Link
-                key={item.companionId}
-                href={`/client/booking/${item.companionId}`}
-                className="shrink-0 snap-start"
-                style={{ width: 160 }}
-              >
-                <div className="relative rounded-xl overflow-hidden bg-charcoal-border" style={{ aspectRatio: '3/4' }}>
-                  {item.primaryImage ? (
-                    <img
-                      src={item.primaryImage}
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-3xl font-medium text-white/30 bg-charcoal">
-                      {item.name.charAt(0)}
-                    </div>
-                  )}
-                  {/* Gradient */}
-                  <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />
-                  {/* Labels */}
-                  <div className="absolute bottom-0 inset-x-0 p-2">
-                    <p className="text-white text-xs font-semibold truncate">{item.name}</p>
-                    {item.hourlyRatePaise > 0 && (
-                      <p className="text-white/60 text-xs">
-                        ₹{Math.round(item.hourlyRatePaise / 100).toLocaleString('en-IN')}/hr
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </Link>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth -mx-5 px-5 scrollbar-hide">
+            {todaysPicks.map((c, i) => (
+              <CompanionCard
+                key={c.id}
+                companion={c}
+                scarcityLabel={i < 2 ? SCARCITY_LABELS[i % SCARCITY_LABELS.length] : undefined}
+              />
             ))}
           </div>
-        )}
-      </div>
+        </section>
+      )}
+
+      {/* Available Now */}
+      {availableNow.length > 0 && (
+        <section className="px-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+              <h2 className="text-white font-semibold text-base">Available Now</h2>
+            </div>
+            <span className="text-white/30 text-xs">{availableNow.length} online</span>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth -mx-5 px-5 scrollbar-hide">
+            {availableNow.map((c) => (
+              <CompanionCard key={c.id} companion={c} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Recommended for You */}
+      {recommended.length > 0 && (
+        <section className="px-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-white font-semibold text-base">Recommended for You</h2>
+              <p className="text-white/30 text-xs mt-0.5">Based on your preferences</p>
+            </div>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth -mx-5 px-5 scrollbar-hide">
+            {recommended.map((c) => (
+              <CompanionCard key={c.id} companion={c} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Subscription CTA (free users) */}
       {!isSubscribed && (
-        <div className="rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/5 to-transparent p-5 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-white">Unlock all companions</p>
-            <p className="text-xs text-white/50 mt-0.5">₹2,999/month — unlimited access</p>
+        <section className="px-5">
+          <div className="rounded-2xl border border-[#C9A96E]/20 bg-gradient-to-br from-[#C9A96E]/5 to-transparent p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-white">Unlock all companions</p>
+                <p className="text-xs text-white/40 mt-0.5">Premium access — unlimited profiles</p>
+              </div>
+              <Link
+                href="/client/subscription"
+                className="shrink-0 bg-[#C9A96E] text-black text-xs font-semibold px-4 py-2 rounded-full hover:bg-[#d4b87a] transition-colors"
+              >
+                Subscribe
+              </Link>
+            </div>
           </div>
-          <Link href="/client/subscription">
-            <Button size="sm" className="shrink-0">Subscribe</Button>
-          </Link>
-        </div>
+        </section>
       )}
+
+      {/* Trust Strip */}
+      <section className="px-5 pb-8">
+        <div className="flex items-center justify-center gap-6 py-4 border-t border-white/5">
+          <div className="flex items-center gap-1.5">
+            <svg className="w-4 h-4 text-[#C9A96E]" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span className="text-white/30 text-[11px]">Verified Profiles</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <svg className="w-4 h-4 text-[#C9A96E]" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+            </svg>
+            <span className="text-white/30 text-[11px]">Secure Payments</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <svg className="w-4 h-4 text-[#C9A96E]" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
+            </svg>
+            <span className="text-white/30 text-[11px]">24/7 Support</span>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -96,3 +96,12 @@ input[type="range"]::-webkit-slider-runnable-track {
 .animate-slide-up {
   animation: slideUp 0.4s ease-out;
 }
+
+/* Hide scrollbar for horizontal scroll sections */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
