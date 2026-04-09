@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyJWT } from '@/lib/auth';
+import { SessionRestorer } from '@/components/SessionRestorer';
 
 export default function HomePage() {
   const cookieStore = cookies();
@@ -24,6 +25,8 @@ export default function HomePage() {
       className="w-screen h-screen bg-black flex items-center justify-center overflow-hidden"
       style={{ fontFamily: "'DM Sans', sans-serif" }}
     >
+      {/* Silently restore session from localStorage refresh token (Samsung/Android cookie-clearing fix) */}
+      <SessionRestorer />
       {/*
        * Phone card:
        *   – On mobile  : fills the entire screen (w-full h-full)

@@ -41,6 +41,18 @@ export default function LoginPage() {
         return;
       }
 
+      // Save refresh token to localStorage so the session can be silently
+      // restored if Android/Samsung clears the httpOnly cookie.
+      try {
+        const sessionRes = await fetch('/api/session');
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          if (sessionData.refreshToken) {
+            localStorage.setItem('_pone_rt', sessionData.refreshToken);
+          }
+        }
+      } catch { /* non-fatal — auth still works via cookie */ }
+
       // Best-effort location update after login — never blocks redirect
       updateLocation();
 

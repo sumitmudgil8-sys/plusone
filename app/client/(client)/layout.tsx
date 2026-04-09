@@ -1,4 +1,5 @@
 "use client";
+import { useEffect } from 'react';
 import { ClientNav } from '@/components/layout/ClientNav';
 import { PushPermissionPrompt } from '@/components/PushPermissionPrompt';
 
@@ -7,18 +8,35 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Extend the auth cookie once per app open (sliding 30-day window).
+  // sessionStorage is cleared when the app is fully closed, so this runs
+  // on every fresh open but not on every page navigation within a session.
+  useEffect(() => {
+    if (sessionStorage.getItem('_session_ok')) return;
+    fetch('/api/session')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.refreshToken) {
+          localStorage.setItem('_pone_rt', d.refreshToken);
+          sessionStorage.setItem('_session_ok', '1');
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleLogout = async () => {
+    localStorage.removeItem('_pone_rt');
+    sessionStorage.removeItem('_session_ok');
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
+  };
+
   return (
     <div className="min-h-screen bg-charcoal flex flex-col">
       <header className="bg-charcoal-surface border-b border-charcoal-border sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-serif font-bold text-gold">Plus One</h1>
-          <button
-            onClick={async () => {
-              await fetch('/api/auth/logout', { method: 'POST' });
-              window.location.href = '/login';
-            }}
-            className="text-sm text-white/60 hover:text-white"
-          >
+          <button onClick={handleLogout} className="text-sm text-white/60 hover:text-white">
             Logout
           </button>
         </div>

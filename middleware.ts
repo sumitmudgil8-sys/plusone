@@ -10,6 +10,7 @@ const publicRoutes = [
   '/offline',
   '/_next',
   '/api/auth',   // includes /api/auth/okyc/* (requireAuth handles internal auth)
+  '/api/session', // handles its own auth — POST used by SessionRestorer without a cookie
   '/terms',
   '/privacy',
   '/refund-policy',

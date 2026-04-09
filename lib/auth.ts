@@ -102,3 +102,29 @@ export function clearAuthCookie(response: NextResponse): NextResponse {
 export function verifyToken(token: string): JWTPayload | null {
   return verifyJWT(token);
 }
+
+// ── Refresh tokens ────────────────────────────────────────────────────────
+// Stored in localStorage by the client; used to silently restore the
+// httpOnly auth cookie when Android/Samsung clears browser cookie storage.
+
+interface RefreshPayload {
+  id: string;
+  role: string;
+  type: 'refresh';
+  iat?: number;
+  exp?: number;
+}
+
+export function signRefreshToken(payload: { id: string; role: string }): string {
+  return jwt.sign({ ...payload, type: 'refresh' }, JWT_SECRET, { expiresIn: '90d' });
+}
+
+export function verifyRefreshToken(token: string): { id: string; role: string } | null {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as RefreshPayload;
+    if (decoded.type !== 'refresh') return null;
+    return { id: decoded.id, role: decoded.role };
+  } catch {
+    return null;
+  }
+}

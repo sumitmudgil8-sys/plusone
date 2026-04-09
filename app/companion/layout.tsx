@@ -286,6 +286,20 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
       .catch(() => {});
   }, []);
 
+  // Extend the auth cookie once per app open (sliding 30-day window)
+  useEffect(() => {
+    if (sessionStorage.getItem('_session_ok')) return;
+    fetch('/api/session')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.refreshToken) {
+          localStorage.setItem('_pone_rt', d.refreshToken);
+          sessionStorage.setItem('_session_ok', '1');
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const { onIncomingCall, onIncomingChatRequest } = useSocket(userId, 'COMPANION');
 
   useEffect(() => {
@@ -408,6 +422,8 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
           </div>
           <button
             onClick={async () => {
+              localStorage.removeItem('_pone_rt');
+              sessionStorage.removeItem('_session_ok');
               await fetch('/api/auth/logout', { method: 'POST' });
               window.location.href = '/login';
             }}
