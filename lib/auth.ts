@@ -93,7 +93,7 @@ export function clearAuthCookie(response: NextResponse): NextResponse {
     value: '',
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',  // Must match setAuthCookie's sameSite to properly clear
     maxAge: 0,
     path: '/',
   });

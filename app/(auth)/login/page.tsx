@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -9,16 +9,33 @@ import { Card } from '@/components/ui/Card';
 import { useLocation } from '@/hooks/useLocation';
 
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-charcoal flex items-center justify-center">
+          <div className="animate-spin h-8 w-8 border-2 border-[#C9A96E] border-t-transparent rounded-full" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { updateLocation } = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [restoring, setRestoring] = useState(true);
+  const isManualLogout = searchParams.get('logged_out') === '1';
+  const [restoring, setRestoring] = useState(!isManualLogout);
 
   // Auto-restore session from localStorage refresh token
   useEffect(() => {
+    if (isManualLogout) { setRestoring(false); return; }
     const rt = localStorage.getItem('_pone_rt');
     if (!rt) { setRestoring(false); return; }
 

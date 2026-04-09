@@ -50,7 +50,7 @@ export default function ClientLayout({
     localStorage.removeItem('_pone_rt');
     sessionStorage.removeItem('_session_ok');
     await fetch('/api/auth/logout', { method: 'POST' });
-    window.location.href = '/login';
+    window.location.href = '/login?logged_out=1';
   };
 
   return (
