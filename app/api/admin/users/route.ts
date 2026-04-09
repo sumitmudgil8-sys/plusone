@@ -47,7 +47,7 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { id, isBanned, subscriptionTier } = body;
+    const { id, isBanned, subscriptionTier, subscriptionStatus, subscriptionPlan, subscriptionExpiresAt } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -56,9 +56,14 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     if (isBanned !== undefined) updateData.isBanned = isBanned;
     if (subscriptionTier !== undefined) updateData.subscriptionTier = subscriptionTier;
+    if (subscriptionStatus !== undefined) updateData.subscriptionStatus = subscriptionStatus;
+    if (subscriptionPlan !== undefined) updateData.subscriptionPlan = subscriptionPlan;
+    if (subscriptionExpiresAt !== undefined) {
+      updateData.subscriptionExpiresAt = subscriptionExpiresAt ? new Date(subscriptionExpiresAt) : null;
+    }
 
     const user = await prisma.user.update({
       where: { id },

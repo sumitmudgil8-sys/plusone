@@ -42,11 +42,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { email, name, hourlyRate = 2000 } = body;
+    const { email, name, password, hourlyRate = 2000, chatRatePerMinute, callRatePerMinute } = body;
 
     if (!email || !name) {
       return NextResponse.json(
         { error: 'Email and name are required' },
+        { status: 400 }
+      );
+    }
+
+    if (password && password.length < 6) {
+      return NextResponse.json(
+        { error: 'Password must be at least 6 characters' },
         { status: 400 }
       );
     }
@@ -63,14 +70,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate random password
-    const tempPassword = crypto.randomBytes(6).toString('hex');
+    // Use admin-provided password or generate a random one
+    const tempPassword = password || crypto.randomBytes(6).toString('hex');
     const passwordHash = await hashPassword(tempPassword);
 
     // hourlyRate param is kept in the API for backwards compat but now in paise.
     // Default 200000 paise = ₹2000/hr.
     const hourlyRatePaise =
       typeof hourlyRate === 'number' && hourlyRate > 0 ? hourlyRate : 200000;
+
+    // Compute per-minute rates in paise (admin inputs in ₹)
+    const chatRatePaise = typeof chatRatePerMinute === 'number' && chatRatePerMinute > 0
+      ? chatRatePerMinute * 100 : null;
+    const callRatePaise = typeof callRatePerMinute === 'number' && callRatePerMinute > 0
+      ? callRatePerMinute * 100 : null;
 
     const companion = await prisma.user.create({
       data: {
@@ -82,6 +95,8 @@ export async function POST(request: NextRequest) {
           create: {
             name,
             hourlyRate: hourlyRatePaise,
+            ...(chatRatePaise !== null ? { chatRatePerMinute: chatRatePaise } : {}),
+            ...(callRatePaise !== null ? { callRatePerMinute: callRatePaise } : {}),
             bio: '',
             lat: 28.6139,
             lng: 77.209,
@@ -107,8 +122,8 @@ export async function POST(request: NextRequest) {
         city: null,
         primaryImage: null,
         hourlyRate: hourlyRatePaise,
-        chatRatePerMinute: null,
-        callRatePerMinute: null,
+        chatRatePerMinute: chatRatePaise,
+        callRatePerMinute: callRatePaise,
         availabilityStatus: 'OFFLINE',
       });
     } catch (ablyErr) {
@@ -120,7 +135,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       companion: companionWithoutPassword,
-      // tempPassword intentionally omitted — delivered by email only
+      tempPassword,
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating companion:', error);

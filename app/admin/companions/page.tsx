@@ -17,7 +17,10 @@ export default function AdminCompanionsPage() {
   const [formData, setFormData] = useState({
     email: '',
     name: '',
+    password: '',
     hourlyRate: 2000,
+    chatRatePerMinute: 0,
+    callRatePerMinute: 0,
   });
   const [creating, setCreating] = useState(false);
 
@@ -54,7 +57,7 @@ export default function AdminCompanionsPage() {
         setNewPassword(data.tempPassword);
         setShowCreateModal(false);
         setShowPasswordModal(true);
-        setFormData({ email: '', name: '', hourlyRate: 2000 });
+        setFormData({ email: '', name: '', password: '', hourlyRate: 2000, chatRatePerMinute: 0, callRatePerMinute: 0 });
         fetchCompanions();
       }
     } catch (error) {
@@ -123,7 +126,9 @@ export default function AdminCompanionsPage() {
               <tr className="border-b border-charcoal-border">
                 <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Name</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Email</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Rate</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Booking</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Chat</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Call</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Status</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Actions</th>
               </tr>
@@ -148,7 +153,9 @@ export default function AdminCompanionsPage() {
                     </div>
                   </td>
                   <td className="py-3 px-4 text-white/70">{companion.email}</td>
-                  <td className="py-3 px-4 text-white">₹{companion.companionProfile?.hourlyRate}/hr</td>
+                  <td className="py-3 px-4 text-white text-sm">₹{Math.round((companion.companionProfile?.hourlyRate ?? 0) / 100)}/hr</td>
+                  <td className="py-3 px-4 text-white text-sm">{companion.companionProfile?.chatRatePerMinute ? `₹${Math.round(companion.companionProfile.chatRatePerMinute / 100)}/min` : '—'}</td>
+                  <td className="py-3 px-4 text-white text-sm">{companion.companionProfile?.callRatePerMinute ? `₹${Math.round(companion.companionProfile.callRatePerMinute / 100)}/min` : '—'}</td>
                   <td className="py-3 px-4">
                     <Badge
                       variant={companion.companionProfile?.isApproved ? 'success' : 'warning'}
@@ -206,20 +213,49 @@ export default function AdminCompanionsPage() {
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
           />
-
           <div>
             <label className="block text-sm font-medium text-white/80 mb-1.5">
-              Hourly Rate (₹)
+              Password
             </label>
             <input
-              type="number"
-              value={formData.hourlyRate}
-              onChange={(e) =>
-                setFormData({ ...formData, hourlyRate: parseInt(e.target.value) || 0 })
-              }
-              className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3"
-              required
+              type="text"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              placeholder="Min 6 chars (leave blank to auto-generate)"
+              className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 placeholder:text-white/30"
             />
+            <p className="text-xs text-white/40 mt-1">Companion must change this on first login</p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-1.5">Booking (₹/hr)</label>
+              <input
+                type="number"
+                value={formData.hourlyRate}
+                onChange={(e) => setFormData({ ...formData, hourlyRate: parseInt(e.target.value) || 0 })}
+                className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-1.5">Chat (₹/min)</label>
+              <input
+                type="number"
+                value={formData.chatRatePerMinute}
+                onChange={(e) => setFormData({ ...formData, chatRatePerMinute: parseInt(e.target.value) || 0 })}
+                className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-1.5">Call (₹/min)</label>
+              <input
+                type="number"
+                value={formData.callRatePerMinute}
+                onChange={(e) => setFormData({ ...formData, callRatePerMinute: parseInt(e.target.value) || 0 })}
+                className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3"
+              />
+            </div>
           </div>
 
           <Button type="submit" className="w-full" isLoading={creating}>
