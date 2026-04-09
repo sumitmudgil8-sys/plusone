@@ -41,12 +41,15 @@ export function middleware(request: NextRequest) {
   // Extract and verify JWT
   const token = request.cookies.get('token')?.value;
   if (!token) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    // Redirect to landing page (not /login) so SessionRestorer can silently
+    // restore the session from the localStorage refresh token. This prevents
+    // users from seeing the login form after Android/iOS clears cookies.
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   const user = verifyJWT(token);
   if (!user) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   // ── Role-based route protection ───────────────────────────────────────────

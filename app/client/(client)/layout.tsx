@@ -12,15 +12,38 @@ export default function ClientLayout({
 }) {
   useEffect(() => {
     if (sessionStorage.getItem('_session_ok')) return;
+
+    const restoreWithRefreshToken = () => {
+      const rt = localStorage.getItem('_pone_rt');
+      if (!rt) return;
+      fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: rt }),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success && d.refreshToken) {
+            localStorage.setItem('_pone_rt', d.refreshToken);
+            sessionStorage.setItem('_session_ok', '1');
+          }
+        })
+        .catch(() => {});
+    };
+
     fetch('/api/session')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) { restoreWithRefreshToken(); return null; }
+        return r.json();
+      })
       .then((d) => {
+        if (!d) return;
         if (d.refreshToken) {
           localStorage.setItem('_pone_rt', d.refreshToken);
           sessionStorage.setItem('_session_ok', '1');
         }
       })
-      .catch(() => {});
+      .catch(() => { restoreWithRefreshToken(); });
   }, []);
 
   const handleLogout = async () => {

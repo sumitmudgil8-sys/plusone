@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +15,34 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [restoring, setRestoring] = useState(true);
+
+  // Auto-restore session from localStorage refresh token
+  useEffect(() => {
+    const rt = localStorage.getItem('_pone_rt');
+    if (!rt) { setRestoring(false); return; }
+
+    fetch('/api/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: rt }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.user?.role) {
+          if (d.refreshToken) localStorage.setItem('_pone_rt', d.refreshToken);
+          switch (d.user.role) {
+            case 'CLIENT':    router.replace('/client/dashboard');    break;
+            case 'COMPANION': router.replace('/companion/dashboard'); break;
+            case 'ADMIN':     router.replace('/admin/dashboard');     break;
+          }
+        } else {
+          localStorage.removeItem('_pone_rt');
+          setRestoring(false);
+        }
+      })
+      .catch(() => { setRestoring(false); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +104,14 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (restoring) {
+    return (
+      <div className="min-h-screen bg-charcoal flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-2 border-[#C9A96E] border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-charcoal flex items-center justify-center px-4 py-12">

@@ -18,7 +18,7 @@ export interface JWTPayload {
 }
 
 export function signJWT(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '365d' });
 }
 
 export function verifyJWT(token: string): JWTPayload | null {
@@ -81,7 +81,7 @@ export function setAuthCookie(response: NextResponse, token: string): NextRespon
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: 60 * 60 * 24 * 365, // 1 year
     path: '/',
   });
   return response;
@@ -116,7 +116,7 @@ interface RefreshPayload {
 }
 
 export function signRefreshToken(payload: { id: string; role: string }): string {
-  return jwt.sign({ ...payload, type: 'refresh' }, JWT_SECRET, { expiresIn: '90d' });
+  return jwt.sign({ ...payload, type: 'refresh' }, JWT_SECRET, { expiresIn: '365d' });
 }
 
 export function verifyRefreshToken(token: string): { id: string; role: string } | null {
