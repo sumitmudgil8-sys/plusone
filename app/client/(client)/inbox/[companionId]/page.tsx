@@ -3,11 +3,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ChatMessageEventType } from '@ably/chat';
-import { useMessages, useTyping } from '@ably/chat/react';
 import { useSocket } from '@/hooks/useSocket';
+import type { RoomMessageCallback, RoomTypingCallback } from '@/hooks/useSocket';
 import { BILLING_TICK_SECONDS } from '@/lib/constants';
-import { AblyChatProvider } from '@/components/chat/AblyChatProvider';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,7 +62,18 @@ export default function ClientInboxPage() {
   useEffect(() => { sessionStateRef.current = sessionState; }, [sessionState]);
   useEffect(() => { sessionIdRef.current = session?.sessionId ?? null; }, [session?.sessionId]);
 
-  const { onChatRequestResponse, onChatEnded, onBalanceLow } = useSocket(userId, 'CLIENT');
+  // Room ID: chat-{clientUserId}-{companionUserId}
+  const roomId = userId ? `chat-${userId}-${companionId}` : undefined;
+
+  const {
+    onChatRequestResponse,
+    onChatEnded,
+    onBalanceLow,
+    publishToRoom,
+    publishRoomTyping,
+    onRoomMessage,
+    onRoomTyping,
+  } = useSocket(userId, 'CLIENT', roomId);
 
   // Fetch current user
   useEffect(() => {
@@ -322,25 +331,24 @@ export default function ClientInboxPage() {
     );
   }
 
-  // Room ID: chat-{clientUserId}-{companionUserId}
-  const roomId = `chat-${userId}-${companionId}`;
-
   return (
-    <AblyChatProvider roomId={roomId}>
-      <ClientChatView
-        userId={userId}
-        companionId={companionId}
-        companionName={companionName}
-        companionAvatar={companionAvatar}
-        liveSeconds={liveSeconds}
-        balanceLow={balanceLow}
-        onEndSession={handleEndSession}
-      />
-    </AblyChatProvider>
+    <ClientChatView
+      userId={userId}
+      companionId={companionId}
+      companionName={companionName}
+      companionAvatar={companionAvatar}
+      liveSeconds={liveSeconds}
+      balanceLow={balanceLow}
+      onEndSession={handleEndSession}
+      publishToRoom={publishToRoom}
+      publishRoomTyping={publishRoomTyping}
+      onRoomMessage={onRoomMessage}
+      onRoomTyping={onRoomTyping}
+    />
   );
 }
 
-// ─── Active chat view (must be inside ChatRoomProvider) ───────────────────────
+// ─── Active chat view ─────────────────────────────────────────────────────────
 
 interface ClientChatViewProps {
   userId: string;
@@ -350,6 +358,10 @@ interface ClientChatViewProps {
   liveSeconds: number;
   balanceLow: boolean;
   onEndSession: () => Promise<void>;
+  publishToRoom: (text: string) => Promise<string | null>;
+  publishRoomTyping: (isTyping: boolean) => void;
+  onRoomMessage: (cb: RoomMessageCallback) => () => void;
+  onRoomTyping: (cb: RoomTypingCallback) => () => void;
 }
 
 function ClientChatView({
@@ -360,35 +372,47 @@ function ClientChatView({
   liveSeconds,
   balanceLow,
   onEndSession,
+  publishToRoom,
+  publishRoomTyping,
+  onRoomMessage,
+  onRoomTyping,
 }: ClientChatViewProps) {
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // @ably/chat: real-time message subscription
-  const { sendMessage } = useMessages({
-    listener: (event) => {
-      if (event.type !== ChatMessageEventType.Created) return;
-      const msg = event.message;
+  // Subscribe to room messages
+  useEffect(() => {
+    return onRoomMessage((data) => {
       setMessages(prev => {
-        if (prev.some(m => m.id === msg.serial)) return prev;
+        if (prev.some(m => m.id === data.id)) return prev;
         return [...prev, {
-          id: msg.serial,
-          text: msg.text,
-          senderId: msg.clientId,
-          createdAt: msg.timestamp,
+          id: data.id,
+          text: data.text,
+          senderId: data.senderId,
+          createdAt: new Date(data.createdAt),
         }];
       });
-    },
-  });
+    });
+  }, [onRoomMessage]);
 
-  // @ably/chat: typing indicators
-  const { currentlyTyping, keystroke, stop } = useTyping();
-  const isOtherTyping = Array.from(currentlyTyping).some(id => id !== userId);
+  // Subscribe to typing indicators
+  useEffect(() => {
+    return onRoomTyping((data) => {
+      if (data.userId === userId) return;
+      setIsOtherTyping(data.isTyping);
+      if (data.isTyping) {
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => setIsOtherTyping(false), 3000);
+      }
+    });
+  }, [onRoomTyping, userId]);
 
   // Load message history from DB on mount
   useEffect(() => {
@@ -413,6 +437,11 @@ function ClientChatView({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOtherTyping]);
 
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => { if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); };
+  }, []);
+
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || sending) return;
     const content = inputText.trim();
@@ -420,9 +449,8 @@ function ClientChatView({
     if (inputRef.current) inputRef.current.style.height = 'auto';
     setSending(true);
     try {
-      stop().catch(() => {});
-      await sendMessage({ text: content });
-      // Message appears via listener callback — no optimistic needed
+      publishRoomTyping(false);
+      await publishToRoom(content);
       // Persist to DB + push notification (fire and forget)
       fetch('/api/messages/send', {
         method: 'POST',
@@ -434,17 +462,13 @@ function ClientChatView({
     } finally {
       setSending(false);
     }
-  }, [inputText, sending, userId, companionId, sendMessage, stop]);
+  }, [inputText, sending, userId, companionId, publishToRoom, publishRoomTyping]);
 
   const handleTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);
     e.target.style.height = 'auto';
     e.target.style.height = `${e.target.scrollHeight}px`;
-    if (e.target.value.trim()) {
-      keystroke().catch(() => {});
-    } else {
-      stop().catch(() => {});
-    }
+    publishRoomTyping(e.target.value.trim().length > 0);
   };
 
   return (

@@ -314,7 +314,7 @@ model BillingSession {
   totalMinutes    Float     @default(0)
   durationSeconds Int       @default(0)
   totalCharged    Int       @default(0)         // paise — total debited from client
-  companionShare  Int       @default(0)         // paise — companion's 70% cut (accumulated per tick)
+  companionShare  Int       @default(0)         // paise — companion's 40% cut of totalCharged (accumulated per tick)
   expiresAt       DateTime?                     // PENDING requests expire at this time
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

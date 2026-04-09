@@ -177,7 +177,9 @@ function IncomingCallModal({
         )}
         <div>
           <p className="text-lg font-semibold text-white">{call.callerName}</p>
-          <p className="text-sm text-white/50 mt-1">Voice call request</p>
+          <p className="text-sm text-white/50 mt-1">
+            Voice call{call.ratePerMinute ? ` · ₹${Math.round(call.ratePerMinute * 0.4 / 100)}/min` : ''}
+          </p>
         </div>
         <div className="flex gap-3">
           <button onClick={onDecline}
@@ -234,7 +236,7 @@ function IncomingChatRequestModal({
         <div>
           <p className="text-lg font-semibold text-white">{request.clientName}</p>
           <p className="text-sm text-white/50 mt-1">
-            Chat request{request.ratePerMinute ? ` · ₹${Math.round(request.ratePerMinute / 100)}/min` : ''}
+            Chat request{request.ratePerMinute ? ` · ₹${Math.round(request.ratePerMinute * 0.4 / 100)}/min` : ''}
           </p>
           {request.expiresAt && (
             <p className="text-xs text-white/40 mt-1">
@@ -379,7 +381,7 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
     } catch {
       // Non-fatal — chat page will retry via polling
     }
-    router.push(`/companion/inbox/${clientId}`);
+    router.push(`/companion/inbox?active=${clientId}`);
   }, [incomingChatRequest, router]);
 
   const handleDeclineChatRequest = useCallback(async () => {

@@ -177,8 +177,8 @@ export async function POST(request: NextRequest) {
         title: type === 'CHAT' ? `${callerName} wants to chat` : `Incoming call from ${callerName}`,
         body:
           type === 'CHAT'
-            ? `Chat session at ₹${Math.round(ratePerMinute / 100)}/min`
-            : `Voice call at ₹${Math.round(ratePerMinute / 100)}/min`,
+            ? `Chat session at ₹${Math.round(ratePerMinute * 0.4 / 100)}/min`
+            : `Voice call at ₹${Math.round(ratePerMinute * 0.4 / 100)}/min`,
         url: `/companion/inbox/${user.id}`,
       });
     } catch (pushErr) {
