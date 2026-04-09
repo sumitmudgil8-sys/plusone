@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useSocket } from '@/hooks/useSocket';
-import type { RoomMessageCallback, RoomTypingCallback } from '@/hooks/useSocket';
+import type { RoomMessage } from '@/hooks/useSocket';
 import { BILLING_TICK_SECONDS } from '@/lib/constants';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -54,20 +54,20 @@ export default function ClientInboxPage() {
   const [sessionSummary, setSessionSummary] = useState<{ totalCharged: number; durationSeconds: number } | null>(null);
   const [liveSeconds, setLiveSeconds] = useState(0);
 
-  // Wall-clock based timer — immune to tab-backgrounding
   const sessionStartedAtMsRef = useRef<number | null>(null);
   const liveSecondsRef = useRef(0);
   const liveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastTickAtMsRef = useRef<number | null>(null); // tracks when last tick was fired
+  const lastTickAtMsRef = useRef<number | null>(null);
   const sessionStateRef = useRef<SessionState>('LOADING');
   const sessionIdRef = useRef<string | null>(null);
 
   useEffect(() => { sessionStateRef.current = sessionState; }, [sessionState]);
   useEffect(() => { sessionIdRef.current = session?.sessionId ?? null; }, [session?.sessionId]);
 
-  // Room ID: chat-{clientUserId}-{companionUserId}
+  // Room ID is computed early — useSocket subscribes to the channel immediately,
+  // before the session is even active. This means the subscription is ready and
+  // waiting when the companion sends the first message.
   const roomId = userId ? `chat-${userId}-${companionId}` : undefined;
 
   const {
@@ -76,8 +76,8 @@ export default function ClientInboxPage() {
     onBalanceLow,
     publishToRoom,
     publishRoomTyping,
-    onRoomMessage,
-    onRoomTyping,
+    roomMessages,   // direct state from hook
+    isOtherTyping,  // direct state from hook
   } = useSocket(userId, 'CLIENT', roomId);
 
   // Fetch current user
@@ -102,7 +102,7 @@ export default function ClientInboxPage() {
       .catch(() => {});
   }, [companionId]);
 
-  // Check session status (PENDING / ACTIVE / NONE)
+  // Check session status
   const checkSession = useCallback(async () => {
     try {
       const res = await fetch(`/api/billing/session-status?companionId=${companionId}`);
@@ -119,7 +119,6 @@ export default function ClientInboxPage() {
           durationSeconds,
           startedAt,
         });
-        // Set wall-clock start time (prefer server startedAt, fall back to duration offset)
         if (!sessionStartedAtMsRef.current) {
           sessionStartedAtMsRef.current = startedAt
             ? new Date(startedAt).getTime()
@@ -140,7 +139,7 @@ export default function ClientInboxPage() {
     checkSession();
   }, [userId, checkSession]);
 
-  // Poll every 3s while PENDING (fallback if Ably event missed)
+  // Poll while PENDING
   useEffect(() => {
     if (sessionState !== 'PENDING') return;
     const interval = setInterval(checkSession, 3000);
@@ -163,7 +162,7 @@ export default function ClientInboxPage() {
     });
   }, [userId, onChatRequestResponse]);
 
-  // Ably: session ended by companion or system
+  // Ably: session ended
   useEffect(() => {
     return onChatEnded((data) => {
       if (session?.sessionId && data.sessionId !== session.sessionId) return;
@@ -178,10 +177,9 @@ export default function ClientInboxPage() {
     return onBalanceLow(() => setBalanceLow(true));
   }, [onBalanceLow]);
 
-  // ── Wall-clock live timer (starts when ACTIVE) ────────────────────────────
+  // ── Wall-clock timer ──────────────────────────────────────────────────────
   useEffect(() => {
     if (sessionState !== 'ACTIVE' || !session) return;
-    // Set start ref on first activation
     if (!sessionStartedAtMsRef.current) {
       sessionStartedAtMsRef.current = session.startedAt
         ? new Date(session.startedAt).getTime()
@@ -193,7 +191,7 @@ export default function ClientInboxPage() {
       liveSecondsRef.current = elapsed;
       setLiveSeconds(elapsed);
     };
-    tick(); // immediate update
+    tick();
     if (liveTimerRef.current) clearInterval(liveTimerRef.current);
     liveTimerRef.current = setInterval(tick, 1000);
     return () => { if (liveTimerRef.current) clearInterval(liveTimerRef.current); };
@@ -203,13 +201,11 @@ export default function ClientInboxPage() {
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState !== 'visible') return;
-      // Sync timer immediately
       if (sessionStateRef.current === 'ACTIVE' && sessionStartedAtMsRef.current) {
         const elapsed = Math.floor((Date.now() - sessionStartedAtMsRef.current) / 1000);
         liveSecondsRef.current = elapsed;
         setLiveSeconds(elapsed);
       }
-      // Fire billing tick immediately if overdue (tab was backgrounded > 60s)
       if (
         sessionStateRef.current === 'ACTIVE' &&
         sessionIdRef.current &&
@@ -217,7 +213,6 @@ export default function ClientInboxPage() {
         Date.now() - lastTickAtMsRef.current >= BILLING_TICK_SECONDS * 1000
       ) {
         fireBillingTick(sessionIdRef.current);
-        // Reset interval
         if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
         tickIntervalRef.current = setInterval(() => {
           if (sessionIdRef.current) fireBillingTick(sessionIdRef.current);
@@ -228,7 +223,7 @@ export default function ClientInboxPage() {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Billing tick every 60s ────────────────────────────────────────────────
+  // ── Billing tick ──────────────────────────────────────────────────────────
   const fireBillingTick = useCallback(async (sid: string) => {
     lastTickAtMsRef.current = Date.now();
     try {
@@ -255,7 +250,7 @@ export default function ClientInboxPage() {
     if (sessionState !== 'ACTIVE' || !session?.sessionId) return;
     if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
     const sid = session.sessionId;
-    lastTickAtMsRef.current = Date.now(); // reset tracking
+    lastTickAtMsRef.current = Date.now();
     tickIntervalRef.current = setInterval(() => fireBillingTick(sid), BILLING_TICK_SECONDS * 1000);
     return () => { if (tickIntervalRef.current) clearInterval(tickIntervalRef.current); };
   }, [sessionState, session?.sessionId, fireBillingTick]);
@@ -280,7 +275,6 @@ export default function ClientInboxPage() {
     } catch { /* keep local summary */ }
   }, [session]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
@@ -329,7 +323,6 @@ export default function ClientInboxPage() {
   if (sessionState === 'PENDING' || sessionState === 'NO_SESSION') {
     return (
       <div className="fixed inset-0 z-50 bg-[#0C0C14] flex flex-col">
-        {/* Header */}
         <div className="flex-shrink-0 flex items-center gap-3 px-4 bg-[#0C0C14] border-b border-white/[0.06]"
           style={{ paddingTop: 'max(env(safe-area-inset-top), 14px)', paddingBottom: '12px' }}>
           <Link href="/client/browse"
@@ -352,8 +345,6 @@ export default function ClientInboxPage() {
               : <p className="text-xs text-white/30">No session</p>}
           </div>
         </div>
-
-        {/* Body */}
         <div className="flex-1 flex flex-col items-center justify-center gap-5 px-8 text-center">
           {sessionState === 'PENDING' ? (
             <>
@@ -405,8 +396,8 @@ export default function ClientInboxPage() {
       onEndSession={handleEndSession}
       publishToRoom={publishToRoom}
       publishRoomTyping={publishRoomTyping}
-      onRoomMessage={onRoomMessage}
-      onRoomTyping={onRoomTyping}
+      roomMessages={roomMessages}
+      isOtherTyping={isOtherTyping}
     />
   );
 }
@@ -423,8 +414,8 @@ interface ClientChatViewProps {
   onEndSession: () => Promise<void>;
   publishToRoom: (text: string, id?: string) => Promise<string | null>;
   publishRoomTyping: (isTyping: boolean) => void;
-  onRoomMessage: (cb: RoomMessageCallback) => () => void;
-  onRoomTyping: (cb: RoomTypingCallback) => () => void;
+  roomMessages: RoomMessage[];   // direct state from parent hook
+  isOtherTyping: boolean;        // direct state from parent hook
 }
 
 function ClientChatView({
@@ -437,53 +428,29 @@ function ClientChatView({
   onEndSession,
   publishToRoom,
   publishRoomTyping,
-  onRoomMessage,
-  onRoomTyping,
+  roomMessages,
+  isOtherTyping,
 }: ClientChatViewProps) {
-  const [messages, setMessages] = useState<LocalMessage[]>([]);
+  // History: messages loaded from DB on mount
+  const [history, setHistory] = useState<LocalMessage[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  // Pending: optimistically added messages waiting for Ably echo
+  const [pendingMessages, setPendingMessages] = useState<LocalMessage[]>([]);
+
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [isOtherTyping, setIsOtherTyping] = useState(false);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Subscribe to room messages (from the OTHER person; own messages are added optimistically)
-  useEffect(() => {
-    return onRoomMessage((data) => {
-      setMessages(prev => {
-        if (prev.some(m => m.id === data.id)) return prev; // deduplicate
-        return [...prev, {
-          id: data.id,
-          text: data.text,
-          senderId: data.senderId,
-          createdAt: new Date(data.createdAt),
-        }];
-      });
-    });
-  }, [onRoomMessage]);
-
-  // Subscribe to typing indicators
-  useEffect(() => {
-    return onRoomTyping((data) => {
-      if (data.userId === userId) return;
-      setIsOtherTyping(data.isTyping);
-      if (data.isTyping) {
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = setTimeout(() => setIsOtherTyping(false), 3000);
-      }
-    });
-  }, [onRoomTyping, userId]);
-
-  // Load message history from DB on mount
+  // ── Load history from DB on mount ─────────────────────────────────────────
   useEffect(() => {
     fetch(`/api/messages/thread?companionUserId=${companionId}&clientUserId=${userId}`)
       .then(r => r.json())
       .then(d => {
         if (d.success && Array.isArray(d.data?.messages)) {
-          setMessages(d.data.messages.map((m: { id: string; content: string; senderId: string; createdAt: string }) => ({
+          setHistory(d.data.messages.map((m: { id: string; content: string; senderId: string; createdAt: string }) => ({
             id: m.id,
             text: m.content,
             senderId: m.senderId,
@@ -495,38 +462,59 @@ function ClientChatView({
       .finally(() => setHistoryLoaded(true));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll to bottom on new messages
+  // ── Remove pending messages once echoed into roomMessages ─────────────────
+  useEffect(() => {
+    if (pendingMessages.length === 0) return;
+    const arrivedIds = new Set(roomMessages.map(m => m.id));
+    setPendingMessages(prev => prev.filter(m => !arrivedIds.has(m.id)));
+  }, [roomMessages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Merged + deduplicated message list ────────────────────────────────────
+  const allMessages = useMemo<LocalMessage[]>(() => {
+    const seen = new Set<string>();
+    const result: LocalMessage[] = [];
+    const add = (m: LocalMessage) => {
+      if (seen.has(m.id)) return;
+      seen.add(m.id);
+      result.push(m);
+    };
+    for (const m of history) add(m);
+    for (const m of roomMessages) {
+      add({ id: m.id, text: m.text, senderId: m.senderId, createdAt: new Date(m.createdAt) });
+    }
+    for (const m of pendingMessages) add(m);
+    return result.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }, [history, roomMessages, pendingMessages]);
+
+  // ── Scroll to bottom ──────────────────────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isOtherTyping]);
+  }, [allMessages, isOtherTyping]);
 
-  // Cleanup typing timeout on unmount
-  useEffect(() => {
-    return () => { if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); };
-  }, []);
-
+  // ── Send ──────────────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || sending) return;
     const content = inputText.trim();
     const now = new Date();
     const msgId = `${userId}-${now.getTime()}-${Math.random().toString(36).slice(2, 6)}`;
+
     setInputText('');
     if (inputRef.current) inputRef.current.style.height = 'auto';
     setSending(true);
-    // Optimistic add — show immediately, deduplication handles echo
-    setMessages(prev => [...prev, { id: msgId, text: content, senderId: userId, createdAt: now }]);
+
+    // Optimistic: show immediately before echo
+    setPendingMessages(prev => [...prev, { id: msgId, text: content, senderId: userId, createdAt: now }]);
+
     try {
       publishRoomTyping(false);
       await publishToRoom(content, msgId);
-      // Persist to DB + push notification (fire and forget)
       fetch('/api/messages/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companionUserId: companionId, clientUserId: userId, content }),
       }).catch(() => {});
     } catch {
-      // Remove optimistic message on failure
-      setMessages(prev => prev.filter(m => m.id !== msgId));
+      setPendingMessages(prev => prev.filter(m => m.id !== msgId));
       setInputText(content);
     } finally {
       setSending(false);
@@ -546,14 +534,12 @@ function ClientChatView({
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center gap-3 px-4 bg-[#0C0C14] border-b border-white/[0.06]"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 14px)', paddingBottom: '12px' }}>
-
         <Link href="/client/browse"
           className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/[0.06] text-white/50 hover:text-white transition-colors shrink-0">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </Link>
-
         <div className="relative shrink-0">
           {companionAvatar
             ? <img src={companionAvatar} alt={companionName} className="w-10 h-10 rounded-full object-cover" />
@@ -562,7 +548,6 @@ function ClientChatView({
               </div>}
           <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[#0C0C14]" />
         </div>
-
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white leading-tight truncate">{companionName}</p>
           <div className="flex items-center gap-1.5">
@@ -570,7 +555,6 @@ function ClientChatView({
             <span className="text-xs text-white/50 tabular-nums">{formatDuration(liveSeconds)}</span>
           </div>
         </div>
-
         <button
           onClick={onEndSession}
           className="shrink-0 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/20 active:scale-95 transition-all">
@@ -600,18 +584,17 @@ function ClientChatView({
           <div className="flex justify-center py-8">
             <div className="w-6 h-6 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
           </div>
-        ) : messages.length === 0 ? (
+        ) : allMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-center py-16">
             <span className="text-3xl">👋</span>
             <p className="text-white/30 text-sm">Say hello to {companionName}!</p>
           </div>
         ) : (
           <div className="flex flex-col gap-1.5">
-            {messages.map((msg, i) => {
+            {allMessages.map((msg, i) => {
               const isOwn = msg.senderId === userId;
-              const sameAbove = i > 0 && messages[i - 1].senderId === msg.senderId;
-              const sameBelow = i < messages.length - 1 && messages[i + 1].senderId === msg.senderId;
-
+              const sameAbove = i > 0 && allMessages[i - 1].senderId === msg.senderId;
+              const sameBelow = i < allMessages.length - 1 && allMessages[i + 1].senderId === msg.senderId;
               return (
                 <div
                   key={msg.id}
@@ -628,7 +611,6 @@ function ClientChatView({
                       )}
                     </div>
                   )}
-
                   <div className={`flex flex-col max-w-[72%] ${isOwn ? 'items-end' : 'items-start'}`}>
                     <div className={`px-4 py-2.5 text-sm leading-relaxed break-words ${
                       isOwn
@@ -647,7 +629,6 @@ function ClientChatView({
               );
             })}
 
-            {/* Typing indicator */}
             {isOtherTyping && (
               <div className="flex items-end gap-2 mt-3">
                 <div className="w-7 shrink-0 self-end mb-0.5">

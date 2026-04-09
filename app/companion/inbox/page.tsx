@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
-import type { RoomMessageCallback, RoomTypingCallback } from '@/hooks/useSocket';
+import type { RoomMessage } from '@/hooks/useSocket';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ function CompanionInboxContent() {
   const [sessionEnded, setSessionEnded] = useState(false);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const sessionStartedAtMsRef = useRef<number | null>(null); // wall-clock start
+  const sessionStartedAtMsRef = useRef<number | null>(null);
 
   // Chat room ID — drives room subscription in useSocket
   const chatRoomId =
@@ -82,8 +82,8 @@ function CompanionInboxContent() {
     onChatEnded,
     publishToRoom,
     publishRoomTyping,
-    onRoomMessage,
-    onRoomTyping,
+    roomMessages,    // direct state from hook — no callbacks
+    isOtherTyping,   // direct state from hook — no callbacks
   } = useSocket(currentUserId ?? undefined, 'COMPANION', chatRoomId);
 
   // ── Load user + threads ───────────────────────────────────────────────────
@@ -168,7 +168,6 @@ function CompanionInboxContent() {
         if (d.data?.status === 'ACTIVE') {
           const durationSeconds: number = d.data.durationSeconds ?? 0;
           const startedAt: string | null = d.data.startedAt ?? null;
-          // Compute wall-clock start: prefer server startedAt, fall back to duration offset
           sessionStartedAtMsRef.current = startedAt
             ? new Date(startedAt).getTime()
             : Date.now() - durationSeconds * 1000;
@@ -206,13 +205,12 @@ function CompanionInboxContent() {
     });
   }, [onChatEnded, chatSessionId]);
 
-  // ── Session timer (wall-clock based — survives tab switches) ─────────────
+  // ── Session timer (wall-clock based) ──────────────────────────────────────
   useEffect(() => {
     if (!chatSessionActive) {
       if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
       return;
     }
-    // Ensure start ref is set (might have been set via Ably accepted event)
     if (!sessionStartedAtMsRef.current) {
       sessionStartedAtMsRef.current = Date.now();
     }
@@ -225,7 +223,7 @@ function CompanionInboxContent() {
     return () => { if (sessionTimerRef.current) clearInterval(sessionTimerRef.current); };
   }, [chatSessionActive]);
 
-  // Sync timer when tab comes back from background
+  // Sync timer on tab visibility change
   useEffect(() => {
     const handler = () => {
       if (document.visibilityState === 'visible' && chatSessionActive && sessionStartedAtMsRef.current) {
@@ -366,8 +364,8 @@ function CompanionInboxContent() {
             onOwnMessage={handleOwnMessage}
             publishToRoom={publishToRoom}
             publishRoomTyping={publishRoomTyping}
-            onRoomMessage={onRoomMessage}
-            onRoomTyping={onRoomTyping}
+            roomMessages={roomMessages}
+            isOtherTyping={isOtherTyping}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center px-8 gap-4">
@@ -414,58 +412,30 @@ interface CompanionChatPanelProps {
   onOwnMessage: (content: string, createdAt: string) => void;
   publishToRoom: (text: string, id?: string) => Promise<string | null>;
   publishRoomTyping: (isTyping: boolean) => void;
-  onRoomMessage: (cb: RoomMessageCallback) => () => void;
-  onRoomTyping: (cb: RoomTypingCallback) => () => void;
+  roomMessages: RoomMessage[];   // direct state from parent hook
+  isOtherTyping: boolean;        // direct state from parent hook
 }
 
 function CompanionChatPanel({
   currentUserId, clientId, clientName, clientAvatar,
   chatSessionActive, sessionEnded, sessionSeconds, ratePerMinute,
   onEndSession, onBack, onOwnMessage,
-  publishToRoom, publishRoomTyping, onRoomMessage, onRoomTyping,
+  publishToRoom, publishRoomTyping,
+  roomMessages, isOtherTyping,
 }: CompanionChatPanelProps) {
-  const [messages, setMessages] = useState<LocalMessage[]>([]);
+  // History: messages loaded from DB on mount
+  const [history, setHistory] = useState<LocalMessage[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  // Pending: optimistically added messages waiting for Ably echo
+  const [pendingMessages, setPendingMessages] = useState<LocalMessage[]>([]);
+
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [isOtherTyping, setIsOtherTyping] = useState(false);
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // ── Subscribe to room messages ────────────────────────────────────────────
-  useEffect(() => {
-    return onRoomMessage((data) => {
-      setMessages(prev => {
-        if (prev.some(m => m.id === data.id)) return prev;
-        return [...prev, {
-          id: data.id,
-          text: data.text,
-          senderId: data.senderId,
-          createdAt: new Date(data.createdAt),
-        }];
-      });
-    });
-  }, [onRoomMessage]);
-
-  // ── Subscribe to room typing ──────────────────────────────────────────────
-  useEffect(() => {
-    return onRoomTyping((data) => {
-      if (data.userId === currentUserId) return;
-      if (data.isTyping) {
-        setIsOtherTyping(true);
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = setTimeout(() => setIsOtherTyping(false), 3000);
-      } else {
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        setIsOtherTyping(false);
-      }
-    });
-  }, [onRoomTyping, currentUserId]);
-
-  useEffect(() => () => { if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); }, []);
 
   // ── Load history from DB ──────────────────────────────────────────────────
   useEffect(() => {
@@ -473,7 +443,7 @@ function CompanionChatPanel({
       .then(r => r.json())
       .then(d => {
         if (d.success && Array.isArray(d.data?.messages)) {
-          setMessages(d.data.messages.map((m: { id: string; content: string; senderId: string; createdAt: string }) => ({
+          setHistory(d.data.messages.map((m: { id: string; content: string; senderId: string; createdAt: string }) => ({
             id: m.id, text: m.content, senderId: m.senderId, createdAt: new Date(m.createdAt),
           })));
         }
@@ -482,6 +452,32 @@ function CompanionChatPanel({
       .finally(() => setHistoryLoaded(true));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Remove pending messages once echoed into roomMessages ─────────────────
+  useEffect(() => {
+    if (pendingMessages.length === 0) return;
+    const arrivedIds = new Set(roomMessages.map(m => m.id));
+    setPendingMessages(prev => prev.filter(m => !arrivedIds.has(m.id)));
+  }, [roomMessages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Merged message list ───────────────────────────────────────────────────
+  // history (DB) + roomMessages (Ably real-time) + pendingMessages (optimistic)
+  // Deduplicated by ID, sorted by createdAt.
+  const allMessages = useMemo<LocalMessage[]>(() => {
+    const seen = new Set<string>();
+    const result: LocalMessage[] = [];
+    const add = (m: LocalMessage) => {
+      if (seen.has(m.id)) return;
+      seen.add(m.id);
+      result.push(m);
+    };
+    for (const m of history) add(m);
+    for (const m of roomMessages) {
+      add({ id: m.id, text: m.text, senderId: m.senderId, createdAt: new Date(m.createdAt) });
+    }
+    for (const m of pendingMessages) add(m);
+    return result.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }, [history, roomMessages, pendingMessages]);
+
   // ── Auto-scroll ───────────────────────────────────────────────────────────
   useEffect(() => {
     const el = containerRef.current;
@@ -489,7 +485,7 @@ function CompanionChatPanel({
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isOtherTyping]);
+  }, [allMessages, isOtherTyping]);
 
   // ── Send ──────────────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
@@ -497,24 +493,25 @@ function CompanionChatPanel({
     const content = inputText.trim();
     const now = new Date();
     const msgId = `${currentUserId}-${now.getTime()}-${Math.random().toString(36).slice(2, 6)}`;
+
     setInputText('');
     if (inputRef.current) inputRef.current.style.height = 'auto';
     setSending(true);
     publishRoomTyping(false);
-    // Optimistic add — show immediately, deduplicated if echo arrives
-    setMessages(prev => [...prev, { id: msgId, text: content, senderId: currentUserId, createdAt: now }]);
+
+    // Optimistic: show immediately before echo
+    setPendingMessages(prev => [...prev, { id: msgId, text: content, senderId: currentUserId, createdAt: now }]);
+
     try {
       await publishToRoom(content, msgId);
       onOwnMessage(content, now.toISOString());
-      // Fire-and-forget: persist to DB + push notification
       fetch('/api/messages/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companionUserId: currentUserId, clientUserId: clientId, content }),
       }).catch(() => {});
     } catch {
-      // Remove optimistic message on failure
-      setMessages(prev => prev.filter(m => m.id !== msgId));
+      setPendingMessages(prev => prev.filter(m => m.id !== msgId));
       setInputText(content);
     } finally {
       setSending(false);
@@ -575,7 +572,7 @@ function CompanionChatPanel({
           <div className="flex justify-center py-10">
             <div className="w-5 h-5 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
           </div>
-        ) : messages.length === 0 && !isOtherTyping ? (
+        ) : allMessages.length === 0 && !isOtherTyping ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-center py-16">
             <span className="text-3xl">👋</span>
             <p className="text-white/30 text-sm">
@@ -584,10 +581,10 @@ function CompanionChatPanel({
           </div>
         ) : (
           <div className="flex flex-col gap-1">
-            {messages.map((msg, i) => {
+            {allMessages.map((msg, i) => {
               const isOwn = msg.senderId === currentUserId;
-              const sameAbove = i > 0 && messages[i - 1].senderId === msg.senderId;
-              const sameBelow = i < messages.length - 1 && messages[i + 1].senderId === msg.senderId;
+              const sameAbove = i > 0 && allMessages[i - 1].senderId === msg.senderId;
+              const sameBelow = i < allMessages.length - 1 && allMessages[i + 1].senderId === msg.senderId;
               return (
                 <div key={msg.id} className={`flex items-end gap-2 ${isOwn ? 'justify-end' : 'justify-start'} ${sameAbove ? 'mt-0.5' : 'mt-3'}`}>
                   {!isOwn && (

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Ably from 'ably';
 
-// ─── Callback types ───────────────────────────────────────────────────────────
+// ─── Session event callback types ─────────────────────────────────────────────
 
 type MessageCallback = (data: {
   id: string;
@@ -56,18 +56,15 @@ type BalanceLowCallback = (data: {
   minutesRemaining: number;
 }) => void;
 
-// Room message/typing — used for the active chat channel
-export type RoomMessageCallback = (data: {
+// ─── Room message type ────────────────────────────────────────────────────────
+// This is what flows through Ably pub/sub on the chat room channel.
+// Components receive roomMessages directly as state (no callback indirection).
+export type RoomMessage = {
   id: string;
   text: string;
   senderId: string;
-  createdAt: string;
-}) => void;
-
-export type RoomTypingCallback = (data: {
-  userId: string;
-  isTyping: boolean;
-}) => void;
+  createdAt: string; // ISO string
+};
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -78,8 +75,15 @@ export type RoomTypingCallback = (data: {
  *   - private:user-{userId}  — session events (chat:request, chat:accepted, etc.)
  *   - chatRoomId             — chat room messages + typing (optional)
  *
- * Passing a different chatRoomId re-subscribes to the new room without
- * recreating the underlying Ably connection.
+ * ARCHITECTURE:
+ *   Room messages flow directly into React state via setRoomMessages().
+ *   There is NO callback-set indirection — this was the root cause of
+ *   messages being dropped when child components hadn't mounted yet.
+ *
+ *   Room subscription does NOT depend on isConnected. Ably queues channel
+ *   attach requests internally and resolves them once the connection is up.
+ *   Adding isConnected as a dep caused the subscription to tear down/rebuild
+ *   on every reconnect, creating message drop windows.
  */
 export function useSocket(userId?: string, _role?: string, chatRoomId?: string) {
   const realtimeRef = useRef<Ably.Realtime | null>(null);
@@ -87,7 +91,22 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
   const roomChannelRef = useRef<Ably.RealtimeChannel | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  // ── Callback sets ────────────────────────────────────────────────────────
+  // ── Room state lives HERE, not in child components ────────────────────────
+  // This guarantees no message is ever dropped due to subscription/callback timing.
+  const [roomMessages, setRoomMessages] = useState<RoomMessage[]>([]);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
+
+  // Refs used inside Ably handlers to avoid stale closures
+  // (refs are always current; listing them as effect deps would cause re-subscription)
+  const userIdRef = useRef(userId);
+  const typingClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { userIdRef.current = userId; }, [userId]);
+
+  // ── Callback sets for session events (private channel) ───────────────────
+  // Session events (chat:request, chat:accepted, etc.) still use the callback
+  // pattern because they're consumed by different components across the app
+  // and don't have the same timing problem as room messages.
   const messageCBs = useRef<Set<MessageCallback>>(new Set());
   const typingCBs = useRef<Set<TypingCallback>>(new Set());
   const incomingCallCBs = useRef<Set<IncomingCallCallback>>(new Set());
@@ -95,8 +114,6 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
   const chatRequestResponseCBs = useRef<Set<ChatRequestResponseCallback>>(new Set());
   const chatEndedCBs = useRef<Set<ChatEndedCallback>>(new Set());
   const balanceLowCBs = useRef<Set<BalanceLowCallback>>(new Set());
-  const roomMessageCBs = useRef<Set<RoomMessageCallback>>(new Set());
-  const roomTypingCBs = useRef<Set<RoomTypingCallback>>(new Set());
 
   // ── Main connection + private channel ────────────────────────────────────
   useEffect(() => {
@@ -146,45 +163,100 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
     };
   }, [userId]);
 
-  // ── Chat room subscription (reuses same connection) ───────────────────────
+  // ── Chat room subscription ────────────────────────────────────────────────
+  //
+  // KEY FIXES vs previous version:
+  //
+  // 1. NO `isConnected` dependency.
+  //    Ably's channel.subscribe() queues the attach internally. The subscription
+  //    is registered immediately and activated once the WebSocket is up.
+  //    Depending on isConnected caused the subscription to be torn down on every
+  //    reconnect, creating windows where messages were dropped.
+  //
+  // 2. State updated DIRECTLY inside the Ably handler, not via a callback set.
+  //    Previous pattern: Ably fires → iterate over roomMessageCBs Set → each cb
+  //    calls setMessages. If no callbacks registered yet (child hasn't mounted),
+  //    messages were silently dropped. Now Ably fires → setRoomMessages() directly
+  //    → React schedules re-render → UI updates. Zero intermediary.
+  //
+  // 3. Named handler refs for clean per-handler unsubscribe (no side effects on
+  //    other hypothetical subscribers to the same channel).
+  //
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!chatRoomId || !isConnected || !realtimeRef.current) return;
+    if (!chatRoomId || !realtimeRef.current) return;
+
+    // Clear state from any previous room
+    setRoomMessages([]);
+    setIsOtherTyping(false);
+    if (typingClearRef.current) clearTimeout(typingClearRef.current);
 
     const ch = realtimeRef.current.channels.get(chatRoomId);
     roomChannelRef.current = ch;
 
-    ch.subscribe('message', (msg) => roomMessageCBs.current.forEach(cb => cb(msg.data)));
-    ch.subscribe('typing', (msg) => roomTypingCBs.current.forEach(cb => cb(msg.data)));
+    // Direct state update — guaranteed to fire on every incoming message
+    const onMessage = (msg: Ably.Message) => {
+      const data = msg.data as RoomMessage;
+      if (!data?.id) return;
+      setRoomMessages(prev => {
+        if (prev.some(m => m.id === data.id)) return prev; // deduplicate
+        return [...prev, data];
+      });
+    };
+
+    const onTyping = (msg: Ably.Message) => {
+      const data = msg.data as { userId: string; isTyping: boolean };
+      if (!data || data.userId === userIdRef.current) return; // ignore own events
+      if (data.isTyping) {
+        setIsOtherTyping(true);
+        if (typingClearRef.current) clearTimeout(typingClearRef.current);
+        typingClearRef.current = setTimeout(() => setIsOtherTyping(false), 3000);
+      } else {
+        if (typingClearRef.current) clearTimeout(typingClearRef.current);
+        setIsOtherTyping(false);
+      }
+    };
+
+    ch.subscribe('message', onMessage);
+    ch.subscribe('typing', onTyping);
 
     return () => {
-      ch.unsubscribe();
+      // Unsubscribe only our specific handlers — safe if channel is shared
+      ch.unsubscribe('message', onMessage);
+      ch.unsubscribe('typing', onTyping);
       roomChannelRef.current = null;
+      if (typingClearRef.current) clearTimeout(typingClearRef.current);
     };
-  }, [chatRoomId, isConnected]);
+  }, [chatRoomId]); // intentionally omits realtimeRef — it's a ref, always current
 
   // ── Publish to room ───────────────────────────────────────────────────────
+  // Uses refs (not state) so this callback never becomes stale and never needs
+  // to be recreated. No deps = created once, always works with latest values.
   const publishToRoom = useCallback(async (text: string, id?: string): Promise<string | null> => {
     const ch = roomChannelRef.current;
-    if (!ch || !userId) return null;
-    const msgId = id ?? `${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    await ch.publish('message', { id: msgId, text, senderId: userId, createdAt: new Date().toISOString() });
+    const uid = userIdRef.current;
+    if (!ch || !uid) return null;
+    const msgId = id ?? `${uid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    await ch.publish('message', { id: msgId, text, senderId: uid, createdAt: new Date().toISOString() });
     return msgId;
-  }, [userId]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const publishRoomTyping = useCallback((isTyping: boolean) => {
-    if (!roomChannelRef.current || !userId) return;
-    roomChannelRef.current.publish('typing', { userId, isTyping }).catch(() => {});
-  }, [userId]);
+    const ch = roomChannelRef.current;
+    const uid = userIdRef.current;
+    if (!ch || !uid) return;
+    ch.publish('typing', { userId: uid, isTyping }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Legacy: send typing to receiver's private channel ────────────────────
   const sendTyping = useCallback((data: { threadId: string; userId: string; receiverId: string }) => {
-    if (!isConnected || !realtimeRef.current) return;
+    if (!realtimeRef.current) return;
     realtimeRef.current.channels
       .get(`private:user-${data.receiverId}`)
       .publish('typing', { userId: data.userId });
-  }, [isConnected]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Callback registers ────────────────────────────────────────────────────
+  // ── Session event callback registers ─────────────────────────────────────
   const onMessage = useCallback((cb: MessageCallback) => {
     messageCBs.current.add(cb);
     return () => { messageCBs.current.delete(cb); };
@@ -220,16 +292,6 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
     return () => { balanceLowCBs.current.delete(cb); };
   }, []);
 
-  const onRoomMessage = useCallback((cb: RoomMessageCallback) => {
-    roomMessageCBs.current.add(cb);
-    return () => { roomMessageCBs.current.delete(cb); };
-  }, []);
-
-  const onRoomTyping = useCallback((cb: RoomTypingCallback) => {
-    roomTypingCBs.current.add(cb);
-    return () => { roomTypingCBs.current.delete(cb); };
-  }, []);
-
   return {
     isConnected,
     onlineUsers: new Set<string>(),
@@ -244,10 +306,10 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
     onChatRequestResponse,
     onChatEnded,
     onBalanceLow,
-    // Chat room
+    // Chat room — state is managed HERE, passed directly to components
     publishToRoom,
     publishRoomTyping,
-    onRoomMessage,
-    onRoomTyping,
+    roomMessages,   // direct state: updated the instant Ably delivers a message
+    isOtherTyping,  // direct state: no callback needed
   };
 }
