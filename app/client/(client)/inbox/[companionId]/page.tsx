@@ -311,8 +311,9 @@ export default function ClientInboxPage() {
     return () => { if (tickIntervalRef.current) clearInterval(tickIntervalRef.current); };
   }, [sessionState, session?.sessionId, fireBillingTick]);
 
-  // Voice call — passes null when not a voice session so the hook stays idle
-  const voiceSessionId = sessionType === 'VOICE' && session?.sessionId ? session.sessionId : null;
+  // Voice call — only pass sessionId once session is ACTIVE (companion has accepted).
+  // Passing it while PENDING causes a 409 from /api/agora/token since billing hasn't started yet.
+  const voiceSessionId = sessionType === 'VOICE' && sessionState === 'ACTIVE' && session?.sessionId ? session.sessionId : null;
   const voiceCall = useVoiceCall(voiceSessionId, userId ?? '');
 
   const handleEndSession = useCallback(async () => {
