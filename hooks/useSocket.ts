@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import Ably from 'ably';
 
 // ─── Session event callback types ─────────────────────────────────────────────
@@ -207,14 +208,19 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
 
     const ch = realtimeRef.current.channels.get(chatRoomId);
     roomChannelRef.current = ch;
+    console.log('[useSocket] subscribed to room channel:', chatRoomId);
 
-    // Direct state update — guaranteed to fire on every incoming message
+    // Direct state update — forced synchronous via flushSync so React 18's
+    // scheduler does not defer the render in background/inactive tabs.
     const onMessage = (msg: Ably.Message) => {
       const data = msg.data as RoomMessage;
       if (!data?.id) return;
-      setRoomMessages(prev => {
-        if (prev.some(m => m.id === data.id)) return prev; // deduplicate
-        return [...prev, data];
+      console.log('[useSocket] room message received:', data.id, 'sender:', data.senderId, 'channel:', chatRoomId);
+      flushSync(() => {
+        setRoomMessages(prev => {
+          if (prev.some(m => m.id === data.id)) return prev; // deduplicate
+          return [...prev, data];
+        });
       });
     };
 
