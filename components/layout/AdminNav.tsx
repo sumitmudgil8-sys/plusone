@@ -1,23 +1,21 @@
-"use client";
 'use client';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/Button';
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: HomeIcon },
-  { href: '/admin/clients', label: 'Clients', icon: ShieldIcon },
-  { href: '/admin/companions', label: 'Companions', icon: StarIcon },
-  { href: '/admin/subscriptions', label: 'Subscriptions', icon: CrownIcon },
+  { href: '/admin/users', label: 'Users', icon: UsersIcon },
+  { href: '/admin/subscriptions', label: 'Subs', icon: CrownIcon },
   { href: '/admin/chats', label: 'Chats', icon: ChatIcon },
-  { href: '/admin/withdrawals', label: 'Withdrawals', icon: WalletIcon },
+  { href: '/admin/withdrawals', label: 'Payouts', icon: WalletIcon },
 ];
 
 export function AdminNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
@@ -34,78 +32,95 @@ export function AdminNav() {
     window.location.href = '/login';
   };
 
-  return (
-    <nav className="fixed top-0 left-0 right-0 bg-charcoal-surface border-b border-charcoal-border z-50">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between py-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold text-gold">Plus One</span>
-            <span className="text-xs bg-gold/20 text-gold px-2 py-0.5 rounded-full">Admin</span>
-          </div>
+  const isActive = (href: string) => {
+    if (href === '/admin/users') {
+      return pathname === '/admin/users' ||
+        pathname.startsWith('/admin/users/') ||
+        pathname === '/admin/clients' ||
+        pathname.startsWith('/admin/clients/') ||
+        pathname === '/admin/companions' ||
+        pathname.startsWith('/admin/companions/');
+    }
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
 
-          <ul className="hidden md:flex items-center gap-1">
+  return (
+    <>
+      {/* Top Header Bar */}
+      <header className="fixed top-0 left-0 right-0 bg-charcoal-surface/80 backdrop-blur-xl border-b border-charcoal-border/50 z-50">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex items-center justify-between h-14">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gold to-amber-600 flex items-center justify-center">
+                <span className="text-sm font-black text-charcoal">P1</span>
+              </div>
+              <div>
+                <span className="text-base font-bold text-white">Plus One</span>
+                <span className="ml-2 text-[10px] uppercase tracking-widest bg-gold/15 text-gold px-2 py-0.5 rounded-full font-semibold">
+                  Admin
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 text-white/50 hover:text-white transition-colors text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Bottom Tab Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-charcoal-surface/95 backdrop-blur-xl border-t border-charcoal-border/50 z-50 safe-area-bottom">
+        <div className="max-w-lg mx-auto">
+          <ul className="flex items-center justify-around px-2 py-1">
             {navItems.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const active = isActive(item.href);
               const badge = item.href === '/admin/withdrawals' && pendingCount > 0 ? pendingCount : null;
               return (
-                <li key={item.href}>
+                <li key={item.href} className="flex-1">
                   <Link
                     href={item.href}
                     className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
-                      isActive
-                        ? 'bg-gold/10 text-gold'
-                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                      'relative flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl transition-all duration-200',
+                      active
+                        ? 'text-gold'
+                        : 'text-white/40 hover:text-white/70'
                     )}
                   >
-                    <item.icon className="w-4 h-4" />
-                    <span className="text-sm font-medium">{item.label}</span>
-                    {badge !== null && (
-                      <span className="ml-1 text-xs bg-amber-500 text-black font-bold px-1.5 py-0.5 rounded-full leading-none">
-                        {badge}
-                      </span>
+                    {active && (
+                      <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-gold rounded-full" />
                     )}
+                    <span className={cn(
+                      'relative transition-transform duration-200',
+                      active && 'scale-110'
+                    )}>
+                      <item.icon className="w-5 h-5" />
+                      {badge !== null && (
+                        <span className="absolute -top-1.5 -right-2.5 text-[9px] bg-amber-500 text-black font-bold min-w-[16px] h-4 flex items-center justify-center px-1 rounded-full leading-none">
+                          {badge}
+                        </span>
+                      )}
+                    </span>
+                    <span className={cn(
+                      'text-[10px] font-medium transition-all',
+                      active ? 'text-gold' : 'text-white/40'
+                    )}>
+                      {item.label}
+                    </span>
                   </Link>
                 </li>
               );
             })}
           </ul>
-
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            Logout
-          </Button>
         </div>
-      </div>
-
-      {/* Mobile Nav */}
-      <div className="md:hidden border-t border-charcoal-border">
-        <ul className="flex justify-around py-2">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            const badge = item.href === '/admin/withdrawals' && pendingCount > 0 ? pendingCount : null;
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    'relative flex flex-col items-center gap-1 px-3 py-2 rounded-lg',
-                    isActive ? 'text-gold' : 'text-white/60'
-                  )}
-                >
-                  <item.icon className="w-5 h-5" />
-                  {badge !== null && (
-                    <span className="absolute -top-1 -right-1 text-[10px] bg-amber-500 text-black font-bold px-1 py-0.5 rounded-full leading-none">
-                      {badge}
-                    </span>
-                  )}
-                  <span className="text-xs">{item.label}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </nav>
+      </nav>
+    </>
   );
 }
 
@@ -125,22 +140,6 @@ function UsersIcon({ className }: { className?: string }) {
   );
 }
 
-function StarIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-    </svg>
-  );
-}
-
-function CalendarIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-  );
-}
-
 function CrownIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -153,14 +152,6 @@ function WalletIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-    </svg>
-  );
-}
-
-function ShieldIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
     </svg>
   );
 }

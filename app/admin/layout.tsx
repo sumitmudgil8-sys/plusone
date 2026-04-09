@@ -9,7 +9,7 @@ export default function AdminLayout({
     <div className="min-h-screen bg-charcoal flex flex-col">
       <AdminNav />
 
-      <div className="pt-32 md:pt-20 pb-6">
+      <div className="pt-16 pb-24">
         <main className="max-w-7xl mx-auto px-4">{children}</main>
       </div>
     </div>
