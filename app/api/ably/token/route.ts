@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
         [getUserChannelName(user.id)]: ['subscribe'],
         'private:user-*': ['publish'],
         'companions-feed': ['subscribe'],
+        // @ably/chat room channels — grant full access for chat rooms
+        '*': ['publish', 'subscribe', 'history', 'presence'],
       },
     });
 
