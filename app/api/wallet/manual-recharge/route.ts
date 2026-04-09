@@ -6,21 +6,49 @@ import { WALLET_MIN_RECHARGE, WALLET_MAX_RECHARGE } from '@/lib/constants';
 const MERCHANT_UPI_ID = process.env.MERCHANT_UPI_ID || '';
 const PAYMENT_WINDOW_MINUTES = 15;
 
+function buildUpiUrl(upiId: string, amountPaise: number, refSuffix: string): string {
+  const amountRupees = (amountPaise / 100).toFixed(2);
+  return `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent('Plus One')}&am=${amountRupees}&cu=INR&tn=${encodeURIComponent(`Plus One Wallet ${refSuffix}`)}`;
+}
+
+function paymentToResponse(payment: {
+  id: string;
+  requestedAmount: number;
+  uniqueAmount: number;
+  upiId: string;
+  status: string;
+  expiresAt: Date;
+  createdAt: Date;
+  resolvedAt: Date | null;
+  adminNote: string | null;
+}, reused: boolean) {
+  return {
+    id: payment.id,
+    requestedAmount: payment.requestedAmount,
+    uniqueAmount: payment.uniqueAmount,
+    status: payment.status,
+    upiId: payment.upiId,
+    upiUrl: buildUpiUrl(payment.upiId, payment.uniqueAmount, payment.id.slice(-6)),
+    expiresAt: payment.expiresAt.toISOString(),
+    createdAt: payment.createdAt.toISOString(),
+    resolvedAt: payment.resolvedAt?.toISOString() ?? null,
+    adminNote: payment.adminNote,
+    reused,
+  };
+}
+
 /**
  * Generate a unique paise amount by adjusting ±1–99 paise from the requested amount.
  * Checks against all currently PENDING manual payments to avoid collisions.
  */
 async function generateUniqueAmount(requestedPaise: number): Promise<number> {
   for (let attempt = 0; attempt < 20; attempt++) {
-    // Random adjustment: ±1 to ±99 paise (never 0)
     const sign = Math.random() > 0.5 ? 1 : -1;
-    const offset = Math.floor(Math.random() * 99) + 1; // 1–99
+    const offset = Math.floor(Math.random() * 99) + 1;
     const candidate = requestedPaise + sign * offset;
 
-    // Ensure amount stays positive and reasonable
     if (candidate <= 0) continue;
 
-    // Check no PENDING payment already uses this exact amount
     const collision = await prisma.manualPayment.findFirst({
       where: {
         uniqueAmount: candidate,
@@ -32,7 +60,6 @@ async function generateUniqueAmount(requestedPaise: number): Promise<number> {
     if (!collision) return candidate;
   }
 
-  // Fallback: use timestamp-based offset (virtually impossible to collide)
   const fallbackOffset = (Date.now() % 99) + 1;
   return requestedPaise + fallbackOffset;
 }
@@ -47,7 +74,7 @@ export async function POST(request: NextRequest) {
 
   if (!MERCHANT_UPI_ID) {
     return NextResponse.json(
-      { success: false, error: 'Payment system not configured' },
+      { success: false, error: 'Payment system not configured. Please contact support.' },
       { status: 503 }
     );
   }
@@ -98,22 +125,9 @@ export async function POST(request: NextRequest) {
   });
 
   if (existingPending) {
-    // Return the existing pending payment so the client can resume
-    const amountRupees = (existingPending.uniqueAmount / 100).toFixed(2);
-    const upiUrl = `upi://pay?pa=${encodeURIComponent(existingPending.upiId)}&pn=${encodeURIComponent('Plus One')}&am=${amountRupees}&cu=INR&tn=${encodeURIComponent(`Wallet Recharge ${existingPending.id.slice(-6)}`)}`;
-
     return NextResponse.json({
       success: true,
-      data: {
-        id: existingPending.id,
-        requestedAmount: existingPending.requestedAmount,
-        uniqueAmount: existingPending.uniqueAmount,
-        upiId: existingPending.upiId,
-        upiUrl,
-        expiresAt: existingPending.expiresAt.toISOString(),
-        createdAt: existingPending.createdAt.toISOString(),
-        reused: true,
-      },
+      data: paymentToResponse(existingPending, true),
     });
   }
 
@@ -131,21 +145,9 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  const amountRupees = (uniqueAmount / 100).toFixed(2);
-  const upiUrl = `upi://pay?pa=${encodeURIComponent(MERCHANT_UPI_ID)}&pn=${encodeURIComponent('Plus One')}&am=${amountRupees}&cu=INR&tn=${encodeURIComponent(`Wallet Recharge ${payment.id.slice(-6)}`)}`;
-
   return NextResponse.json({
     success: true,
-    data: {
-      id: payment.id,
-      requestedAmount: payment.requestedAmount,
-      uniqueAmount: payment.uniqueAmount,
-      upiId: MERCHANT_UPI_ID,
-      upiUrl,
-      expiresAt: payment.expiresAt.toISOString(),
-      createdAt: payment.createdAt.toISOString(),
-      reused: false,
-    },
+    data: paymentToResponse(payment, false),
   });
 }
 
@@ -185,9 +187,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data: { payment: null } });
   }
 
-  const amountRupees = (payment.uniqueAmount / 100).toFixed(2);
-  const upiUrl = `upi://pay?pa=${encodeURIComponent(payment.upiId)}&pn=${encodeURIComponent('Plus One')}&am=${amountRupees}&cu=INR&tn=${encodeURIComponent(`Wallet Recharge ${payment.id.slice(-6)}`)}`;
-
   return NextResponse.json({
     success: true,
     data: {
@@ -197,7 +196,7 @@ export async function GET(request: NextRequest) {
         uniqueAmount: payment.uniqueAmount,
         status: payment.status,
         upiId: payment.upiId,
-        upiUrl,
+        upiUrl: buildUpiUrl(payment.upiId, payment.uniqueAmount, payment.id.slice(-6)),
         expiresAt: payment.expiresAt.toISOString(),
         createdAt: payment.createdAt.toISOString(),
         resolvedAt: payment.resolvedAt?.toISOString() ?? null,
