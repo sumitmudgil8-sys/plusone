@@ -62,9 +62,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For CHAT: return existing PENDING or ACTIVE session (idempotent)
-    // For VOICE: return existing ACTIVE session only
-    const existingStatuses = type === 'CHAT' ? ['PENDING', 'ACTIVE'] : ['ACTIVE'];
+    // Return existing PENDING or ACTIVE session (idempotent for both CHAT and VOICE)
+    const existingStatuses = ['PENDING', 'ACTIVE'];
     const existing = await prisma.billingSession.findFirst({
       where: { clientId: user.id, companionId, status: { in: existingStatuses } },
     });
@@ -111,10 +110,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // CHAT: create PENDING session (billing starts only after companion accepts)
-    // VOICE: create ACTIVE session immediately
-    const sessionStatus = type === 'CHAT' ? 'PENDING' : 'ACTIVE';
-    const expiresAt = type === 'CHAT' ? new Date(Date.now() + 3 * 60 * 1000) : undefined;
+    // Both CHAT and VOICE start PENDING — billing only starts after companion accepts.
+    const expiresAt = new Date(Date.now() + 3 * 60 * 1000); // 3 min to answer
 
     const session = await prisma.billingSession.create({
       data: {
@@ -122,9 +119,8 @@ export async function POST(request: NextRequest) {
         companionId,
         type,
         ratePerMinute,
-        status: sessionStatus,
-        ...(type === 'VOICE' ? { startedAt: new Date() } : {}),
-        ...(expiresAt ? { expiresAt } : {}),
+        status: 'PENDING',
+        expiresAt,
       },
     });
 
@@ -192,8 +188,8 @@ export async function POST(request: NextRequest) {
         ratePerMinute,
         balance: wallet.balance,
         resumed: false,
-        pending: type === 'CHAT',
-        expiresAt: expiresAt?.toISOString() ?? null,
+        pending: true,
+        expiresAt: expiresAt.toISOString(),
       },
     });
   } catch (error) {

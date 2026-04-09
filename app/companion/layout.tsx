@@ -351,12 +351,32 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
     setNeedsPasswordChange(false);
   }, []);
 
-  const handleAcceptCall = useCallback(() => {
+  const handleAcceptCall = useCallback(async () => {
     if (!incomingCall) return;
     const { clientId, sessionId } = incomingCall;
     setIncomingCall(null);
+    try {
+      await fetch('/api/billing/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+    } catch { /* non-fatal — navigate anyway */ }
     router.push(`/companion/inbox/${clientId}?voiceSessionId=${sessionId}`);
   }, [incomingCall, router]);
+
+  const handleDeclineCall = useCallback(async () => {
+    if (!incomingCall) return;
+    const { sessionId } = incomingCall;
+    setIncomingCall(null);
+    try {
+      await fetch('/api/billing/decline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+    } catch { /* non-fatal */ }
+  }, [incomingCall]);
 
   const handleAcceptChatRequest = useCallback(async () => {
     if (!incomingChatRequest) return;
@@ -447,7 +467,7 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
         <IncomingCallModal
           call={incomingCall}
           onAccept={handleAcceptCall}
-          onDecline={() => setIncomingCall(null)}
+          onDecline={handleDeclineCall}
         />
       )}
 

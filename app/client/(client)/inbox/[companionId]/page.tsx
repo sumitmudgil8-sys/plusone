@@ -137,6 +137,7 @@ export default function ClientInboxPage() {
         setSessionState('ACTIVE');
       } else if (status === 'PENDING') {
         setSession({ sessionId: d.data.sessionId, ratePerMinute: d.data.ratePerMinute, totalCharged: 0, durationSeconds: 0, startedAt: null });
+        setSessionType(d.data.type ?? 'CHAT');
         setSessionState('PENDING');
       } else {
         setSessionState('NO_SESSION');
@@ -169,16 +170,15 @@ export default function ClientInboxPage() {
         });
         const d = await res.json();
         if (d.success) {
-          sessionStartedAtMsRef.current = Date.now();
           setSession({
             sessionId: d.data.sessionId,
             ratePerMinute: d.data.ratePerMinute,
             totalCharged: 0,
             durationSeconds: 0,
-            startedAt: new Date().toISOString(),
+            startedAt: null,
           });
           setSessionType('VOICE');
-          setSessionState('ACTIVE');
+          setSessionState('PENDING'); // companion must accept before Agora starts
         } else {
           setSessionState('NO_SESSION');
         }
@@ -189,18 +189,22 @@ export default function ClientInboxPage() {
     start();
   }, [sessionState, userId, companionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ably: companion accepted
+  // Ably: companion accepted or declined
   useEffect(() => {
     if (!userId) return;
     return onChatRequestResponse((data) => {
-      if (data.status !== 'ACCEPTED') return;
       if (sessionIdRef.current && data.sessionId !== sessionIdRef.current) return;
+      if (data.status === 'DECLINED') {
+        setSessionState('NO_SESSION');
+        return;
+      }
+      if (data.status !== 'ACCEPTED') return;
       const sessionId = data.sessionId ?? sessionIdRef.current;
       if (!sessionId) return;
       sessionStartedAtMsRef.current = Date.now();
       setSession(prev => prev
-        ? { ...prev, sessionId }
-        : { sessionId, ratePerMinute: 0, totalCharged: 0, durationSeconds: 0, startedAt: null });
+        ? { ...prev, sessionId, startedAt: new Date().toISOString() }
+        : { sessionId, ratePerMinute: 0, totalCharged: 0, durationSeconds: 0, startedAt: new Date().toISOString() });
       setSessionState('ACTIVE');
     });
   }, [userId, onChatRequestResponse]);
@@ -394,7 +398,7 @@ export default function ClientInboxPage() {
           <div>
             <p className="text-sm font-semibold text-white">{companionName}</p>
             {sessionState === 'PENDING'
-              ? <p className="text-xs text-amber-400">Waiting…</p>
+              ? <p className="text-xs text-amber-400">{sessionType === 'VOICE' ? 'Ringing…' : 'Waiting…'}</p>
               : <p className="text-xs text-white/30">No session</p>}
           </div>
         </div>
@@ -403,16 +407,32 @@ export default function ClientInboxPage() {
             <>
               <div className="relative">
                 <div className="w-20 h-20 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                  <svg className="w-9 h-9 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
+                  {sessionType === 'VOICE' ? (
+                    <svg className="w-9 h-9 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                        d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-9 h-9 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  )}
                 </div>
                 <div className="absolute inset-0 rounded-full border border-amber-500/20 animate-ping" />
               </div>
               <div>
-                <p className="text-white font-semibold text-lg">Waiting for {companionName}…</p>
-                <p className="text-white/40 text-sm mt-1">They&apos;ll be notified right away</p>
+                {sessionType === 'VOICE' ? (
+                  <>
+                    <p className="text-white font-semibold text-lg">Calling {companionName}…</p>
+                    <p className="text-white/40 text-sm mt-1">Waiting for them to answer</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-white font-semibold text-lg">Waiting for {companionName}…</p>
+                    <p className="text-white/40 text-sm mt-1">They&apos;ll be notified right away</p>
+                  </>
+                )}
               </div>
             </>
           ) : (
