@@ -8,6 +8,7 @@ import type { RoomMessage } from '@/hooks/useSocket';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
 import type { VoiceCallState } from '@/hooks/useVoiceCall';
 import { BILLING_TICK_SECONDS } from '@/lib/constants';
+import { ActiveCallBanner } from '@/components/ActiveCallBanner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -337,6 +338,7 @@ export default function ClientInboxPage() {
   }, [session]);
 
   const handleEndVoiceCall = useCallback(async () => {
+    ActiveCallBanner.clear();
     await voiceCall.endCall();
     await handleEndSession();
   }, [voiceCall, handleEndSession]);
@@ -347,6 +349,21 @@ export default function ClientInboxPage() {
       if (liveTimerRef.current) clearInterval(liveTimerRef.current);
     };
   }, []);
+
+  // Active call banner — set when VOICE call is active, clear when ended
+  useEffect(() => {
+    if (sessionType === 'VOICE' && sessionState === 'ACTIVE' && voiceCall.state === 'connected') {
+      ActiveCallBanner.set({
+        sessionId: session?.sessionId ?? '',
+        returnPath: `/client/inbox/${companionId}`,
+        peerName: companion?.name ?? 'Companion',
+      });
+    }
+    if (sessionState === 'ENDED' || voiceCall.state === 'ended' || voiceCall.state === 'error') {
+      ActiveCallBanner.clear();
+    }
+    return () => { ActiveCallBanner.clear(); };
+  }, [sessionType, sessionState, voiceCall.state, companionId, companion?.name, session?.sessionId]);
 
   const companionName = companion?.name ?? 'Companion';
   const companionAvatar = companion?.avatarUrl ?? null;
@@ -843,6 +860,9 @@ function ClientVoiceOverlay({
     !remoteUserJoined ? `Waiting for ${companionName} to join…` :
     `In call with ${companionName}`;
 
+  const showTimer = callState === 'connected' && remoteUserJoined;
+  const showConnecting = callState === 'connecting' || (callState === 'connected' && !remoteUserJoined);
+
   return (
     <div className="fixed inset-0 z-[60] flex flex-col items-center justify-between bg-[#0A0A12] px-8"
       style={{ paddingTop: 'max(env(safe-area-inset-top), 48px)', paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}>
@@ -855,16 +875,16 @@ function ClientVoiceOverlay({
             : <div className="w-28 h-28 rounded-full bg-amber-500/10 border-2 border-amber-500/20 flex items-center justify-center">
                 <span className="text-4xl font-semibold text-amber-300">{companionName[0]}</span>
               </div>}
-          {callState === 'connected' && remoteUserJoined && (
+          {showTimer && (
             <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-green-400 border-2 border-[#0A0A12]" />
           )}
         </div>
         <p className="text-2xl font-semibold text-white mt-3">{companionName}</p>
         <p className="text-sm text-white/50 text-center max-w-[240px]">{statusText}</p>
-        {callState === 'connected' && remoteUserJoined && (
+        {showTimer && (
           <p className="text-3xl font-mono text-white/70 mt-2">{formatDuration(liveSeconds)}</p>
         )}
-        {(callState === 'connecting' || (callState === 'connected' && !remoteUserJoined)) && (
+        {showConnecting && (
           <div className="flex gap-1.5 mt-3">
             {[0, 200, 400].map(delay => (
               <span key={delay} className="w-2 h-2 rounded-full bg-amber-400/60 animate-bounce" style={{ animationDelay: `${delay}ms` }} />

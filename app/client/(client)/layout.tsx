@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { ClientNav } from '@/components/layout/ClientNav';
 import { PushPermissionPrompt } from '@/components/PushPermissionPrompt';
+import { ActiveCallBanner } from '@/components/ActiveCallBanner';
 
 export default function ClientLayout({
   children,
@@ -60,6 +61,7 @@ export default function ClientLayout({
 
       <ClientNav />
       <PushPermissionPrompt />
+      <ActiveCallBanner />
     </div>
   );
 }

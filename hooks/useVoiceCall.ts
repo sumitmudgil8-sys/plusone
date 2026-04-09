@@ -19,6 +19,7 @@ interface VoiceCallHook {
   state: VoiceCallState;
   isMuted: boolean;
   remoteUserJoined: boolean;
+  remoteAudioPlaying: boolean;
   error: string | null;
   toggleMute: () => Promise<void>;
   endCall: () => Promise<void>;
@@ -42,6 +43,7 @@ export function useVoiceCall(
   const [state, setState] = useState<VoiceCallState>('idle');
   const [isMuted, setIsMuted] = useState(false);
   const [remoteUserJoined, setRemoteUserJoined] = useState(false);
+  const [remoteAudioPlaying, setRemoteAudioPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const cleanup = useCallback(async () => {
@@ -99,22 +101,28 @@ export function useVoiceCall(
         clientRef.current = agoraClient;
 
         // Remote user handlers
+        // user-joined/user-left track presence; user-published/unpublished track audio
+        agoraClient.on('user-joined', () => {
+          setRemoteUserJoined(true);
+        });
+
         agoraClient.on('user-published', async (remoteUser: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
           if (mediaType === 'audio') {
             await agoraClient.subscribe(remoteUser, 'audio');
             remoteUser.audioTrack?.play();
-            setRemoteUserJoined(true);
+            setRemoteAudioPlaying(true);
           }
         });
 
         agoraClient.on('user-unpublished', (_remoteUser: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
           if (mediaType === 'audio') {
-            setRemoteUserJoined(false);
+            setRemoteAudioPlaying(false);
           }
         });
 
         agoraClient.on('user-left', () => {
           setRemoteUserJoined(false);
+          setRemoteAudioPlaying(false);
         });
 
         // Join the channel (string UID mode)
@@ -158,7 +166,9 @@ export function useVoiceCall(
   const toggleMute = useCallback(async () => {
     if (!localTrackRef.current) return;
     const next = !isMuted;
-    await localTrackRef.current.setEnabled(!next);
+    // setMuted only silences the audio without unpublishing the track,
+    // so the remote side won't see a user-unpublished event.
+    localTrackRef.current.setMuted(next);
     setIsMuted(next);
   }, [isMuted]);
 
@@ -167,5 +177,5 @@ export function useVoiceCall(
     await cleanup();
   }, [cleanup]);
 
-  return { state, isMuted, remoteUserJoined, error, toggleMute, endCall };
+  return { state, isMuted, remoteUserJoined, remoteAudioPlaying, error, toggleMute, endCall };
 }

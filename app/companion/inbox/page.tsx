@@ -7,6 +7,7 @@ import { useSocket } from '@/hooks/useSocket';
 import type { RoomMessage } from '@/hooks/useSocket';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
 import type { VoiceCallState } from '@/hooks/useVoiceCall';
+import { ActiveCallBanner } from '@/components/ActiveCallBanner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,7 +103,24 @@ function CompanionInboxContent() {
 
   useEffect(() => () => { if (voiceTimerRef.current) clearInterval(voiceTimerRef.current); }, []);
 
+  // Active call banner for companion
+  useEffect(() => {
+    if (voiceSessionId && voiceCall.state === 'connected') {
+      const clientInfo = threads.find(t => t.clientId === activeClientId);
+      ActiveCallBanner.set({
+        sessionId: voiceSessionId,
+        returnPath: `/companion/inbox?active=${activeClientId}&voiceSessionId=${voiceSessionId}`,
+        peerName: clientInfo?.clientName ?? 'Client',
+      });
+    }
+    if (voiceCall.state === 'ended' || voiceCall.state === 'error') {
+      ActiveCallBanner.clear();
+    }
+    return () => { ActiveCallBanner.clear(); };
+  }, [voiceSessionId, voiceCall.state, activeClientId]);
+
   const handleEndVoiceCall = useCallback(async () => {
+    ActiveCallBanner.clear();
     await voiceCall.endCall();
     if (voiceSessionId) {
       fetch('/api/billing/end', {
@@ -759,6 +777,9 @@ function CompanionVoiceOverlay({
     !remoteUserJoined ? 'Waiting for client…' :
     'In call';
 
+  const showTimer = callState === 'connected' && remoteUserJoined;
+  const showConnecting = callState === 'connecting' || (callState === 'connected' && !remoteUserJoined);
+
   return (
     <div className="fixed inset-0 z-[80] flex flex-col items-center justify-between bg-[#0A0A12] px-8"
       style={{ paddingTop: 'max(env(safe-area-inset-top), 48px)', paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}>
@@ -772,10 +793,10 @@ function CompanionVoiceOverlay({
             </div>}
         <p className="text-xl font-semibold text-white mt-3">{clientName}</p>
         <p className="text-sm text-white/50">{statusText}</p>
-        {callState === 'connected' && remoteUserJoined && (
+        {showTimer && (
           <p className="text-2xl font-mono text-white/70 mt-1">{formatDuration(liveSeconds)}</p>
         )}
-        {callState === 'connected' && !remoteUserJoined && (
+        {showConnecting && (
           <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse mt-2" />
         )}
       </div>
