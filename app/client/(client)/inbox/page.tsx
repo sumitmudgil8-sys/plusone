@@ -680,7 +680,7 @@ export default function InboxPage() {
             </button>
           )}
           <a
-            href={`/client/chat/${activeThread.companionId}`}
+            href={`/client/inbox/${activeThread.companionId}`}
             className="p-2 text-white/60 hover:text-white transition-colors"
             title="Voice call"
           >

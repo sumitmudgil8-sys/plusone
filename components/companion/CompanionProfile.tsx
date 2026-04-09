@@ -272,7 +272,7 @@ export function CompanionProfile({
 
               {/* Call */}
               <a
-                href={`/client/chat/${companion.id}`}
+                href={`/client/inbox/${companion.id}`}
                 onClick={(e) => {
                   if (callDisabled) e.preventDefault();
                 }}
