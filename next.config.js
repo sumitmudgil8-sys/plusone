@@ -96,7 +96,7 @@ const nextConfig = {
                 // Agora RTC (voice calls)
                 "wss://*.agora.io https://*.agora.io wss://*.edge.agora.io https://*.sd-rtn.com wss://*.sd-rtn.com",
                 // Ably Realtime (chat + call signaling)
-                "wss://*.ably.io https://*.ably.io wss://*.ably-realtime.com https://*.ably-realtime.com",
+                "wss://*.ably.io https://*.ably.io wss://*.ably-realtime.com https://*.ably-realtime.com wss://*.ably.net https://*.ably.net",
                 // Razorpay (payments)
                 "https://api.razorpay.com https://lumberjack.razorpay.com",
                 // Cloudinary (image uploads)
