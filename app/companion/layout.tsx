@@ -541,21 +541,14 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
 
   const handleAcceptChatRequest = useCallback(async () => {
     if (!incomingChatRequest) return;
-    const { sessionId, clientId } = incomingChatRequest;
+    const { clientId } = incomingChatRequest;
     setIncomingChatRequest(null);
-    // Complete the accept API call FIRST so the session is ACTIVE in DB
-    // before the companion chat page loads and polls /api/companion/active-session.
-    try {
-      if (sessionId) {
-        await fetch('/api/billing/accept', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId }),
-        });
-      }
-    } catch {
-      // Non-fatal — chat page will retry via polling
-    }
+    // NOTE: we deliberately do NOT call /api/billing/accept here. The
+    // session stays PENDING until the companion actually lands on the chat
+    // thread — the inbox page's polling effect activates it at that moment.
+    // This guarantees the billing timer only starts once the companion has
+    // entered the chat (per UX requirement), not the instant they tap
+    // "Accept" on the modal.
     router.push(`/companion/inbox?active=${clientId}`);
   }, [incomingChatRequest, router]);
 

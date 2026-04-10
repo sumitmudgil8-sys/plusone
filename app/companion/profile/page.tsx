@@ -104,7 +104,6 @@ export default function CompanionProfilePage() {
     ethnicity: '', foodPreference: '', drinking: '', smoking: '',
   });
   const [section3, setSection3] = useState({ personalityTags: [] as string[] });
-  const [section4, setSection4] = useState({ chatRatePerMinute: 0, callRatePerMinute: 0, hourlyRate: 0 });
 
   // Gallery state
   const [images, setImages] = useState<CompanionImageRecord[]>([]);
@@ -161,11 +160,6 @@ export default function CompanionProfilePage() {
           foodPreference: p.foodPreference ?? '', drinking: p.drinking ?? '', smoking: p.smoking ?? '',
         });
         setSection3({ personalityTags: parsedPTags });
-        setSection4({
-          chatRatePerMinute: Math.round((p.chatRatePerMinute ?? 2000) / 100),
-          callRatePerMinute: Math.round((p.callRatePerMinute ?? 3200) / 100),
-          hourlyRate: Math.round((p.hourlyRate ?? 200000) / 100),
-        });
       }
     } catch { /* */ } finally { setLoading(false); }
   };
@@ -417,24 +411,6 @@ export default function CompanionProfilePage() {
               </div>
             )}
 
-            {/* Rates */}
-            <div className="flex gap-3 mt-3">
-              {section4.chatRatePerMinute > 0 && (
-                <span className="text-xs text-pink-300 bg-pink-500/10 px-2.5 py-1 rounded-full border border-pink-500/20">
-                  Chat ₹{section4.chatRatePerMinute}/min
-                </span>
-              )}
-              {section4.callRatePerMinute > 0 && (
-                <span className="text-xs text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
-                  Call ₹{section4.callRatePerMinute}/min
-                </span>
-              )}
-              {section4.hourlyRate > 0 && (
-                <span className="text-xs text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                  Book ₹{section4.hourlyRate}/hr
-                </span>
-              )}
-            </div>
           </div>
         </div>
 
@@ -639,39 +615,6 @@ export default function CompanionProfilePage() {
               onClick={() => saveSection('s3', { personalityTags: section3.personalityTags })}>
               Save
             </Button>
-          </div>
-
-          {/* Rates */}
-          <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
-            <h3 className="text-sm font-semibold text-white/80 mb-4">Rates</h3>
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Chat ₹/min</label>
-                  <input type="number" min={0} value={section4.chatRatePerMinute} onChange={(e) => setSection4({ ...section4, chatRatePerMinute: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-white/[0.04] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-gold/50" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Call ₹/min</label>
-                  <input type="number" min={0} value={section4.callRatePerMinute} onChange={(e) => setSection4({ ...section4, callRatePerMinute: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-white/[0.04] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-gold/50" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-white/50 mb-1.5 uppercase tracking-wider">Book ₹/hr</label>
-                  <input type="number" min={0} value={section4.hourlyRate} onChange={(e) => setSection4({ ...section4, hourlyRate: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-white/[0.04] border border-white/10 text-white rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-gold/50" />
-                </div>
-              </div>
-              <Button className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 border-0"
-                isLoading={saving['s4']}
-                onClick={() => saveSection('s4', {
-                  chatRatePerMinute: section4.chatRatePerMinute * 100,
-                  callRatePerMinute: section4.callRatePerMinute * 100,
-                  hourlyRate: section4.hourlyRate * 100,
-                })}>
-                Save Rates
-              </Button>
-            </div>
           </div>
 
           {/* Photos */}

@@ -82,18 +82,33 @@ function CompanionInboxContent() {
   const voiceLiveSeconds = companionCall.liveSeconds;
 
   // If we land on this page with voiceSessionId but context has no active call,
-  // start it (e.g. page refresh or direct URL)
+  // start it (e.g. page refresh or direct URL). Don't re-start a call that has
+  // already ended/errored — that was the root cause of the "screen glitches
+  // after call ends": when the context auto-cleared `activeCall` 2 s after the
+  // call ended, this effect would re-fire with the stale voiceSessionId in the
+  // URL and launch a zombie call attempt.
   useEffect(() => {
-    if (voiceSessionId && !companionCall.activeCall && activeClientId) {
-      const clientInfo = threads.find(t => t.clientId === activeClientId);
-      companionCall.startCall({
-        sessionId: voiceSessionId,
-        clientId: activeClientId,
-        clientName: clientInfo?.clientName ?? 'Client',
-        clientAvatar: clientInfo?.clientAvatar ?? null,
-      });
-    }
-  }, [voiceSessionId, companionCall.activeCall, activeClientId, threads]);
+    if (!voiceSessionId || !activeClientId) return;
+    if (companionCall.activeCall) return;
+    if (voiceCall.state === 'ended' || voiceCall.state === 'error') return;
+    const clientInfo = threads.find(t => t.clientId === activeClientId);
+    companionCall.startCall({
+      sessionId: voiceSessionId,
+      clientId: activeClientId,
+      clientName: clientInfo?.clientName ?? 'Client',
+      clientAvatar: clientInfo?.clientAvatar ?? null,
+    });
+  }, [voiceSessionId, companionCall.activeCall, activeClientId, threads, voiceCall.state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When the call ends by ANY party (remote hangup, network error, or our own
+  // end button), strip voiceSessionId from the URL so the auto-restart effect
+  // above does not re-fire. Without this, the companion's screen would flash
+  // as activeCall cleared and immediately re-started on the stale URL param.
+  useEffect(() => {
+    if (voiceCall.state !== 'ended' && voiceCall.state !== 'error') return;
+    if (!voiceSessionId) return;
+    router.replace(`/companion/inbox${activeClientId ? `?active=${activeClientId}` : ''}`);
+  }, [voiceCall.state, voiceSessionId, activeClientId, router]);
 
   const handleEndVoiceCall = useCallback(async () => {
     await companionCall.endCall();
@@ -188,13 +203,42 @@ function CompanionInboxContent() {
     if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
   }, [activeClientId]);
 
-  // ── Poll for active billing session ───────────────────────────────────────
+  // ── Poll for active / pending billing session ────────────────────────────
+  //
+  // This effect does two things now:
+  //
+  //   1. If a CHAT session is PENDING for this thread, activate it by calling
+  //      /api/billing/accept. This is the ONLY place a chat session gets
+  //      activated — the companion modal no longer activates it. The moment
+  //      the companion opens the thread IS the moment billing and the timer
+  //      start, which is what the product requires.
+  //
+  //   2. If a session is already ACTIVE (e.g. page refresh, thread reopened,
+  //      voice call in progress) pick it up and hydrate the timer state.
   useEffect(() => {
     if (!activeClientId || !currentUserId || chatSessionActive) return;
+    let cancelled = false;
     const check = async () => {
       try {
         const res = await fetch(`/api/billing/session-status?clientId=${activeClientId}`);
         const d = await res.json();
+        if (cancelled) return;
+
+        if (d.data?.status === 'PENDING' && d.data?.type === 'CHAT' && d.data?.sessionId) {
+          // Companion is now in the thread — activate the pending chat.
+          // /api/billing/accept is idempotent and fires chat:accepted, which
+          // the onChatRequestResponse listener below picks up to start the
+          // UI timer from Date.now().
+          try {
+            await fetch('/api/billing/accept', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessionId: d.data.sessionId }),
+            });
+          } catch { /* non-fatal — next poll will retry */ }
+          return;
+        }
+
         if (d.data?.status === 'ACTIVE') {
           const durationSeconds: number = d.data.durationSeconds ?? 0;
           const startedAt: string | null = d.data.startedAt ?? null;
@@ -210,7 +254,7 @@ function CompanionInboxContent() {
     };
     check();
     const interval = setInterval(check, 3000);
-    return () => clearInterval(interval);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [activeClientId, currentUserId, chatSessionActive]);
 
   // ── Ably: chat:accepted ───────────────────────────────────────────────────
@@ -481,6 +525,10 @@ function CompanionChatPanel({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // First render after history loads: snap instantly so the latest message
+  // is visible immediately on chat open. Subsequent updates only follow the
+  // bottom if the user is already near it (so they can scroll up freely).
+  const initialScrollDoneRef = useRef(false);
 
   // ── Load history from DB ──────────────────────────────────────────────────
   useEffect(() => {
@@ -525,12 +573,19 @@ function CompanionChatPanel({
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
   useEffect(() => {
+    if (!historyLoaded) return;
     const el = containerRef.current;
     if (!el) return;
+    if (!initialScrollDoneRef.current) {
+      // First paint after history loaded — snap to bottom instantly.
+      el.scrollTop = el.scrollHeight;
+      initialScrollDoneRef.current = true;
+      return;
+    }
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [allMessages, isOtherTyping]);
+  }, [allMessages, isOtherTyping, historyLoaded]);
 
   // ── Send ──────────────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {

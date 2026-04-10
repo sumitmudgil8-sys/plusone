@@ -42,8 +42,14 @@ export function CompanionCallProvider({ children, userId }: { children: ReactNod
   const startedAtRef = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Timer gates on BOTH state==='connected' AND remoteUserJoined so it only
+  // runs once the other party is actually in the call. This matches the
+  // client-side behaviour and honours the UX rule: "timer should start after
+  // the other party enters". Before this fix the companion's timer started as
+  // soon as their own Agora publish completed, even if the client hadn't
+  // actually joined the channel yet.
   useEffect(() => {
-    if (voiceCall.state === 'connected') {
+    if (voiceCall.state === 'connected' && voiceCall.remoteUserJoined) {
       if (!startedAtRef.current) startedAtRef.current = Date.now();
       const tick = () => {
         if (!startedAtRef.current) return;
@@ -58,11 +64,13 @@ export function CompanionCallProvider({ children, userId }: { children: ReactNod
       startedAtRef.current = null;
       setLiveSeconds(0);
     }
-  }, [voiceCall.state]);
+  }, [voiceCall.state, voiceCall.remoteUserJoined]);
 
-  // Sync ActiveCallBanner
+  // Sync ActiveCallBanner — only show once the remote party has joined, so
+  // the mini-banner reflects an actual live call rather than a one-sided
+  // Agora publish.
   useEffect(() => {
-    if (activeCall && voiceCall.state === 'connected') {
+    if (activeCall && voiceCall.state === 'connected' && voiceCall.remoteUserJoined) {
       ActiveCallBanner.set({
         sessionId: activeCall.sessionId,
         returnPath: `/companion/inbox?active=${activeCall.clientId}&voiceSessionId=${activeCall.sessionId}`,
@@ -72,7 +80,7 @@ export function CompanionCallProvider({ children, userId }: { children: ReactNod
     if (voiceCall.state === 'ended' || voiceCall.state === 'error') {
       ActiveCallBanner.clear();
     }
-  }, [activeCall, voiceCall.state]);
+  }, [activeCall, voiceCall.state, voiceCall.remoteUserJoined]);
 
   // Auto-clear activeCall when call ends
   useEffect(() => {

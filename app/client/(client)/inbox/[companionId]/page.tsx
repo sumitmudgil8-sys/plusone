@@ -612,6 +612,11 @@ function ClientChatView({
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Tracks the first render after history loads so we can snap to the bottom
+  // instantly (no smooth-scroll animation) — otherwise the user briefly sees
+  // the top of the conversation before it scrolls down.
+  const initialScrollDoneRef = useRef(false);
 
   // ── Load history from DB on mount ─────────────────────────────────────────
   useEffect(() => {
@@ -656,9 +661,20 @@ function ClientChatView({
   }, [history, roomMessages, pendingMessages]);
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
+  // First render after history loads: snap instantly so the latest message
+  // is visible immediately when the chat opens. Subsequent updates use smooth
+  // scroll so new messages animate in.
   useEffect(() => {
+    if (!historyLoaded) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    if (!initialScrollDoneRef.current) {
+      container.scrollTop = container.scrollHeight;
+      initialScrollDoneRef.current = true;
+      return;
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [allMessages, isOtherTyping]);
+  }, [allMessages, isOtherTyping, historyLoaded]);
 
   // ── Send ──────────────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
@@ -748,7 +764,7 @@ function ClientChatView({
       )}
 
       {/* ── Messages ────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
         {!historyLoaded ? (
           <div className="flex justify-center py-8">
             <div className="w-6 h-6 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
