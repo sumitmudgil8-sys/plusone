@@ -497,6 +497,7 @@ model ManualPayment {
   requestedAmount Int      // paise — what client wanted (e.g. 50000 = ₹500)
   uniqueAmount    Int      // paise — adjusted amount client actually pays (e.g. 49996 = ₹499.96)
   status          String   @default("PENDING") // PENDING | APPROVED | REJECTED | EXPIRED
+  type            String   @default("WALLET")  // WALLET | SUBSCRIPTION
   upiId           String   // merchant UPI ID
   adminNote       String?
   createdAt       DateTime @default(now())

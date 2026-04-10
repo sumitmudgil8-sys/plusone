@@ -85,8 +85,10 @@ export async function PATCH(
     });
   }
 
-  // ── Approve: atomic wallet credit + status update ──
+  // ── Approve: atomic credit/activation + status update ──
   // Use a transaction to prevent double-crediting
+  const isSubscription = payment.type === 'SUBSCRIPTION';
+
   try {
     await prisma.$transaction(async (tx) => {
       // Re-check status inside transaction to prevent race conditions
@@ -105,39 +107,58 @@ export async function PATCH(
         },
       });
 
-      // Credit the wallet with the unique amount (what client actually paid)
-      const wallet = await tx.wallet.upsert({
-        where: { userId: payment.userId },
-        create: { userId: payment.userId, balance: fresh.uniqueAmount },
-        update: { balance: { increment: fresh.uniqueAmount } },
-      });
+      if (fresh.type === 'SUBSCRIPTION') {
+        // ── Subscription: activate the user's subscription ──
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
 
-      const updatedWallet = await tx.wallet.findUniqueOrThrow({
-        where: { userId: payment.userId },
-      });
+        await tx.user.update({
+          where: { id: payment.userId },
+          data: {
+            subscriptionTier: 'PREMIUM',
+            subscriptionStatus: 'ACTIVE',
+            subscriptionPlan: 'MONTHLY_2999',
+            subscriptionExpiresAt: expiresAt,
+          },
+        });
+      } else {
+        // ── Wallet: credit the wallet with the unique amount ──
+        await tx.wallet.upsert({
+          where: { userId: payment.userId },
+          create: { userId: payment.userId, balance: fresh.uniqueAmount },
+          update: { balance: { increment: fresh.uniqueAmount } },
+        });
 
-      await tx.walletTransaction.create({
-        data: {
-          walletId: updatedWallet.id,
-          type: 'RECHARGE',
-          amount: fresh.uniqueAmount,
-          balanceAfter: updatedWallet.balance,
-          description: `Wallet recharge (manual UPI verification)`,
-          metadata: JSON.stringify({
-            manualPaymentId: id,
-            requestedAmount: fresh.requestedAmount,
-            uniqueAmount: fresh.uniqueAmount,
-          }),
-        },
-      });
+        const updatedWallet = await tx.wallet.findUniqueOrThrow({
+          where: { userId: payment.userId },
+        });
+
+        await tx.walletTransaction.create({
+          data: {
+            walletId: updatedWallet.id,
+            type: 'RECHARGE',
+            amount: fresh.uniqueAmount,
+            balanceAfter: updatedWallet.balance,
+            description: `Wallet recharge (manual UPI verification)`,
+            metadata: JSON.stringify({
+              manualPaymentId: id,
+              requestedAmount: fresh.requestedAmount,
+              uniqueAmount: fresh.uniqueAmount,
+            }),
+          },
+        });
+      }
     });
 
     return NextResponse.json({
       success: true,
       data: {
-        message: 'Payment approved and wallet credited',
+        message: isSubscription
+          ? 'Subscription activated'
+          : 'Payment approved and wallet credited',
         userId: payment.userId,
         amount: payment.uniqueAmount,
+        type: payment.type ?? 'WALLET',
       },
     });
   } catch (err: unknown) {

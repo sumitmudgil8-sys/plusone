@@ -12,6 +12,7 @@ interface ManualPayment {
   requestedAmount: number;
   uniqueAmount: number;
   status: string;
+  type: string;
   upiId: string;
   adminNote: string | null;
   createdAt: string;
@@ -85,7 +86,11 @@ export default function AdminPaymentsPage() {
   }, [activeFilter, fetchPayments]);
 
   const handleApprove = async (id: string) => {
-    if (!confirm('Approve this payment? This will credit the client\'s wallet.')) return;
+    const payment = payments.find((p) => p.id === id);
+    const msg = payment?.type === 'SUBSCRIPTION'
+      ? 'Approve this payment? This will activate the client\'s subscription for 30 days.'
+      : 'Approve this payment? This will credit the client\'s wallet.';
+    if (!confirm(msg)) return;
     setActionLoading(id);
     try {
       const res = await fetch(`/api/admin/payments/${id}`, {
@@ -149,7 +154,7 @@ export default function AdminPaymentsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Payments</h1>
-        <p className="text-white/50 text-sm">Verify and approve manual UPI wallet recharges</p>
+        <p className="text-white/50 text-sm">Verify and approve manual UPI payments</p>
       </div>
 
       {/* Stats */}
@@ -229,6 +234,9 @@ export default function AdminPaymentsPage() {
                         <span className="font-medium text-white">{name}</span>
                         <Badge variant={STATUS_BADGE[payment.status] ?? 'default'}>
                           {payment.status}
+                        </Badge>
+                        <Badge variant={payment.type === 'SUBSCRIPTION' ? 'gold' : 'outline'}>
+                          {payment.type === 'SUBSCRIPTION' ? 'Subscription' : 'Wallet'}
                         </Badge>
                       </div>
                       <p className="text-xs text-white/40 mt-0.5">{payment.user.email}</p>
