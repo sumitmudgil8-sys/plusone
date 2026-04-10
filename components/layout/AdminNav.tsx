@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: HomeIcon },
@@ -17,6 +18,8 @@ export function AdminNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [pendingCount, setPendingCount] = useState(0);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     fetch('/api/admin/withdrawals?status=PENDING')
@@ -28,6 +31,7 @@ export function AdminNav() {
   }, []);
 
   const handleLogout = async () => {
+    setLoggingOut(true);
     localStorage.removeItem('_pone_rt');
     sessionStorage.removeItem('_session_ok');
     try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* proceed */ }
@@ -65,7 +69,7 @@ export function AdminNav() {
             </div>
 
             <button
-              onClick={handleLogout}
+              onClick={() => setLogoutOpen(true)}
               className="flex items-center gap-1.5 text-white/50 hover:text-white transition-colors text-sm"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -122,6 +126,16 @@ export function AdminNav() {
           </ul>
         </div>
       </nav>
+      <ConfirmDialog
+        isOpen={logoutOpen}
+        onClose={() => setLogoutOpen(false)}
+        onConfirm={handleLogout}
+        title="Log out?"
+        message="You'll need to sign in again to access the admin console."
+        confirmLabel="Log out"
+        variant="danger"
+        busy={loggingOut}
+      />
     </>
   );
 }

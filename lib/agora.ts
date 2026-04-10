@@ -1,6 +1,9 @@
 import { RtcTokenBuilder, RtcRole } from 'agora-token';
 
-const TOKEN_TTL_SECONDS = 3600; // 1 hour
+// Keep this tight — clients re-request via /api/agora/token if they need
+// to re-join, and that re-validates session ownership + ACTIVE status.
+// A stale leaked token can only be used inside this window.
+const TOKEN_TTL_SECONDS = 1800; // 30 minutes
 
 function getAgoraCredentials() {
   const appId = process.env.AGORA_APP_ID;

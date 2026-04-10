@@ -17,8 +17,19 @@ export interface JWTPayload {
   exp?: number;
 }
 
+// Access tokens are short-lived; the long-lived refresh token (below)
+// silently re-mints them via /api/session POST. This limits the exploit
+// window of a stolen cookie while preserving persistent-login UX.
+const ACCESS_TOKEN_TTL_SECONDS = 24 * 60 * 60; // 24 hours
+const REFRESH_TOKEN_TTL_SECONDS = 90 * 24 * 60 * 60; // 90 days
+// Bcrypt cost — 12 is the current OWASP recommendation for password hashing.
+// 10 → 12 ≈ 4× slower verification; still well under 300ms on modern hardware.
+const BCRYPT_ROUNDS = 12;
+
+export { ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS };
+
 export function signJWT(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '365d' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL_SECONDS });
 }
 
 export function verifyJWT(token: string): JWTPayload | null {
@@ -30,7 +41,7 @@ export function verifyJWT(token: string): JWTPayload | null {
 }
 
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
+  return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
 export async function comparePassword(password: string, hash: string): Promise<boolean> {
@@ -81,7 +92,10 @@ export function setAuthCookie(response: NextResponse, token: string): NextRespon
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 365, // 1 year
+    // Cookie maxAge matches the access-token TTL. The localStorage refresh
+    // token (/api/session POST) silently re-issues a new cookie on app
+    // open once the old one is gone.
+    maxAge: ACCESS_TOKEN_TTL_SECONDS,
     path: '/',
   });
   return response;
@@ -116,7 +130,9 @@ interface RefreshPayload {
 }
 
 export function signRefreshToken(payload: { id: string; role: string }): string {
-  return jwt.sign({ ...payload, type: 'refresh' }, JWT_SECRET, { expiresIn: '365d' });
+  return jwt.sign({ ...payload, type: 'refresh' }, JWT_SECRET, {
+    expiresIn: REFRESH_TOKEN_TTL_SECONDS,
+  });
 }
 
 export function verifyRefreshToken(token: string): { id: string; role: string } | null {

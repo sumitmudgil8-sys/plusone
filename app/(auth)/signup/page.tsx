@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useToast } from '@/components/ui/Toast';
 
 export default function SignupPage() {
   const router = useRouter();
+  const toast = useToast();
 
   const [form, setForm] = useState({
     name: '',
@@ -29,6 +31,7 @@ export default function SignupPage() {
 
     if (form.password !== form.confirmPassword) {
       setError('Passwords do not match');
+      toast.error('Passwords do not match');
       return;
     }
 
@@ -49,13 +52,17 @@ export default function SignupPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? 'Something went wrong');
+        const msg = data.error ?? 'Something went wrong';
+        setError(msg);
+        toast.error(msg);
         return;
       }
 
+      toast.success('Application submitted');
       router.push('/apply/submitted');
     } catch {
       setError('Something went wrong. Please try again.');
+      toast.error('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { BookingCard } from '@/components/booking/BookingCard';
+import { useToast } from '@/components/ui/Toast';
 import { formatDateTime } from '@/lib/utils';
 
 interface TodayBreakdown {
@@ -82,6 +83,7 @@ function buildSummary(schedule: WeeklySchedule): string {
 }
 
 export default function CompanionDashboard() {
+  const toast = useToast();
   const [user, setUser] = useState<{ isOnline?: boolean; companionProfile?: { name?: string } } | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [bookings, setBookings] = useState<any[]>([]);
@@ -188,11 +190,20 @@ export default function CompanionDashboard() {
         body: JSON.stringify({ status }),
       });
       if (res.ok) {
+        const verb =
+          status === 'CONFIRMED' ? 'accepted' :
+          status === 'CANCELLED' ? 'declined' :
+          status.toLowerCase();
+        toast.success(`Booking ${verb}`);
         const d = await fetch('/api/bookings').then((r) => r.json());
         setBookings(d.bookings ?? []);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? 'Failed to update booking');
       }
     } catch (error) {
       console.error('Error updating booking:', error);
+      toast.error('Network error — please try again');
     }
   };
 
@@ -221,9 +232,14 @@ export default function CompanionDashboard() {
       if (res.ok) {
         const d = await res.json();
         setUser((prev) => prev ? { ...prev, isOnline: d.data.isOnline } : prev);
+        toast.success(d.data.isOnline ? 'You are now online' : 'You are now offline');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? 'Failed to update status');
       }
     } catch (error) {
       console.error('Toggle online error:', error);
+      toast.error('Network error — please try again');
     } finally {
       setTogglingOnline(false);
     }
@@ -238,9 +254,13 @@ export default function CompanionDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ availableNow: newVal }),
       });
-      if (res.ok) setAvailableNow(newVal);
+      if (res.ok) {
+        setAvailableNow(newVal);
+      } else {
+        toast.error('Failed to update availability');
+      }
     } catch {
-      // revert on failure
+      toast.error('Network error — please try again');
     } finally {
       setTogglingAvailableNow(false);
     }
@@ -293,9 +313,12 @@ export default function CompanionDashboard() {
       if (res.ok) {
         setSchedule(draftSchedule);
         setEditingAvailability(false);
+        toast.success('Schedule saved');
+      } else {
+        toast.error('Failed to save schedule');
       }
     } catch {
-      // error
+      toast.error('Network error — please try again');
     } finally {
       setSavingAvailability(false);
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { recordAdminAction, AdminAction } from '@/lib/admin-audit';
 
 export const runtime = 'nodejs';
 
@@ -87,6 +88,14 @@ export async function PATCH(req: NextRequest) {
           ? 'Your profile has been approved and is now visible to clients.'
           : notes || 'Your verification was not approved.',
       },
+    });
+
+    await recordAdminAction({
+      adminId: payload.id,
+      action: isApproved ? AdminAction.VERIFICATION_APPROVE : AdminAction.VERIFICATION_REJECT,
+      targetType: 'CompanionProfile',
+      targetId: userId,
+      reason: notes || undefined,
     });
 
     return NextResponse.json({ success: true });

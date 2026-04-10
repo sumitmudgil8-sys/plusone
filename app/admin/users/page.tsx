@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
+import { useToast } from '@/components/ui/Toast';
 import { UserTable } from '@/components/admin/UserTable';
 import { cn } from '@/lib/utils';
 import type { User } from '@/types';
@@ -118,6 +119,7 @@ export default function AdminUsersPage() {
 
 // ─── Clients Section ─────────────────────────────────────────────
 function ClientsSection() {
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<ClientStatus>('PENDING_REVIEW');
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,9 +154,16 @@ function ClientsSection() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'approve' }),
       });
-      if (res.ok) fetchClients(activeTab);
+      if (res.ok) {
+        toast.success('Client approved');
+        fetchClients(activeTab);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error ?? 'Failed to approve client');
+      }
     } catch (err) {
       console.error(err);
+      toast.error('Network error — please try again');
     } finally {
       setActionLoading(null);
     }
@@ -170,12 +179,17 @@ function ClientsSection() {
         body: JSON.stringify({ action: 'reject', reason: rejectReason }),
       });
       if (res.ok) {
+        toast.success('Client rejected');
         setRejectModal(null);
         setRejectReason('');
         fetchClients(activeTab);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error ?? 'Failed to reject client');
       }
     } catch (err) {
       console.error(err);
+      toast.error('Network error — please try again');
     } finally {
       setActionLoading(null);
     }

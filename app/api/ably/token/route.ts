@@ -34,14 +34,23 @@ export async function GET(request: NextRequest) {
     // in serverless environments and makes the key check per-request.
     const rest = new Ably.Rest({ key: apiKey });
 
+    // NOTE: Do NOT add a wildcard '*' entry here — it overrides all scoped
+    // capabilities below and grants any signed-in user full access to every
+    // channel on the account (including other users' private channels).
     const tokenRequest = await rest.auth.createTokenRequest({
       clientId: user.id,
       capability: {
+        // Own private user channel — receive session events, chat requests, etc.
         [getUserChannelName(user.id)]: ['subscribe'],
+        // Publish-only on other users' private channels — used for typing
+        // indicators and other outbound signals. Cannot subscribe.
         'private:user-*': ['publish'],
+        // Public companions feed — clients see newly-added companions.
         'companions-feed': ['subscribe'],
+        // Chat rooms — both parties need full pub/sub/history/presence.
+        // Server-side authorization ensures only session participants
+        // are permitted to fetch the token at all.
         'chat-*': ['publish', 'subscribe', 'history', 'presence'],
-        '*': ['publish', 'subscribe', 'history', 'presence'],
       },
     });
 

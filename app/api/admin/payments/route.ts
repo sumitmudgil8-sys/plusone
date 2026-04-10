@@ -12,6 +12,12 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const statusFilter = searchParams.get('status'); // PENDING | APPROVED | REJECTED | EXPIRED
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+  const limit = Math.min(
+    100,
+    Math.max(1, parseInt(searchParams.get('limit') || '100', 10) || 100)
+  );
+  const skip = (page - 1) * limit;
 
   // Auto-expire stale PENDING payments before returning
   await prisma.manualPayment.updateMany({
@@ -27,20 +33,24 @@ export async function GET(request: NextRequest) {
     where.status = statusFilter;
   }
 
-  const payments = await prisma.manualPayment.findMany({
-    where,
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          clientProfile: { select: { name: true, avatarUrl: true } },
+  const [payments, total] = await Promise.all([
+    prisma.manualPayment.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            clientProfile: { select: { name: true, avatarUrl: true } },
+          },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-  });
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.manualPayment.count({ where }),
+  ]);
 
   // Summary stats
   const [pendingCount, pendingSum, approvedTodayCount, approvedTodaySum] = await Promise.all([
@@ -68,6 +78,12 @@ export async function GET(request: NextRequest) {
     success: true,
     data: {
       payments,
+      pagination: {
+        page,
+        limit,
+        total,
+        hasMore: skip + payments.length < total,
+      },
       stats: {
         pendingCount,
         pendingAmount: pendingSum._sum.uniqueAmount ?? 0,

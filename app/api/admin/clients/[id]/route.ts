@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { sendClientApprovedEmail, sendClientRejectedEmail } from '@/lib/email';
+import { recordAdminAction, AdminAction } from '@/lib/admin-audit';
 
 export const runtime = 'nodejs';
 
@@ -64,6 +65,13 @@ export async function PATCH(
       // Fire-and-forget — email failure must not break the approval
       sendClientApprovedEmail(client.email, name);
 
+      await recordAdminAction({
+        adminId: auth.user.id,
+        action: AdminAction.CLIENT_APPROVE,
+        targetType: 'User',
+        targetId: id,
+      });
+
       return NextResponse.json({ success: true, data: { client: updated } });
     }
 
@@ -83,6 +91,14 @@ export async function PATCH(
     });
 
     sendClientRejectedEmail(client.email, name, reason);
+
+    await recordAdminAction({
+      adminId: auth.user.id,
+      action: AdminAction.CLIENT_REJECT,
+      targetType: 'User',
+      targetId: id,
+      reason,
+    });
 
     return NextResponse.json({ success: true, data: { client: updated } });
   } catch (error) {

@@ -5,6 +5,12 @@ import { requireAuth } from '@/lib/auth';
 export const runtime = 'nodejs';
 
 // GET /api/users/[id] - Get user profile
+//
+// Privacy guard: self or admin get the full profile. All other authenticated
+// callers get a scoped public view (id, role, display name, avatar only).
+// The companion inbox legitimately needs to resolve client display info for
+// active threads, so we don't 403 cross-user reads — we just strip
+// sensitive fields (email, phone, LinkedIn, status, etc.).
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -13,6 +19,7 @@ export async function GET(
   if (auth.user === null) return auth.response;
 
   const { id } = params;
+  const isSelfOrAdmin = auth.user.id === id || auth.user.role === 'ADMIN';
 
   try {
     const user = await prisma.user.findUnique({
@@ -28,6 +35,28 @@ export async function GET(
         { error: 'User not found' },
         { status: 404 }
       );
+    }
+
+    if (!isSelfOrAdmin) {
+      // Public / cross-user view — only display identity, no sensitive fields.
+      return NextResponse.json({
+        user: {
+          id: user.id,
+          role: user.role,
+          clientProfile: user.clientProfile
+            ? {
+                name: user.clientProfile.name,
+                avatarUrl: user.clientProfile.avatarUrl,
+              }
+            : null,
+          companionProfile: user.companionProfile
+            ? {
+                name: user.companionProfile.name,
+                avatarUrl: user.companionProfile.avatarUrl,
+              }
+            : null,
+        },
+      });
     }
 
     // Remove password hash from response

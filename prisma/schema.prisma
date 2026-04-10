@@ -104,8 +104,6 @@ model User {
   companionProfileViews    CompanionProfileView[] @relation("CompanionViews")
   pushSubscriptions        PushSubscription[]
   fcmTokens                FcmToken[]
-  clientChatRequests       ChatRequest[]      @relation("ClientChatRequests")
-  companionChatRequests    ChatRequest[]      @relation("CompanionChatRequests")
   withdrawalRequests       WithdrawalRequest[]
   manualPayments           ManualPayment[]
 }
@@ -451,33 +449,11 @@ model FcmToken {
   @@index([userId])
 }
 
-enum ChatRequestStatus {
-  PENDING
-  ACCEPTED
-  DECLINED
-  EXPIRED
-}
-
 enum WithdrawalStatus {
   PENDING
   APPROVED
   REJECTED
   PAID
-}
-
-model ChatRequest {
-  id          String            @id @default(cuid())
-  clientId    String
-  companionId String
-  client      User              @relation("ClientChatRequests", fields: [clientId], references: [id], onDelete: Cascade)
-  companion   User              @relation("CompanionChatRequests", fields: [companionId], references: [id], onDelete: Cascade)
-  status      ChatRequestStatus @default(PENDING)
-  createdAt   DateTime          @default(now())
-  expiresAt   DateTime
-
-  @@index([clientId])
-  @@index([companionId])
-  @@index([status])
 }
 
 model WithdrawalRequest {
@@ -512,4 +488,25 @@ model ManualPayment {
   @@index([userId, status])
   @@index([uniqueAmount, status])
   @@index([status, createdAt])
+}
+
+// Immutable audit trail for admin actions. Every privileged mutation (ban,
+// approve, reject, payout, etc.) should append a row here so we can
+// reconstruct "who did what, when, to whom, and why" after the fact.
+//
+// Deliberately NOT tied to the admin User via FK cascade — if an admin
+// account is later deleted, their audit history must still be readable.
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  adminId    String   // User.id of the acting admin (no FK cascade by design)
+  action     String   // e.g. "USER_BAN", "PAYMENT_APPROVE", "WITHDRAWAL_PAY"
+  targetType String   // e.g. "User", "ManualPayment", "WithdrawalRequest"
+  targetId   String   // primary key of the affected row
+  reason     String?  // optional admin-supplied justification
+  metadata   String?  @default("{}") // JSON blob for action-specific context
+  createdAt  DateTime @default(now())
+
+  @@index([adminId, createdAt])
+  @@index([targetType, targetId])
+  @@index([action, createdAt])
 }

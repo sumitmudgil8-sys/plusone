@@ -48,7 +48,11 @@ export async function GET(request: NextRequest) {
       (clientUser.subscriptionExpiresAt == null || clientUser.subscriptionExpiresAt > now);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const companionProfileFilter: any = {};
+    const companionProfileFilter: any = {
+      // Only approved profiles are visible in the public browse feed.
+      // Un-approved profiles (pending admin review) must never leak here.
+      isApproved: true,
+    };
 
     if (minPrice || maxPrice) {
       companionProfileFilter.hourlyRate = {};

@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
+import { DEPOSIT_PERCENTAGE } from '@/lib/constants';
 import { formatCurrency } from '@/lib/utils';
 
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
@@ -52,6 +54,7 @@ export function BookingForm({
   weeklyAvailability,
 }: BookingFormProps) {
   const router = useRouter();
+  const toast = useToast();
   const availableDates = useMemo(
     () => generateAvailableDates(weeklyAvailability, availability),
     [weeklyAvailability, availability]
@@ -66,11 +69,13 @@ export function BookingForm({
   const [showTermsModal, setShowTermsModal] = useState(false);
 
   const totalAmount = hourlyRate * duration;
+  const depositAmount = Math.ceil((totalAmount * DEPOSIT_PERCENTAGE) / 100);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!termsAccepted) {
       setError('Please accept the terms and conditions to proceed.');
+      toast.error('Please accept the terms and conditions');
       return;
     }
     setError('');
@@ -92,15 +97,25 @@ export function BookingForm({
 
       if (!res.ok) {
         if (data.error === 'COMPANION_LOCKED') {
-          setError('This companion is locked. Upgrade to Premium to book.');
+          const msg = 'This companion is locked. Upgrade to Premium to book.';
+          setError(msg);
+          toast.error(msg);
+          return;
+        }
+        if (data.error === 'INSUFFICIENT_BALANCE') {
+          const msg = data.message || 'Insufficient wallet balance for the booking deposit.';
+          setError(msg);
+          toast.error(msg);
           return;
         }
         throw new Error(data.error || 'Failed to create booking');
       }
 
+      toast.success('Booking request sent');
       setShowSuccessModal(true);
     } catch (err: any) {
       setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -178,6 +193,13 @@ export function BookingForm({
               <span className="font-medium text-white">Total</span>
               <span className="font-bold text-gold text-lg">{formatCurrency(totalAmount)}</span>
             </div>
+            <div className="flex justify-between text-white/80 bg-gold/5 border border-gold/15 rounded-lg px-3 py-2">
+              <span>Deposit due now ({DEPOSIT_PERCENTAGE}%)</span>
+              <span className="font-semibold text-gold">{formatCurrency(depositAmount)}</span>
+            </div>
+            <p className="text-[11px] text-white/40 leading-snug">
+              Held from your wallet until the booking is confirmed. Refunded in full if the companion declines or you cancel before confirmation.
+            </p>
           </div>
         </Card>
 

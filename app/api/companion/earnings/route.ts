@@ -143,7 +143,11 @@ export async function GET(request: NextRequest) {
   const pendingWithdrawal = withdrawals
     .filter((w) => w.status === 'PENDING' || w.status === 'APPROVED')
     .reduce((sum, w) => sum + w.amount, 0);
-  const availableBalance = totalEarned - paidOut;
+  // Available = earned − already-paid − held-for-payout. Non-terminal
+  // withdrawal requests (PENDING + APPROVED) must be held, otherwise
+  // companions see inflated "available" figures and hit unexpected
+  // insufficient-balance errors on the withdrawal POST.
+  const availableBalance = totalEarned - paidOut - pendingWithdrawal;
 
   // Period breakdowns — all billing figures use companionShare (companion cut)
   const periods = {

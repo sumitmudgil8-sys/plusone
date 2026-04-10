@@ -4,25 +4,46 @@ export const runtime = 'nodejs';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 
-// GET /api/admin/bookings - Get all bookings
+// GET /api/admin/bookings - Paginated list of bookings
 export async function GET(request: NextRequest) {
   try {
     const auth = requireAuth(request, ['ADMIN']);
     if (auth.user === null) return auth.response;
 
-    const bookings = await prisma.booking.findMany({
-      include: {
-        client: {
-          include: { clientProfile: true },
-        },
-        companion: {
-          include: { companionProfile: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(searchParams.get('limit') || '100', 10) || 100)
+    );
+    const skip = (page - 1) * limit;
 
-    return NextResponse.json({ bookings });
+    const [bookings, total] = await Promise.all([
+      prisma.booking.findMany({
+        include: {
+          client: {
+            include: { clientProfile: true },
+          },
+          companion: {
+            include: { companionProfile: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.booking.count(),
+    ]);
+
+    return NextResponse.json({
+      bookings,
+      pagination: {
+        page,
+        limit,
+        total,
+        hasMore: skip + bookings.length < total,
+      },
+    });
   } catch (error) {
     console.error('Error fetching bookings:', error);
     return NextResponse.json(

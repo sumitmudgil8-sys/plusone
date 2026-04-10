@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useToast } from '@/components/ui/Toast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,18 +60,6 @@ const BODY_TYPES = ['Slim', 'Athletic', 'Average', 'Curvy', 'Heavy'];
 const FOOD_OPTIONS = ['Veg', 'Non-veg', 'Vegan', 'No preference'];
 const HABIT_OPTIONS = ['Never', 'Socially', 'Regularly'];
 
-// ─── Toast ───────────────────────────────────────────────────────────────────
-
-function Toast({ msg, ok }: { msg: string; ok: boolean }) {
-  return (
-    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-lg border ${
-      ok ? 'bg-green-500/15 border-green-500/30 text-green-400' : 'bg-red-500/15 border-red-500/30 text-red-400'
-    }`}>
-      {msg}
-    </div>
-  );
-}
-
 // ─── SelectField ─────────────────────────────────────────────────────────────
 
 function SelectField({ label, value, onChange, options, placeholder }: {
@@ -94,6 +84,7 @@ function SelectField({ label, value, onChange, options, placeholder }: {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CompanionProfilePage() {
+  const toast = useToast();
   const [user, setUser] = useState<UserRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'preview' | 'edit'>('preview');
@@ -120,13 +111,11 @@ export default function CompanionProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [settingPrimary, setSettingPrimary] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Per-section saving
   const [saving, setSaving] = useState<Record<string, boolean>>({});
-
-  // Toast
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   // Security
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -144,8 +133,8 @@ export default function CompanionProfilePage() {
   }, []);
 
   const showToast = (msg: string, ok: boolean) => {
-    setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3000);
+    if (ok) toast.success(msg);
+    else toast.error(msg);
   };
 
   const fetchUser = async () => {
@@ -250,8 +239,15 @@ export default function CompanionProfilePage() {
   const handleDeleteImage = async (id: string) => {
     try {
       const res = await fetch(`/api/companion/images/${id}`, { method: 'DELETE' });
-      if (res.ok) setImages((prev) => prev.filter((img) => img.id !== id));
-    } catch { /* */ }
+      if (res.ok) {
+        setImages((prev) => prev.filter((img) => img.id !== id));
+        toast.success('Photo removed');
+      } else {
+        toast.error('Failed to delete photo');
+      }
+    } catch {
+      toast.error('Network error — please try again');
+    }
   };
 
   const handleSetPrimary = async (id: string) => {
@@ -261,8 +257,17 @@ export default function CompanionProfilePage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: id }),
       });
-      if (res.ok) setImages((prev) => prev.map((img) => ({ ...img, isPrimary: img.id === id })));
-    } catch { /* */ } finally { setSettingPrimary(null); }
+      if (res.ok) {
+        setImages((prev) => prev.map((img) => ({ ...img, isPrimary: img.id === id })));
+        toast.success('Primary photo updated');
+      } else {
+        toast.error('Failed to set primary');
+      }
+    } catch {
+      toast.error('Network error — please try again');
+    } finally {
+      setSettingPrimary(null);
+    }
   };
 
   // Password change
@@ -300,8 +305,6 @@ export default function CompanionProfilePage() {
 
   return (
     <div className="max-w-lg mx-auto pb-8">
-      {toast && <Toast msg={toast.msg} ok={toast.ok} />}
-
       {/* ── Temp password warning ────────────────────────────────────── */}
       {isTempPassword && (
         <div className="mb-4 flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
@@ -695,7 +698,7 @@ export default function CompanionProfilePage() {
                     {img.isPrimary && (
                       <span className="absolute top-1 left-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-500 text-white leading-none">Main</span>
                     )}
-                    <button onClick={() => handleDeleteImage(img.id)}
+                    <button onClick={() => setPendingDeleteId(img.id)}
                       className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
@@ -732,6 +735,19 @@ export default function CompanionProfilePage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        isOpen={pendingDeleteId !== null}
+        onClose={() => setPendingDeleteId(null)}
+        onConfirm={async () => {
+          const id = pendingDeleteId;
+          setPendingDeleteId(null);
+          if (id) await handleDeleteImage(id);
+        }}
+        title="Remove this photo?"
+        message="This photo will be permanently deleted from your gallery."
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

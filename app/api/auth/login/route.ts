@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { comparePassword, signJWT } from '@/lib/auth';
+import { loginLimiter, getClientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP to blunt credential stuffing. Limiter state is
+    // in-memory — see lib/rate-limit.ts for the caveats.
+    const ip = getClientIp(request);
+    const rl = loginLimiter.check(`login:${ip}`);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Too many login attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      );
+    }
+
     const body = await request.json();
     const { email, password } = body;
 

@@ -43,7 +43,9 @@ export async function GET(
       },
     });
 
-    if (!companion || !companion.companionProfile) {
+    // Only approved profiles are visible to clients. Pending/rejected
+    // profiles return 404 to prevent guessing IDs from the public browse.
+    if (!companion || !companion.companionProfile || !companion.companionProfile.isApproved) {
       return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
     }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
+import { signupLimiter, getClientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +26,16 @@ const signupSchema = z.object({
 // Does NOT issue a JWT — the client must log in manually after signup.
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP to prevent mass account creation. See lib/rate-limit.ts.
+    const ip = getClientIp(request);
+    const rl = signupLimiter.check(`signup:${ip}`);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Too many signup attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      );
+    }
+
     const body = await request.json();
     const parsed = signupSchema.safeParse(body);
 

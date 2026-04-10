@@ -9,6 +9,7 @@ import { ActiveCallBanner } from '@/components/ActiveCallBanner';
 import { CompanionCallProvider, useCompanionCall } from '@/contexts/CompanionCallContext';
 import { useFcm } from '@/hooks/useFcm';
 import { ForegroundNotification } from '@/components/ForegroundNotification';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface IncomingCall {
   sessionId: string;
@@ -20,8 +21,7 @@ interface IncomingCall {
 }
 
 interface IncomingChatRequest {
-  requestId?: string;    // old ChatRequest flow
-  sessionId?: string;    // new BillingSession flow
+  sessionId?: string;    // BillingSession flow
   clientId: string;
   clientName: string;
   clientAvatar: string | null;
@@ -380,6 +380,16 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [incomingChatRequest, setIncomingChatRequest] = useState<IncomingChatRequest | null>(null);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const doLogout = async () => {
+    setLoggingOut(true);
+    localStorage.removeItem('_pone_rt');
+    sessionStorage.removeItem('_session_ok');
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* proceed */ }
+    window.location.href = '/login?logged_out=1';
+  };
 
   // Auto-request FCM notification permission for companions on login.
   // Companions need push notifications for incoming calls and chat requests.
@@ -481,14 +491,6 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
           }
           return;
         }
-        // Fall back to old ChatRequest model
-        const res = await fetch('/api/chat-request/pending');
-        const data = await res.json();
-        if (data.success && data.data) {
-          setIncomingChatRequest((prev) =>
-            prev ? prev : data.data
-          );
-        }
       } catch {
         // Non-fatal
       }
@@ -539,7 +541,7 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
 
   const handleAcceptChatRequest = useCallback(async () => {
     if (!incomingChatRequest) return;
-    const { requestId, sessionId, clientId } = incomingChatRequest;
+    const { sessionId, clientId } = incomingChatRequest;
     setIncomingChatRequest(null);
     // Complete the accept API call FIRST so the session is ACTIVE in DB
     // before the companion chat page loads and polls /api/companion/active-session.
@@ -550,12 +552,6 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId }),
         });
-      } else if (requestId) {
-        await fetch(`/api/chat-request/${requestId}/respond`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'ACCEPTED' }),
-        });
       }
     } catch {
       // Non-fatal — chat page will retry via polling
@@ -565,22 +561,14 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
 
   const handleDeclineChatRequest = useCallback(async () => {
     if (!incomingChatRequest) return;
-    const { requestId, sessionId } = incomingChatRequest;
+    const { sessionId } = incomingChatRequest;
     setIncomingChatRequest(null);
     try {
       if (sessionId) {
-        // New BillingSession flow
         await fetch('/api/billing/decline', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId }),
-        });
-      } else if (requestId) {
-        // Old ChatRequest flow
-        await fetch(`/api/chat-request/${requestId}/respond`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'DECLINED' }),
         });
       }
     } catch {
@@ -602,12 +590,7 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
             <span className="text-xs bg-gold/20 text-gold px-2 py-0.5 rounded-full">Companion</span>
           </div>
           <button
-            onClick={async () => {
-              localStorage.removeItem('_pone_rt');
-              sessionStorage.removeItem('_session_ok');
-              try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* proceed */ }
-              window.location.href = '/login?logged_out=1';
-            }}
+            onClick={() => setLogoutOpen(true)}
             className="text-sm text-white/60 hover:text-white"
           >
             Logout
@@ -622,6 +605,16 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
       <CompanionNav />
       <PushPermissionPrompt />
       <ForegroundNotification notification={foregroundNotification} onDismiss={dismissNotification} />
+      <ConfirmDialog
+        isOpen={logoutOpen}
+        onClose={() => setLogoutOpen(false)}
+        onConfirm={doLogout}
+        title="Log out?"
+        message="You'll stop receiving incoming call and chat requests until you sign back in."
+        confirmLabel="Log out"
+        variant="danger"
+        busy={loggingOut}
+      />
 
       {/* Floating call widget — visible on all pages when a call is active */}
       {companionCall.activeCall && companionCall.voiceCall.state !== 'ended' && (

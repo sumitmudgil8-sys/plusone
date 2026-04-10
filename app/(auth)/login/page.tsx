@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useToast } from '@/components/ui/Toast';
 import { useLocation } from '@/hooks/useLocation';
 
 export default function LoginPage() {
@@ -25,6 +26,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { updateLocation } = useLocation();
+  const toast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -75,9 +77,13 @@ function LoginForm() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || 'Invalid credentials');
+        const msg = data.error || 'Invalid credentials';
+        setError(msg);
+        toast.error(msg);
         return;
       }
+
+      toast.success('Welcome back');
 
       // Companions with a temporary password must change it first
       if (data.user.role === 'COMPANION' && data.user.isTemporaryPassword) {
@@ -116,6 +122,7 @@ function LoginForm() {
       }
     } catch (err) {
       setError('Something went wrong');
+      toast.error('Something went wrong');
     } finally {
       setLoading(false);
     }

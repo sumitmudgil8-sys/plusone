@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { recordAdminAction, AdminAction } from '@/lib/admin-audit';
 
 /**
  * PATCH /api/admin/payments/[id]
@@ -79,6 +80,19 @@ export async function PATCH(
       },
     });
 
+    await recordAdminAction({
+      adminId: auth.user.id,
+      action: AdminAction.PAYMENT_REJECT,
+      targetType: 'ManualPayment',
+      targetId: id,
+      reason: adminNote,
+      metadata: {
+        userId: payment.userId,
+        type: payment.type,
+        amount: payment.uniqueAmount,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       data: { message: 'Payment rejected' },
@@ -148,6 +162,20 @@ export async function PATCH(
           },
         });
       }
+    });
+
+    await recordAdminAction({
+      adminId: auth.user.id,
+      action: AdminAction.PAYMENT_APPROVE,
+      targetType: 'ManualPayment',
+      targetId: id,
+      reason: adminNote,
+      metadata: {
+        userId: payment.userId,
+        type: payment.type,
+        amount: payment.uniqueAmount,
+        isSubscription,
+      },
     });
 
     return NextResponse.json({

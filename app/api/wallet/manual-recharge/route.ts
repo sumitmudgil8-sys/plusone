@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { WALLET_MIN_RECHARGE, WALLET_MAX_RECHARGE } from '@/lib/constants';
+import { manualPaymentLimiter } from '@/lib/rate-limit';
 
 const MERCHANT_UPI_ID = process.env.MERCHANT_UPI_ID || '';
 const PAYMENT_WINDOW_MINUTES = 15;
@@ -71,6 +72,19 @@ async function generateUniqueAmount(requestedPaise: number): Promise<number> {
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request, ['CLIENT']);
   if (!auth.user) return auth.response;
+
+  // Rate-limit by user id so one attacker account can't spawn unbounded
+  // PENDING manual payments (which each hit the admin queue + scan bank feed).
+  const rl = manualPaymentLimiter.check(`manual-recharge:${auth.user.id}`);
+  if (!rl.ok) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `Too many payment requests. Try again in ${rl.retryAfter}s.`,
+      },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+    );
+  }
 
   if (!MERCHANT_UPI_ID) {
     return NextResponse.json(

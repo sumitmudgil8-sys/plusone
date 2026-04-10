@@ -1,10 +1,12 @@
 "use client";
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 interface BookingCardProps {
@@ -35,6 +37,7 @@ interface BookingCardProps {
 export function BookingCard({ booking, role, onStatusChange }: BookingCardProps) {
   const person = role === 'CLIENT' ? booking.companion : booking.client;
   const profile = (person as any)?.companionProfile || (person as any)?.clientProfile;
+  const [confirmAction, setConfirmAction] = useState<null | 'CANCELLED' | 'REJECTED'>(null);
 
   const statusColors: Record<string, string> = {
     PENDING: 'warning',
@@ -105,7 +108,7 @@ export function BookingCard({ booking, role, onStatusChange }: BookingCardProps)
             size="sm"
             variant="outline"
             className="flex-1"
-            onClick={() => onStatusChange?.(booking.id, 'REJECTED')}
+            onClick={() => setConfirmAction('REJECTED')}
           >
             Reject
           </Button>
@@ -115,7 +118,7 @@ export function BookingCard({ booking, role, onStatusChange }: BookingCardProps)
             size="sm"
             variant="danger"
             className="flex-1"
-            onClick={() => onStatusChange?.(booking.id, 'CANCELLED')}
+            onClick={() => setConfirmAction('CANCELLED')}
           >
             Cancel
           </Button>
@@ -131,6 +134,22 @@ export function BookingCard({ booking, role, onStatusChange }: BookingCardProps)
           </Button>
         )}
       </div>
+      <ConfirmDialog
+        isOpen={confirmAction !== null}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => {
+          if (confirmAction) onStatusChange?.(booking.id, confirmAction);
+          setConfirmAction(null);
+        }}
+        title={confirmAction === 'CANCELLED' ? 'Cancel this booking?' : 'Reject this booking?'}
+        message={
+          confirmAction === 'CANCELLED'
+            ? 'Your booking will be cancelled. Late cancellations may incur a fee per our terms.'
+            : 'The client will be notified that you declined this booking.'
+        }
+        confirmLabel={confirmAction === 'CANCELLED' ? 'Cancel booking' : 'Reject'}
+        variant="danger"
+      />
     </Card>
   );
 }

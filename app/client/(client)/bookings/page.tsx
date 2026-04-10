@@ -5,8 +5,10 @@ import { useEffect, useState } from 'react';
 import { BookingCard } from '@/components/booking/BookingCard';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { useToast } from '@/components/ui/Toast';
 
 export default function BookingsPage() {
+  const toast = useToast();
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
@@ -36,10 +38,17 @@ export default function BookingsPage() {
       });
 
       if (res.ok) {
+        toast.success(
+          status === 'CANCELLED' ? 'Booking cancelled' : `Booking ${status.toLowerCase()}`
+        );
         fetchBookings();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? 'Failed to update booking');
       }
     } catch (error) {
       console.error('Error updating booking:', error);
+      toast.error('Network error — please try again');
     }
   };
 

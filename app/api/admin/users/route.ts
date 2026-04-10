@@ -1,28 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { recordAdminAction, AdminAction } from '@/lib/admin-audit';
 
 export const runtime = 'nodejs';
 
-// GET /api/admin/users - Get all users
+// GET /api/admin/users - Paginated list of users
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['ADMIN']);
   if (auth.user === null) return auth.response;
 
   try {
-    const users = await prisma.user.findMany({
-      include: {
-        clientProfile: true,
-        companionProfile: true,
-        _count: {
-          select: {
-            clientBookings: true,
-            companionBookings: true,
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(searchParams.get('limit') || '100', 10) || 100)
+    );
+    const skip = (page - 1) * limit;
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        include: {
+          clientProfile: true,
+          companionProfile: true,
+          _count: {
+            select: {
+              clientBookings: true,
+              companionBookings: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.user.count(),
+    ]);
 
     // Remove password hashes
     const usersWithoutPassword = (users as any[]).map((user) => {
@@ -30,7 +44,15 @@ export async function GET(request: NextRequest) {
       return userWithoutPassword;
     });
 
-    return NextResponse.json({ users: usersWithoutPassword });
+    return NextResponse.json({
+      users: usersWithoutPassword,
+      pagination: {
+        page,
+        limit,
+        total,
+        hasMore: skip + users.length < total,
+      },
+    });
   } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(
@@ -71,6 +93,25 @@ export async function PATCH(request: NextRequest) {
       include: { clientProfile: true, companionProfile: true },
     });
 
+    // Audit the mutation. Ban/unban is the most important case; subscription
+    // edits also get logged as generic updates for completeness.
+    if (isBanned === true) {
+      await recordAdminAction({
+        adminId: auth.user.id,
+        action: AdminAction.USER_BAN,
+        targetType: 'User',
+        targetId: id,
+        metadata: { subscriptionTier, subscriptionStatus },
+      });
+    } else if (isBanned === false) {
+      await recordAdminAction({
+        adminId: auth.user.id,
+        action: AdminAction.USER_UNBAN,
+        targetType: 'User',
+        targetId: id,
+      });
+    }
+
     const { passwordHash, ...userWithoutPassword } = user;
 
     return NextResponse.json({ user: userWithoutPassword });
@@ -100,6 +141,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     await prisma.user.delete({ where: { id } });
+
+    await recordAdminAction({
+      adminId: auth.user.id,
+      action: AdminAction.USER_DELETE,
+      targetType: 'User',
+      targetId: id,
+    });
 
     return NextResponse.json({
       success: true,

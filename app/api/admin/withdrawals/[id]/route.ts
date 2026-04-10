@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendPushToUser } from '@/lib/push';
+import { recordAdminAction, AdminAction } from '@/lib/admin-audit';
 
 export const runtime = 'nodejs';
 
@@ -56,6 +57,24 @@ export async function PATCH(
   const updated = await prisma.withdrawalRequest.update({
     where: { id: params.id },
     data: updateData,
+  });
+
+  const auditAction =
+    action === 'approve'
+      ? AdminAction.WITHDRAWAL_APPROVE
+      : action === 'mark_paid'
+      ? AdminAction.WITHDRAWAL_PAY
+      : AdminAction.WITHDRAWAL_REJECT;
+  await recordAdminAction({
+    adminId: auth.user.id,
+    action: auditAction,
+    targetType: 'WithdrawalRequest',
+    targetId: params.id,
+    reason: adminNote,
+    metadata: {
+      companionId: withdrawal.companionId,
+      amount: withdrawal.amount,
+    },
   });
 
   const amountRupees = Math.round(withdrawal.amount / 100);

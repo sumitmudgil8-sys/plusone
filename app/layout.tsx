@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { SplashScreen } from '@/components/SplashScreen';
+import { ToastProvider } from '@/components/ui/Toast';
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
@@ -92,7 +93,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased bg-charcoal text-white min-h-screen">
-        <SplashScreen>{children}</SplashScreen>
+        <ToastProvider>
+          <SplashScreen>{children}</SplashScreen>
+        </ToastProvider>
       </body>
     </html>
   );

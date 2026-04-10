@@ -108,15 +108,25 @@ export async function PATCH(req: NextRequest) {
 
     const { checkInId } = await req.json();
 
-    const checkIn = await prisma.checkIn.update({
-      where: { id: checkInId },
+    if (!checkInId) {
+      return NextResponse.json({ error: 'checkInId is required' }, { status: 400 });
+    }
+
+    // Scoped updateMany so an attacker can't complete another user's
+    // check-in by guessing the id.
+    const result = await prisma.checkIn.updateMany({
+      where: { id: checkInId, userId: payload.id },
       data: {
         checkedInAt: new Date(),
         status: 'COMPLETED',
       },
     });
 
-    return NextResponse.json({ checkIn });
+    if (result.count === 0) {
+      return NextResponse.json({ error: 'Check-in not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Complete check-in error:', error);
     return NextResponse.json({ error: 'Failed to complete check-in' }, { status: 500 });

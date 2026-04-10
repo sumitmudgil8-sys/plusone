@@ -3,21 +3,36 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, hashPassword } from '@/lib/auth';
 import { sendCompanionCredentialsEmail } from '@/lib/email';
 import { getAblyClient } from '@/lib/ably';
+import { recordAdminAction, AdminAction } from '@/lib/admin-audit';
 import crypto from 'crypto';
 
 export const runtime = 'nodejs';
 
-// GET /api/admin/companions - Get all companions
+// GET /api/admin/companions - Paginated list of companions
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['ADMIN']);
   if (auth.user === null) return auth.response;
 
   try {
-    const companions = await prisma.user.findMany({
-      where: { role: 'COMPANION' },
-      include: { companionProfile: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(searchParams.get('limit') || '100', 10) || 100)
+    );
+    const skip = (page - 1) * limit;
+
+    const where = { role: 'COMPANION' as const };
+    const [companions, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        include: { companionProfile: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.user.count({ where }),
+    ]);
 
     // Remove password hashes
     const companionsWithoutPassword = (companions as any[]).map((user) => {
@@ -25,7 +40,15 @@ export async function GET(request: NextRequest) {
       return userWithoutPassword;
     });
 
-    return NextResponse.json({ companions: companionsWithoutPassword });
+    return NextResponse.json({
+      companions: companionsWithoutPassword,
+      pagination: {
+        page,
+        limit,
+        total,
+        hasMore: skip + companions.length < total,
+      },
+    });
   } catch (error) {
     console.error('Error fetching companions:', error);
     return NextResponse.json(
@@ -167,6 +190,13 @@ export async function PATCH(request: NextRequest) {
       data: { isApproved },
     });
 
+    await recordAdminAction({
+      adminId: auth.user.id,
+      action: isApproved ? AdminAction.COMPANION_APPROVE : AdminAction.COMPANION_REJECT,
+      targetType: 'CompanionProfile',
+      targetId: id,
+    });
+
     return NextResponse.json({ companion });
   } catch (error) {
     console.error('Error updating companion:', error);
@@ -194,6 +224,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     await prisma.user.delete({ where: { id } });
+
+    await recordAdminAction({
+      adminId: auth.user.id,
+      action: AdminAction.USER_DELETE,
+      targetType: 'User',
+      targetId: id,
+      metadata: { role: 'COMPANION' },
+    });
 
     return NextResponse.json({
       success: true,

@@ -27,32 +27,41 @@ export async function POST(request: NextRequest) {
   const { amount, note } = parsed.data;
   const companionId = auth.user.id;
 
-  // Compute available balance
-  const [chatAgg, callAgg, bookingAgg, paidWithdrawals] = await Promise.all([
+  // Compute available balance.
+  //
+  // IMPORTANT: billing sessions must use `companionShare` (net, after the
+  // 20% platform commission), NOT `totalCharged` (gross). Using totalCharged
+  // would let companions withdraw the platform's cut too.
+  //
+  // This must match the calculation in /api/companion/earnings.
+  const [chatAgg, callAgg, bookingAgg, heldWithdrawals] = await Promise.all([
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'CHAT' },
-      _sum: { totalCharged: true },
+      _sum: { companionShare: true },
     }),
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'VOICE' },
-      _sum: { totalCharged: true },
+      _sum: { companionShare: true },
     }),
     prisma.booking.aggregate({
       where: { companionId, status: 'COMPLETED' },
       _sum: { totalAmount: true },
     }),
+    // Deduct both PAID and non-terminal requests (PENDING + APPROVED) so
+    // companions cannot double-withdraw while an admin is processing payout.
+    // REJECTED is terminal and does NOT deduct.
     prisma.withdrawalRequest.aggregate({
-      where: { companionId, status: 'PAID' },
+      where: { companionId, status: { in: ['PENDING', 'APPROVED', 'PAID'] } },
       _sum: { amount: true },
     }),
   ]);
 
   const totalEarned =
-    (chatAgg._sum.totalCharged ?? 0) +
-    (callAgg._sum.totalCharged ?? 0) +
+    (chatAgg._sum.companionShare ?? 0) +
+    (callAgg._sum.companionShare ?? 0) +
     (bookingAgg._sum.totalAmount ?? 0);
-  const paidOut = paidWithdrawals._sum.amount ?? 0;
-  const availableBalance = totalEarned - paidOut;
+  const heldOrPaidOut = heldWithdrawals._sum.amount ?? 0;
+  const availableBalance = totalEarned - heldOrPaidOut;
 
   if (amount > availableBalance) {
     return NextResponse.json(

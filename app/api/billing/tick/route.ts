@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { debitWallet, creditWallet } from '@/lib/wallet';
 import { getAblyClient, getUserChannelName } from '@/lib/ably';
 import { BILLING_TICK_SECONDS, BILLING_MIN_BALANCE_MINUTES, PLATFORM_COMMISSION_RATE } from '@/lib/constants';
+import { billingTickLimiter } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -21,6 +22,18 @@ export async function POST(request: NextRequest) {
   if (auth.user === null) return auth.response;
 
   const { user } = auth;
+
+  // Per-user rate limit on top of the existing lastTickAt DB check below.
+  // The DB check prevents double-billing within a session; this protects
+  // against a single authenticated user hammering the endpoint across many
+  // sessions or with invalid session IDs.
+  const rl = billingTickLimiter.check(`tick:${user.id}`);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { success: false, error: 'Too many billing requests. Slow down.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+    );
+  }
 
   const body = await request.json();
   const parsed = tickSchema.safeParse(body);
@@ -59,10 +72,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Anti-double-billing: reject tick if too soon after last tick
-    const minTickMs = (BILLING_TICK_SECONDS - 5) * 1000; // 55s minimum — tight window to prevent double-billing
-    const msSinceLastTick = Date.now() - session.lastTickAt.getTime();
-    if (msSinceLastTick < minTickMs) {
+    // Atomically claim the tick slot. This replaces the previous read-then-
+    // check pattern, which had a TOCTOU window where two concurrent ticks
+    // could both pass the lastTickAt check and both debit the wallet.
+    //
+    // The updateMany only advances lastTickAt if BOTH conditions hold:
+    //   1. the session is still ACTIVE (not ended by another request)
+    //   2. at least minTickMs has elapsed since the last recorded tick
+    //
+    // If count === 0, another tick beat us — bail out before touching wallets.
+    const minTickMs = (BILLING_TICK_SECONDS - 5) * 1000; // 55s minimum
+    const nowMs = Date.now();
+    const tickCutoff = new Date(nowMs - minTickMs);
+    const nowDate = new Date(nowMs);
+
+    const claim = await prisma.billingSession.updateMany({
+      where: {
+        id: sessionId,
+        clientId: user.id,
+        status: 'ACTIVE',
+        lastTickAt: { lte: tickCutoff },
+      },
+      data: { lastTickAt: nowDate },
+    });
+
+    if (claim.count === 0) {
       return NextResponse.json(
         { success: false, error: 'TICK_TOO_SOON' },
         { status: 429 }
@@ -71,13 +105,18 @@ export async function POST(request: NextRequest) {
 
     const { ratePerMinute, companionId } = session;
 
-    // Debit client wallet (throws INSUFFICIENT_BALANCE if low)
+    // Debit client wallet (throws INSUFFICIENT_BALANCE if low).
+    // Tagged by session type so earnings/transaction history can distinguish
+    // chat charges from call charges.
+    const debitType = session.type === 'VOICE' ? 'CALL_CHARGE' : 'CHAT_CHARGE';
+    const chargeLabel = session.type === 'VOICE' ? 'Voice call' : 'Chat';
     try {
       await debitWallet(
         user.id,
         ratePerMinute,
-        `Chat with companion — 1 minute`,
-        { sessionId, companionId }
+        `${chargeLabel} with companion — 1 minute`,
+        { sessionId, companionId },
+        debitType
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown';
@@ -110,18 +149,19 @@ export async function POST(request: NextRequest) {
       await creditWallet(
         companionId,
         companionEarning,
-        `Earnings from chat — 1 minute`,
-        { sessionId, clientId: user.id }
+        `Earnings from ${session.type === 'VOICE' ? 'voice call' : 'chat'} — 1 minute`,
+        { sessionId, clientId: user.id, sessionType: session.type },
+        'EARNING'
       );
     } catch (companionErr) {
       console.error('Companion credit error (non-fatal):', companionErr);
     }
 
-    // Update session (track companionShare for earnings display)
+    // Update session totals. lastTickAt was already advanced by the atomic
+    // claim above, so we only need to bump the counters here.
     const updatedSession = await prisma.billingSession.update({
       where: { id: sessionId },
       data: {
-        lastTickAt: new Date(),
         totalMinutes: { increment: 1 },
         durationSeconds: { increment: BILLING_TICK_SECONDS },
         totalCharged: { increment: ratePerMinute },

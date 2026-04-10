@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { useToast } from '@/components/ui/Toast';
 
 interface Transaction {
   id: string;
@@ -31,6 +32,7 @@ const QUICK_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 type RechargeStep = 'amount' | 'pay' | 'waiting' | 'result';
 
 export default function WalletPage() {
+  const toast = useToast();
   const [balance, setBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
@@ -139,7 +141,14 @@ export default function WalletPage() {
           if (p.status !== 'PENDING') {
             setPayment(p);
             setStep('result');
-            if (p.status === 'APPROVED') fetchWallet();
+            if (p.status === 'APPROVED') {
+              toast.success('Payment received — wallet credited');
+              fetchWallet();
+            } else if (p.status === 'REJECTED') {
+              toast.error(p.adminNote || 'Payment rejected. Contact support if this is wrong.');
+            } else if (p.status === 'EXPIRED') {
+              toast.info('Payment request expired');
+            }
           }
         }
       } catch { /* non-fatal */ }
@@ -185,7 +194,9 @@ export default function WalletPage() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setRechargeError(data.error ?? 'Failed to create payment. Please try again.');
+        const msg = data.error ?? 'Failed to create payment. Please try again.';
+        setRechargeError(msg);
+        toast.error(msg);
         return;
       }
 
@@ -198,7 +209,9 @@ export default function WalletPage() {
         try { window.location.href = p.upiUrl; } catch { /* ignore */ }
       }, 600);
     } catch {
-      setRechargeError('Network error. Please check your connection and try again.');
+      const msg = 'Network error. Please check your connection and try again.';
+      setRechargeError(msg);
+      toast.error(msg);
     } finally {
       setRecharging(false);
     }

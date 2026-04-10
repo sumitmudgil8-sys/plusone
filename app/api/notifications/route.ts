@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendEmail } from '@/lib/email';
 
 export const runtime = 'nodejs';
 
@@ -38,28 +37,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Create a notification
-export async function POST(req: NextRequest) {
-  try {
-    const { userId, type, title, message, data } = await req.json();
-
-    const notification = await prisma.notification.create({
-      data: {
-        userId,
-        type,
-        title,
-        message,
-        data: JSON.stringify(data || {}),
-      },
-    });
-
-    return NextResponse.json({ notification });
-  } catch (error) {
-    console.error('Create notification error:', error);
-    return NextResponse.json({ error: 'Failed to create notification' }, { status: 500 });
-  }
-}
-
 // Mark notifications as read
 export async function PATCH(req: NextRequest) {
   try {
@@ -84,8 +61,11 @@ export async function PATCH(req: NextRequest) {
         data: { isRead: true },
       });
     } else if (notificationId) {
-      await prisma.notification.update({
-        where: { id: notificationId },
+      // Scoped updateMany so an attacker can't mark another user's
+      // notifications read by guessing IDs. updateMany silently succeeds
+      // with count=0 if the row isn't theirs.
+      await prisma.notification.updateMany({
+        where: { id: notificationId, userId: payload.id },
         data: { isRead: true },
       });
     }

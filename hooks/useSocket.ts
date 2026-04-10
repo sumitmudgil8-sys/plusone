@@ -28,7 +28,6 @@ type IncomingCallCallback = (data: {
 }) => void;
 
 type IncomingChatRequestCallback = (data: {
-  requestId?: string;
   sessionId?: string;
   clientId: string;
   clientName: string;
@@ -38,7 +37,6 @@ type IncomingChatRequestCallback = (data: {
 }) => void;
 
 type ChatRequestResponseCallback = (data: {
-  requestId?: string;
   sessionId?: string;
   companionId?: string;
   clientId?: string;
@@ -156,7 +154,6 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
     ch.subscribe('chat:accepted', (msg) => {
       const d = msg.data as Record<string, unknown>;
       chatRequestResponseCBs.current.forEach(cb => cb({
-        requestId: d.requestId as string | undefined,
         sessionId: d.sessionId as string | undefined,
         companionId: d.companionId as string | undefined,
         clientId: d.clientId as string | undefined,
@@ -166,7 +163,6 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
     ch.subscribe('chat:declined', (msg) => {
       const d = msg.data as Record<string, unknown>;
       chatRequestResponseCBs.current.forEach(cb => cb({
-        requestId: d.requestId as string | undefined,
         sessionId: d.sessionId as string | undefined,
         status: 'DECLINED',
       }));
