@@ -249,17 +249,31 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
     ch.subscribe('message', onMessage);
     ch.subscribe('typing', onTyping);
 
-    // Monitor channel state for debugging — helps trace attachment failures
+    // Monitor channel state for debugging — helps trace attachment failures.
+    //
+    // Reattach policy:
+    //   - `suspended` is transient (network blip) → try to reattach
+    //   - `failed` with a retryable reason → try to reattach
+    //   - `failed` with an auth/capability error (40100–40199) → DO NOT retry.
+    //     These are permanent until the token is refreshed; retrying produces
+    //     an infinite error loop that hammers Ably and floods the console.
     const onStateChange = (stateChange: Ably.ChannelStateChange) => {
       console.log(`[useSocket] room channel ${chatRoomId}: ${stateChange.previous} → ${stateChange.current}`,
         stateChange.reason ? `reason: ${stateChange.reason.message}` : '');
-      // If the channel enters a failed/suspended state, try to re-attach
-      if (stateChange.current === 'suspended' || stateChange.current === 'failed') {
-        console.warn(`[useSocket] room channel ${chatRoomId} entered ${stateChange.current}, attempting reattach`);
-        ch.attach().catch((err: Error) => {
-          console.error('[useSocket] reattach failed:', err.message);
-        });
+      if (stateChange.current !== 'suspended' && stateChange.current !== 'failed') return;
+
+      const reason = stateChange.reason as (Ably.ErrorInfo & { code?: number; statusCode?: number }) | undefined;
+      const code = reason?.code ?? 0;
+      const isAuthError = code >= 40100 && code < 40200;
+      if (isAuthError) {
+        console.error(`[useSocket] room channel ${chatRoomId} failed with auth/capability error (${code}); not retrying`);
+        return;
       }
+
+      console.warn(`[useSocket] room channel ${chatRoomId} entered ${stateChange.current}, attempting reattach`);
+      ch.attach().catch((err: Error) => {
+        console.error('[useSocket] reattach failed:', err.message);
+      });
     };
     ch.on(onStateChange);
 

@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 // Capability grants:
 //   - subscribe on their own private channel (session events)
 //   - publish on any private:user-* channel (outbound typing indicators)
-//   - full access on chat room channels (chat-*)
+//   - full access on chat room channels (chat:**)
 //   - companions-feed subscribe
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['CLIENT', 'COMPANION', 'ADMIN']);
@@ -49,8 +49,9 @@ export async function GET(request: NextRequest) {
         'companions-feed': ['subscribe'],
         // Chat rooms — both parties need full pub/sub/history/presence.
         // Server-side authorization ensures only session participants
-        // are permitted to fetch the token at all.
-        'chat-*': ['publish', 'subscribe', 'history', 'presence'],
+        // are permitted to fetch the token at all. Uses `:` separators so
+        // the `**` wildcard actually matches multi-segment room names.
+        'chat:**': ['publish', 'subscribe', 'history', 'presence'],
       },
     });
 

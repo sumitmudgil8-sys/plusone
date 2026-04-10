@@ -8,6 +8,7 @@ import type { RoomMessage } from '@/hooks/useSocket';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
 import type { VoiceCallState } from '@/hooks/useVoiceCall';
 import { BILLING_TICK_SECONDS } from '@/lib/constants';
+import { getChatRoomChannelName } from '@/lib/ably';
 import { ActiveCallBanner } from '@/components/ActiveCallBanner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -79,7 +80,7 @@ export default function ClientInboxPage() {
   // Room ID is computed early — useSocket subscribes to the channel immediately,
   // before the session is even active. This means the subscription is ready and
   // waiting when the companion sends the first message.
-  const roomId = userId ? `chat-${userId}-${companionId}` : undefined;
+  const roomId = userId ? getChatRoomChannelName(userId, companionId) : undefined;
 
   const {
     onChatRequestResponse,

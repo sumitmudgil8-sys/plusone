@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { getAblyClient, getUserChannelName } from '@/lib/ably';
+import { getAblyClient, getUserChannelName, getChatRoomChannelName } from '@/lib/ably';
 import { sendPushToUser } from '@/lib/push';
 
 export const runtime = 'nodejs';
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       //    dropped; if it failed (e.g. brief disconnect), this server publish
       //    ensures the recipient still sees the message.
       if (ablyMsgId) {
-        const roomChannel = `chat-${clientUserId}-${companionUserId}`;
+        const roomChannel = getChatRoomChannelName(clientUserId, companionUserId);
         await ably.channels.get(roomChannel).publish('message', {
           id: ablyMsgId,
           text: content,

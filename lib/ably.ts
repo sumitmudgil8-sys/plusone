@@ -17,3 +17,17 @@ export function getAblyClient(): Ably.Rest {
 export function getUserChannelName(userId: string): string {
   return `private:user-${userId}`;
 }
+
+/**
+ * Chat room channel name for a client-companion pair.
+ *
+ * IMPORTANT: Ably capability wildcards only match at `:` segment boundaries —
+ * `chat-*` does NOT match `chat-abc-xyz` (the whole thing is one segment).
+ * We use `:` separators so a capability of `chat:**` matches every room.
+ * The room id is stable per pair regardless of who is client/companion as
+ * long as both ends build it the same way, so callers must always pass
+ * (clientId, companionId) in that order.
+ */
+export function getChatRoomChannelName(clientId: string, companionId: string): string {
+  return `chat:${clientId}:${companionId}`;
+}

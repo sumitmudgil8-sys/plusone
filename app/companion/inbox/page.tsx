@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { getChatRoomChannelName } from '@/lib/ably';
 import { useSocket } from '@/hooks/useSocket';
 import type { RoomMessage } from '@/hooks/useSocket';
 import type { VoiceCallState } from '@/hooks/useVoiceCall';
@@ -99,10 +100,11 @@ function CompanionInboxContent() {
     router.replace(`/companion/inbox${activeClientId ? `?active=${activeClientId}` : ''}`);
   }, [companionCall, router, activeClientId]);
 
-  // Chat room ID — drives room subscription in useSocket
+  // Chat room ID — drives room subscription in useSocket.
+  // Must match the format used by the client side and the server publisher.
   const chatRoomId =
     currentUserId && activeClientId
-      ? `chat-${activeClientId}-${currentUserId}`
+      ? getChatRoomChannelName(activeClientId, currentUserId)
       : undefined;
 
   const {
