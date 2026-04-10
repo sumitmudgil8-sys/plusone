@@ -26,6 +26,7 @@ interface CompanionCardProps {
   age?: number;
   city?: string;
   nearbyMode?: boolean;
+  availableNow?: boolean;
 }
 
 export function CompanionCard({
@@ -44,6 +45,7 @@ export function CompanionCard({
   age,
   city,
   nearbyMode = false,
+  availableNow = false,
 }: CompanionCardProps) {
   const [isFavorited, setIsFavorited] = useState(initialFavorited);
   const [isHovered, setIsHovered] = useState(false);
@@ -119,6 +121,12 @@ export function CompanionCard({
           {/* Badges top-left */}
           {accessible && (
             <div className="absolute top-2 left-2 flex flex-col gap-1">
+              {availableNow && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/90 text-white text-[10px] font-semibold backdrop-blur-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  Available
+                </span>
+              )}
               {isVerified && (
                 <Badge className="bg-green-500/90 text-white text-xs">
                   <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">

@@ -25,6 +25,32 @@ interface CompanionRow {
   age?: number;
   city?: string;
   isNew?: boolean;
+  availableNow?: boolean;
+}
+
+type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
+const DAY_OPTIONS: { key: DayKey; label: string }[] = [
+  { key: 'mon', label: 'Mon' },
+  { key: 'tue', label: 'Tue' },
+  { key: 'wed', label: 'Wed' },
+  { key: 'thu', label: 'Thu' },
+  { key: 'fri', label: 'Fri' },
+  { key: 'sat', label: 'Sat' },
+  { key: 'sun', label: 'Sun' },
+];
+
+function getCurrentDayKey(): DayKey {
+  const dayMap: DayKey[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  return dayMap[new Date().getDay()];
+}
+
+function getCurrentSlot(): string {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 12) return 'MORNING';
+  if (h >= 12 && h < 17) return 'AFTERNOON';
+  if (h >= 17 && h < 21) return 'EVENING';
+  return 'NIGHT';
 }
 
 export default function BrowsePage() {
@@ -38,6 +64,8 @@ export default function BrowsePage() {
   const [nearbyMode, setNearbyMode] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationToast, setLocationToast] = useState('');
+  const [filterAvailableNow, setFilterAvailableNow] = useState(false);
+  const [filterDay, setFilterDay] = useState<DayKey | ''>('');
   const ablyRef = useRef<import('ably').Realtime | null>(null);
 
   // On mount: silently fetch location if already granted
@@ -57,17 +85,29 @@ export default function BrowsePage() {
     };
   }, []);
 
-  // Re-fetch when nearby mode or location changes
+  // Re-fetch when filters change
   useEffect(() => {
     if (!loading) fetchCompanions();
-  }, [nearbyMode, userLocation]);
+  }, [nearbyMode, userLocation, filterAvailableNow, filterDay]);
 
   const fetchCompanions = async () => {
     try {
-      let url = '/api/companions';
+      const params = new URLSearchParams();
       if (nearbyMode && userLocation) {
-        url += `?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=50`;
+        params.set('lat', String(userLocation.lat));
+        params.set('lng', String(userLocation.lng));
+        params.set('radius', '50');
       }
+      if (filterAvailableNow) params.set('availableNow', 'true');
+      if (filterDay) {
+        params.set('availableDay', filterDay);
+        // Also filter by current time slot when filtering by today
+        if (filterDay === getCurrentDayKey()) {
+          params.set('availableSlot', getCurrentSlot());
+        }
+      }
+      const qs = params.toString();
+      let url = `/api/companions${qs ? `?${qs}` : ''}`;
       const res = await fetch(url);
       const data = await res.json();
       setCompanions(data.companions ?? []);
@@ -218,6 +258,44 @@ export default function BrowsePage() {
           {locationToast}
         </div>
       )}
+
+      {/* Availability filters */}
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+        <button
+          onClick={() => setFilterAvailableNow(!filterAvailableNow)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-colors ${
+            filterAvailableNow
+              ? 'bg-green-500/15 border-green-500/30 text-green-400'
+              : 'bg-charcoal-surface border-white/[0.06] text-white/50 hover:text-white/70'
+          }`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${filterAvailableNow ? 'bg-green-400' : 'bg-white/20'}`} />
+          Available Now
+        </button>
+
+        {DAY_OPTIONS.map((d) => (
+          <button
+            key={d.key}
+            onClick={() => setFilterDay(filterDay === d.key ? '' : d.key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-colors ${
+              filterDay === d.key
+                ? 'bg-gold/15 border-gold/30 text-gold'
+                : 'bg-charcoal-surface border-white/[0.06] text-white/50 hover:text-white/70'
+            }`}
+          >
+            {d.label}
+          </button>
+        ))}
+
+        {(filterAvailableNow || filterDay) && (
+          <button
+            onClick={() => { setFilterAvailableNow(false); setFilterDay(''); }}
+            className="px-3 py-1.5 rounded-full text-xs font-medium text-white/30 hover:text-white/60 transition-colors whitespace-nowrap"
+          >
+            Clear
+          </button>
+        )}
+      </div>
 
       {/* Subscription banner */}
       {hasLocked && !bannerDismissed && !nearbyMode && (

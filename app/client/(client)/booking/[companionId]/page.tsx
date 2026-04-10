@@ -266,6 +266,7 @@ export default function BookingPage() {
             companionName={companion.name}
             hourlyRate={companion.hourlyRate}
             availability={companion.availability || []}
+            weeklyAvailability={companion.weeklyAvailability}
           />
         </Card>
       </div>

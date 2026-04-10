@@ -169,6 +169,11 @@ model CompanionProfile {
   education        String?
   occupation       String?
   personalityTags  String              @default("[]") // JSON array
+
+  // Weekly availability: JSON map of day → time slots
+  // e.g. {"mon":["MORNING","AFTERNOON"],"tue":["EVENING"],...}
+  weeklyAvailability String            @default("{}")
+  availableNow       Boolean           @default(false)
 }
 
 model MessageThread {

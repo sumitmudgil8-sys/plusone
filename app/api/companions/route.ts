@@ -25,6 +25,9 @@ export async function GET(request: NextRequest) {
   const userLat = searchParams.get('lat') ? parseFloat(searchParams.get('lat')!) : null;
   const userLng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : null;
   const radius = searchParams.get('radius') ? parseFloat(searchParams.get('radius')!) : 50;
+  const availableDay = searchParams.get('availableDay');   // e.g. "mon"
+  const availableSlot = searchParams.get('availableSlot'); // e.g. "EVENING"
+  const availableNow = searchParams.get('availableNow');   // "true" to filter
 
   try {
     const [clientProfile, clientUser] = await Promise.all([
@@ -127,6 +130,8 @@ export async function GET(request: NextRequest) {
           interests: JSON.parse(profile.interests || '[]'),
           tags: JSON.parse(profile.tags || '[]'),
           personalityTags: JSON.parse(profile.personalityTags || '[]'),
+          weeklyAvailability: JSON.parse(profile.weeklyAvailability || '{}'),
+          availableNow: profile.availableNow,
           distance,
           isFavorited: companion.favorites.length > 0,
         };
@@ -147,6 +152,20 @@ export async function GET(request: NextRequest) {
       companionsWithDistance.sort((a, b) => b.averageRating - a.averageRating);
     } else {
       companionsWithDistance.sort((a, b) => a.distance - b.distance);
+    }
+
+    // Filter by availability if requested
+    if (availableNow === 'true') {
+      companionsWithDistance = companionsWithDistance.filter((c) => c.availableNow);
+    }
+    if (availableDay) {
+      companionsWithDistance = companionsWithDistance.filter((c) => {
+        const schedule = c.weeklyAvailability as Record<string, string[]>;
+        const daySlots = schedule[availableDay];
+        if (!daySlots || daySlots.length === 0) return false;
+        if (availableSlot) return daySlots.includes(availableSlot);
+        return true;
+      });
     }
 
     // Free tier: first MAX_FREE_COMPANIONS accessible; rest are visible but locked.

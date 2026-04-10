@@ -11,6 +11,26 @@ interface CompanionImage {
   isPrimary: boolean;
 }
 
+type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+type SlotKey = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT';
+
+const PROFILE_DAYS: { key: DayKey; short: string }[] = [
+  { key: 'mon', short: 'Mon' },
+  { key: 'tue', short: 'Tue' },
+  { key: 'wed', short: 'Wed' },
+  { key: 'thu', short: 'Thu' },
+  { key: 'fri', short: 'Fri' },
+  { key: 'sat', short: 'Sat' },
+  { key: 'sun', short: 'Sun' },
+];
+
+const SLOT_LABELS: Record<SlotKey, string> = {
+  MORNING: 'Morn',
+  AFTERNOON: 'Aft',
+  EVENING: 'Eve',
+  NIGHT: 'Night',
+};
+
 interface CompanionData {
   id: string;
   name: string;
@@ -34,6 +54,8 @@ interface CompanionData {
   distance: number;
   isFavorited: boolean;
   accessible: boolean;
+  weeklyAvailability?: Record<string, string[]>;
+  availableNow?: boolean;
 }
 
 interface CompanionProfileProps {
@@ -158,8 +180,14 @@ export function CompanionProfile({
         )}
 
         {/* Availability badge — top left */}
-        <div className="absolute top-3 left-3">
-          {isOnline && (
+        <div className="absolute top-3 left-3 flex flex-col gap-1">
+          {companion.availableNow && (
+            <Badge className="bg-green-500/90 text-white text-xs flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse inline-block" />
+              Available Now
+            </Badge>
+          )}
+          {isOnline && !companion.availableNow && (
             <Badge className="bg-green-500/90 text-white text-xs flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-white inline-block" />
               Online
@@ -171,7 +199,7 @@ export function CompanionProfile({
               Busy
             </Badge>
           )}
-          {isOffline && (
+          {isOffline && !companion.availableNow && (
             <Badge className="bg-white/20 text-white/60 text-xs flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-white/50 inline-block" />
               Offline
@@ -319,6 +347,39 @@ export function CompanionProfile({
               <p className="text-sm text-gold/80 mb-2 italic">"{companion.tagline}"</p>
             )}
             <p className="text-white/70 whitespace-pre-line text-sm leading-relaxed">{companion.bio}</p>
+          </Card>
+        )}
+
+        {/* Weekly Availability */}
+        {companion.weeklyAvailability && Object.values(companion.weeklyAvailability).some((s) => (s as string[]).length > 0) && (
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-medium text-white text-sm">Weekly Availability</h2>
+              {companion.availableNow && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[10px] font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  Available Now
+                </span>
+              )}
+            </div>
+            <div className="space-y-1">
+              {PROFILE_DAYS.map((day) => {
+                const slots = (companion.weeklyAvailability?.[day.key] ?? []) as SlotKey[];
+                if (slots.length === 0) return null;
+                return (
+                  <div key={day.key} className="flex items-center gap-2">
+                    <span className="text-xs text-white/50 w-8 font-medium">{day.short}</span>
+                    <div className="flex gap-1">
+                      {slots.map((slot) => (
+                        <span key={slot} className="text-[10px] px-1.5 py-0.5 rounded bg-gold/10 text-gold/70 border border-gold/15">
+                          {SLOT_LABELS[slot] ?? slot}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </Card>
         )}
 

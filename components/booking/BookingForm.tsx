@@ -1,7 +1,6 @@
-"use client";
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -9,11 +8,40 @@ import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { formatCurrency } from '@/lib/utils';
 
+type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
+const DAY_KEY_MAP: DayKey[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+function generateAvailableDates(
+  weeklyAvailability: Record<string, string[]> | undefined,
+  legacyAvailability: string[],
+  daysAhead = 14
+): string[] {
+  // If weekly availability has data, use it to generate dates
+  const hasWeekly = weeklyAvailability && Object.values(weeklyAvailability).some((s) => s.length > 0);
+  if (hasWeekly) {
+    const dates: string[] = [];
+    const today = new Date();
+    for (let i = 0; i < daysAhead; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const dayKey = DAY_KEY_MAP[d.getDay()];
+      if (weeklyAvailability[dayKey]?.length > 0) {
+        dates.push(d.toISOString().split('T')[0]);
+      }
+    }
+    return dates;
+  }
+  // Fall back to legacy array
+  return legacyAvailability;
+}
+
 interface BookingFormProps {
   companionId: string;
   companionName: string;
   hourlyRate: number;
   availability: string[];
+  weeklyAvailability?: Record<string, string[]>;
 }
 
 export function BookingForm({
@@ -21,8 +49,13 @@ export function BookingForm({
   companionName,
   hourlyRate,
   availability,
+  weeklyAvailability,
 }: BookingFormProps) {
   const router = useRouter();
+  const availableDates = useMemo(
+    () => generateAvailableDates(weeklyAvailability, availability),
+    [weeklyAvailability, availability]
+  );
   const [date, setDate] = useState('');
   const [duration, setDuration] = useState(2);
   const [notes, setNotes] = useState('');
@@ -89,7 +122,7 @@ export function BookingForm({
                 className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold"
               >
                 <option value="">Select a date</option>
-                {availability.map((dateStr) => (
+                {availableDates.map((dateStr) => (
                   <option key={dateStr} value={dateStr}>
                     {new Date(dateStr).toLocaleDateString('en-IN', {
                       weekday: 'short',

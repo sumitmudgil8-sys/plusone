@@ -107,6 +107,8 @@ export async function GET(
         lat: profile.lat,
         lng: profile.lng,
         availability: JSON.parse(profile.availability || '[]'),
+        weeklyAvailability: JSON.parse(profile.weeklyAvailability || '{}'),
+        availableNow: profile.availableNow,
         distance,
         isFavorited: companion.favorites.length > 0,
         accessible,
