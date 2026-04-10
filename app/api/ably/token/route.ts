@@ -48,10 +48,13 @@ export async function GET(request: NextRequest) {
         // Public companions feed — clients see newly-added companions.
         'companions-feed': ['subscribe'],
         // Chat rooms — both parties need full pub/sub/history/presence.
-        // Server-side authorization ensures only session participants
-        // are permitted to fetch the token at all. Uses `:` separators so
-        // the `**` wildcard actually matches multi-segment room names.
-        'chat:**': ['publish', 'subscribe', 'history', 'presence'],
+        // Channel naming: `chat:<clientId>:<companionId>` (exactly 3 segments).
+        // Ably capability wildcards use a single `*` per segment; `**` is NOT
+        // valid syntax, so use `chat:*:*` to match the two ID segments.
+        // Server-side authorization on /api/messages/send ensures only session
+        // participants can actually publish via the server, and the bearer of
+        // the token is authenticated on the server side.
+        'chat:*:*': ['publish', 'subscribe', 'history', 'presence'],
       },
     });
 

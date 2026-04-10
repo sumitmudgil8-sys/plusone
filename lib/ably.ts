@@ -21,12 +21,13 @@ export function getUserChannelName(userId: string): string {
 /**
  * Chat room channel name for a client-companion pair.
  *
- * IMPORTANT: Ably capability wildcards only match at `:` segment boundaries —
- * `chat-*` does NOT match `chat-abc-xyz` (the whole thing is one segment).
- * We use `:` separators so a capability of `chat:**` matches every room.
- * The room id is stable per pair regardless of who is client/companion as
- * long as both ends build it the same way, so callers must always pass
- * (clientId, companionId) in that order.
+ * IMPORTANT: Ably capability wildcards only match at `:` segment boundaries,
+ * and each `*` matches exactly one segment (`**` is NOT valid syntax). A
+ * hyphenated name like `chat-abc-xyz` is a single segment — `chat-*` would not
+ * match it. We use `:` separators and the token capability `chat:*:*` to
+ * match the two ID segments. The room id is stable per pair regardless of
+ * who is client/companion as long as both ends build it the same way, so
+ * callers must always pass (clientId, companionId) in that order.
  */
 export function getChatRoomChannelName(clientId: string, companionId: string): string {
   return `chat:${clientId}:${companionId}`;
