@@ -252,7 +252,7 @@ export default function BookingPage() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-white">Book This Companion</h2>
             {companion.isVerified && (
-              <Badge className="bg-green-500/20 text-green-400">
+              <Badge variant="success">
                 <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
@@ -308,8 +308,8 @@ export default function BookingPage() {
 
             {chatRequestStatus === 'accepted' && (
               <>
-                <div className="w-16 h-16 rounded-full bg-green-500/20 border-2 border-green-500/40 flex items-center justify-center mx-auto">
-                  <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="w-16 h-16 rounded-full bg-success/20 border-2 border-success/40 flex items-center justify-center mx-auto">
+                  <svg className="w-8 h-8 text-success-fg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
@@ -319,8 +319,8 @@ export default function BookingPage() {
 
             {chatRequestStatus === 'declined' && (
               <>
-                <div className="w-16 h-16 rounded-full bg-red-500/20 border-2 border-red-500/40 flex items-center justify-center mx-auto">
-                  <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="w-16 h-16 rounded-full bg-error/20 border-2 border-error/40 flex items-center justify-center mx-auto">
+                  <svg className="w-8 h-8 text-error-fg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </div>
@@ -349,23 +349,37 @@ export default function BookingPage() {
 
             {chatRequestStatus === 'insufficient_balance' && (
               <>
-                <div className="w-16 h-16 rounded-full bg-yellow-500/20 border-2 border-yellow-500/40 flex items-center justify-center mx-auto">
-                  <svg className="w-8 h-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="w-16 h-16 rounded-full bg-warning/20 border-2 border-warning/40 flex items-center justify-center mx-auto">
+                  <svg className="w-8 h-8 text-warning-fg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                   </svg>
                 </div>
                 <div>
                   <p className="text-white font-semibold">Insufficient Balance</p>
-                  {insufficientBalanceDetails ? (
-                    <p className="text-white/50 text-sm mt-1">
-                      You need ₹{(insufficientBalanceDetails.required / 100).toFixed(0)} (10 min) to start.{' '}
-                      Current balance: ₹{(insufficientBalanceDetails.current / 100).toFixed(0)}.{' '}
-                      Add ₹{((insufficientBalanceDetails.required - insufficientBalanceDetails.current) / 100).toFixed(0)} to continue.
-                    </p>
-                  ) : (
-                    <p className="text-white/50 text-sm mt-1">Add money to your wallet to start a chat session.</p>
-                  )}
+                  <p className="text-white/50 text-sm mt-1">
+                    {insufficientBalanceDetails
+                      ? `You need ₹${Math.ceil((insufficientBalanceDetails.required - insufficientBalanceDetails.current) / 100)} more to start a chat session.`
+                      : 'Add money to your wallet to start a chat session.'}
+                  </p>
                 </div>
+                {insufficientBalanceDetails && (
+                  <div className="w-full rounded-xl bg-white/[0.04] border border-white/[0.06] p-3 text-left space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">Current balance</span>
+                      <span className="text-white font-medium">₹{(insufficientBalanceDetails.current / 100).toFixed(0)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">Required (10 min minimum)</span>
+                      <span className="text-white font-medium">₹{(insufficientBalanceDetails.required / 100).toFixed(0)}</span>
+                    </div>
+                    <div className="border-t border-white/[0.06] pt-1.5 flex justify-between text-xs">
+                      <span className="text-warning-fg font-semibold">Shortfall</span>
+                      <span className="text-warning-fg font-semibold">
+                        ₹{Math.ceil((insufficientBalanceDetails.required - insufficientBalanceDetails.current) / 100)}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <div className="flex gap-2 w-full">
                   <Button variant="outline" onClick={() => setChatRequestStatus('idle')} className="flex-1">Cancel</Button>
                   <Button onClick={() => router.push('/client/wallet')} className="flex-1">Add Money</Button>

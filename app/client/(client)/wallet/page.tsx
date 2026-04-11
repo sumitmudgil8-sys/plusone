@@ -422,6 +422,16 @@ export default function WalletPage() {
                 </button>
               </div>
 
+              {/* Why unique amount? — helps users understand the few-paise offset */}
+              <div className="flex items-start gap-2 bg-info/5 border border-info/20 rounded-lg p-3">
+                <svg className="w-4 h-4 text-info-fg shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-xs text-white/60 leading-relaxed">
+                  <span className="text-white/80 font-medium">Why a unique amount?</span> The extra few paise help us automatically match your payment to your account. It gets credited in full to your wallet.
+                </p>
+              </div>
+
               {/* UPI ID row */}
               <div className="bg-white/5 rounded-xl p-3 flex items-center justify-between">
                 <div>

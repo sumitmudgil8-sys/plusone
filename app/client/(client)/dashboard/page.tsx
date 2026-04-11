@@ -22,14 +22,16 @@ function getGreeting() {
 export default function ClientHome() {
   const [user, setUser] = useState<{ clientProfile?: { name?: string }; subscriptionStatus?: string } | null>(null);
   const [companions, setCompanions] = useState<Companion[]>([]);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [userRes, companionsRes] = await Promise.all([
+        const [userRes, companionsRes, walletRes] = await Promise.all([
           fetch('/api/users/me'),
           fetch('/api/companions'),
+          fetch('/api/wallet'),
         ]);
         if (userRes.ok) {
           const userData = await userRes.json();
@@ -38,6 +40,10 @@ export default function ClientHome() {
         if (companionsRes.ok) {
           const data = await companionsRes.json();
           setCompanions(data.companions ?? []);
+        }
+        if (walletRes.ok) {
+          const walletData = await walletRes.json();
+          if (walletData.success) setWalletBalance(walletData.data.balance);
         }
       } catch (error) {
         console.error('Error fetching home data:', error);
@@ -103,6 +109,34 @@ export default function ClientHome() {
         </div>
       </div>
 
+      {/* Wallet balance widget */}
+      {walletBalance !== null && (
+        <Link
+          href="/client/wallet"
+          className="flex items-center justify-between gap-3 rounded-2xl bg-charcoal-surface border border-white/[0.06] px-5 py-4 active:scale-[0.98] transition-transform"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[11px] text-white/40 uppercase tracking-wider font-medium">Wallet balance</p>
+              <p className="text-lg font-bold text-white mt-0.5">
+                ₹{(walletBalance / 100).toLocaleString('en-IN')}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-gold font-semibold">
+            {walletBalance < 20000 ? 'Add money' : 'Recharge'}
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </Link>
+      )}
+
       {/* Today's Picks */}
       {todaysPicks.length > 0 && (
         <section>
@@ -125,8 +159,8 @@ export default function ClientHome() {
           <div className="flex items-center justify-between mb-3.5">
             <div className="flex items-center gap-2.5">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success-fg opacity-60" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-success-fg" />
               </span>
               <h2 className="text-white font-semibold text-[15px]">Available Now</h2>
             </div>

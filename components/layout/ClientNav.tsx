@@ -20,28 +20,30 @@ export function ClientNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 glass-strong border-t border-white/[0.06] safe-area-bottom">
-      <ul className="flex items-center justify-around max-w-lg mx-auto py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <ul className="flex items-stretch justify-around max-w-lg mx-auto pb-[max(0.25rem,env(safe-area-inset-bottom))]">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (
-            <li key={item.href}>
+            <li key={item.href} className="flex-1">
               <Link
                 href={item.href}
+                aria-label={item.label}
                 className={cn(
-                  'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200',
+                  'relative flex flex-col items-center justify-center gap-0.5 min-h-[56px] py-2 rounded-xl transition-all duration-200',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40',
                   isActive
-                    ? 'text-gold'
-                    : 'text-white/30 active:text-white/50'
+                    ? 'text-amber-400'
+                    : 'text-white/35 active:text-white/60 hover:text-white/60'
                 )}
               >
                 <item.icon className={cn(
-                  'w-[22px] h-[22px] transition-transform duration-200',
+                  'w-6 h-6 transition-transform duration-200',
                   isActive && 'scale-110'
                 )} />
-                <span className="text-[10px] font-medium">{item.label}</span>
+                <span className="text-[10px] font-semibold tracking-wide">{item.label}</span>
                 {isActive && (
-                  <span className="absolute -bottom-0.5 w-5 h-0.5 bg-gold rounded-full" />
+                  <span className="absolute bottom-0.5 w-6 h-0.5 bg-amber-400 rounded-full" />
                 )}
               </Link>
             </li>

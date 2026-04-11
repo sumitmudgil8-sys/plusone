@@ -22,6 +22,25 @@ const config: Config = {
           bright: '#D4AF37',
           muted: '#C9A96E99',
         },
+        // Semantic status tokens — use these instead of raw emerald/red/amber
+        // classes so the palette is centralized and themeable. `text-success`,
+        // `bg-error`, etc. are referenced across the app; do not remove.
+        success: {
+          DEFAULT: '#10b981',
+          fg: '#34d399',      // lighter for text on dark bg
+        },
+        error: {
+          DEFAULT: '#ef4444',
+          fg: '#f87171',
+        },
+        warning: {
+          DEFAULT: '#f59e0b',
+          fg: '#fbbf24',
+        },
+        info: {
+          DEFAULT: '#3b82f6',
+          fg: '#60a5fa',
+        },
       },
       fontFamily: {
         serif: ['Georgia', 'Cambria', 'Times New Roman', 'serif'],

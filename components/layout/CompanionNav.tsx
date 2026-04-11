@@ -17,26 +17,31 @@ export function CompanionNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 glass-strong border-t border-white/[0.06] md:relative md:top-0 md:border-t-0 md:border-b md:bg-charcoal-surface md:backdrop-blur-none z-50 safe-area-bottom">
-      <div className="max-w-7xl mx-auto px-4">
-        <ul className="flex justify-around md:justify-start md:gap-1 py-2 md:py-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:pb-3">
+      <div className="max-w-7xl mx-auto md:px-4">
+        <ul className="flex items-stretch justify-around md:justify-start md:gap-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:py-3 md:pb-3">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
-              <li key={item.href}>
+              <li key={item.href} className="flex-1 md:flex-none">
                 <Link
                   href={item.href}
+                  aria-label={item.label}
                   className={cn(
-                    'flex flex-col md:flex-row items-center gap-0.5 md:gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-xl transition-all duration-200 relative',
+                    'relative flex flex-col md:flex-row items-center justify-center md:justify-start gap-0.5 md:gap-2 min-h-[56px] py-2 md:px-4 md:py-2 rounded-xl transition-all duration-200',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40',
                     isActive
-                      ? 'text-gold'
-                      : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03]'
+                      ? 'text-amber-400'
+                      : 'text-white/35 hover:text-white/60 hover:bg-white/[0.03]'
                   )}
                 >
                   <item.icon className={cn(
-                    'w-5 h-5 transition-transform duration-200',
+                    'w-6 h-6 md:w-5 md:h-5 transition-transform duration-200',
                     isActive && 'scale-110'
                   )} />
-                  <span className="text-[10px] md:text-sm font-medium">{item.label}</span>
+                  <span className="text-[10px] md:text-sm font-semibold tracking-wide">{item.label}</span>
+                  {isActive && (
+                    <span className="absolute bottom-0.5 md:hidden w-6 h-0.5 bg-amber-400 rounded-full" />
+                  )}
                 </Link>
               </li>
             );

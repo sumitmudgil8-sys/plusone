@@ -529,6 +529,25 @@ function CompanionChatPanel({
   // is visible immediately on chat open. Subsequent updates only follow the
   // bottom if the user is already near it (so they can scroll up freely).
   const initialScrollDoneRef = useRef(false);
+  // Tracks whether the companion is scrolled near the bottom. If they've
+  // scrolled up to read older messages we don't auto-follow new messages —
+  // instead we surface a "new messages" pill they can tap to jump back down.
+  const isNearBottomRef = useRef(true);
+  const prevLastMsgIdRef = useRef<string | null>(null);
+  const [showNewMessagesPill, setShowNewMessagesPill] = useState(false);
+
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    isNearBottomRef.current = nearBottom;
+    if (nearBottom) setShowNewMessagesPill(false);
+  }, []);
+
+  const scrollToLatest = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowNewMessagesPill(false);
+  }, []);
 
   // ── Load history from DB ──────────────────────────────────────────────────
   useEffect(() => {
@@ -572,20 +591,44 @@ function CompanionChatPanel({
   }, [history, roomMessages, pendingMessages]);
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
+  // First paint: snap instantly. After that, auto-follow new messages only if
+  // the companion is still near the bottom OR the new message was sent by the
+  // companion themselves. Otherwise surface a "new messages" pill.
   useEffect(() => {
     if (!historyLoaded) return;
     const el = containerRef.current;
     if (!el) return;
+
     if (!initialScrollDoneRef.current) {
-      // First paint after history loaded — snap to bottom instantly.
       el.scrollTop = el.scrollHeight;
       initialScrollDoneRef.current = true;
+      isNearBottomRef.current = true;
+      prevLastMsgIdRef.current = allMessages[allMessages.length - 1]?.id ?? null;
       return;
     }
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+
+    const lastMsg = allMessages[allMessages.length - 1];
+    if (!lastMsg || lastMsg.id === prevLastMsgIdRef.current) return;
+    prevLastMsgIdRef.current = lastMsg.id;
+
+    const isOwn = lastMsg.senderId === currentUserId;
+    if (isOwn || isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setShowNewMessagesPill(false);
+    } else {
+      setShowNewMessagesPill(true);
+    }
+  }, [allMessages, historyLoaded, currentUserId]);
+
+  // Typing indicator: only follow if we're already near the bottom. Never
+  // show the "new messages" pill for typing — it's transient.
+  useEffect(() => {
+    if (!historyLoaded || !isOtherTyping) return;
+    if (!initialScrollDoneRef.current) return;
+    if (isNearBottomRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [allMessages, isOtherTyping, historyLoaded]);
+  }, [isOtherTyping, historyLoaded]);
 
   // ── Send ──────────────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
@@ -667,7 +710,8 @@ function CompanionChatPanel({
       </div>
 
       {/* Messages */}
-      <div ref={containerRef} className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+      <div className="relative flex-1 min-h-0">
+      <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-y-auto overscroll-contain px-4 py-4">
         {!historyLoaded ? (
           <div className="flex justify-center py-10">
             <div className="w-5 h-5 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
@@ -737,6 +781,18 @@ function CompanionChatPanel({
             <div ref={messagesEndRef} />
           </div>
         )}
+      </div>
+      {showNewMessagesPill && (
+        <button
+          onClick={scrollToLatest}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-full bg-amber-500 text-black text-xs font-semibold shadow-lg shadow-amber-500/30 active:scale-95 transition-transform flex items-center gap-1.5"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+          New messages
+        </button>
+      )}
       </div>
 
       {/* Input */}

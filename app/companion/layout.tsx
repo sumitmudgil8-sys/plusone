@@ -140,7 +140,7 @@ function ForcePasswordModal({ onSuccess }: { onSuccess: () => void }) {
           </div>
 
           {error && (
-            <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+            <p className="text-sm text-error-fg bg-error/10 border border-error/20 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
@@ -298,13 +298,13 @@ function CompanionFloatingCall({
     !voiceCall.remoteUserJoined ? 'Waiting…' : 'In call';
 
   return (
-    <div className="fixed bottom-20 md:bottom-4 right-4 z-[90] bg-charcoal-surface border border-green-500/30 rounded-2xl shadow-2xl shadow-green-500/10 p-3 w-72">
+    <div className="fixed bottom-20 md:bottom-4 right-4 z-[90] bg-charcoal-surface border border-success/30 rounded-2xl shadow-2xl shadow-success/10 p-3 w-72">
       <div className="flex items-center gap-3">
         {activeCall.clientAvatar ? (
-          <img src={activeCall.clientAvatar} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-green-500/30" />
+          <img src={activeCall.clientAvatar} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-success/30" />
         ) : (
-          <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center ring-2 ring-green-500/30">
-            <span className="text-sm font-semibold text-green-400">{activeCall.clientName[0]}</span>
+          <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center ring-2 ring-success/30">
+            <span className="text-sm font-semibold text-success-fg">{activeCall.clientName[0]}</span>
           </div>
         )}
         <div className="flex-1 min-w-0">
@@ -312,33 +312,33 @@ function CompanionFloatingCall({
           <div className="flex items-center gap-2">
             {isConnected && (
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success-fg opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-success-fg" />
               </span>
             )}
             <span className="text-xs text-white/50">{statusText}</span>
-            {isConnected && <span className="text-xs font-mono text-green-400">{timeStr}</span>}
+            {isConnected && <span className="text-xs font-mono text-success-fg">{timeStr}</span>}
           </div>
         </div>
       </div>
       <div className="flex gap-2 mt-2.5">
         <button
           onClick={onReturn}
-          className="flex-1 py-1.5 rounded-lg bg-green-500/20 text-green-400 text-xs font-medium hover:bg-green-500/30 transition-colors"
+          className="flex-1 py-1.5 rounded-lg bg-success/20 text-success-fg text-xs font-medium hover:bg-success/30 transition-colors"
         >
           Return to call
         </button>
         <button
           onClick={() => voiceCall.toggleMute()}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-            voiceCall.isMuted ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-white/60 hover:text-white'
+            voiceCall.isMuted ? 'bg-warning/20 text-warning-fg' : 'bg-white/10 text-white/60 hover:text-white'
           }`}
         >
           {voiceCall.isMuted ? 'Unmute' : 'Mute'}
         </button>
         <button
           onClick={endCall}
-          className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/30 transition-colors"
+          className="px-3 py-1.5 rounded-lg bg-error/20 text-error-fg text-xs font-medium hover:bg-error/30 transition-colors"
         >
           End
         </button>
@@ -576,7 +576,7 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
         <ForcePasswordModal onSuccess={handlePasswordChangeSuccess} />
       )}
 
-      <header className="glass-strong border-b border-white/[0.06] sticky top-0 z-40">
+      <header className="glass-strong border-b border-white/[0.06] sticky top-0 z-40" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-serif font-bold text-gold">Plus One</h1>

@@ -117,8 +117,8 @@ function ToastContainer({
 }
 
 const VARIANT_STYLES: Record<ToastVariant, string> = {
-  success: 'bg-emerald-500/15 border-emerald-400/40 text-emerald-100',
-  error: 'bg-red-500/15 border-red-400/40 text-red-100',
+  success: 'bg-success/15 border-success/40 text-success-fg',
+  error: 'bg-error/15 border-error/40 text-error-fg',
   info: 'bg-white/10 border-white/20 text-white',
 };
 

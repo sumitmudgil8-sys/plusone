@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Card } from '@/components/ui/Card';
 import { BookingCard } from '@/components/booking/BookingCard';
 import { useToast } from '@/components/ui/Toast';
 import { formatDateTime } from '@/lib/utils';
@@ -327,7 +326,7 @@ export default function CompanionDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -335,30 +334,98 @@ export default function CompanionDashboard() {
   const isOnline = user?.isOnline ?? false;
   const isAvailabilitySet = hasAnySlots(schedule);
   const summary = buildSummary(schedule);
+  const firstName = user?.companionProfile?.name?.split(' ')[0] ?? 'there';
 
   return (
-    <div className="space-y-6">
-      {/* Header + online toggle */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">
-            Welcome back, {user?.companionProfile?.name}
-          </h1>
-          <p className="text-white/60">Manage your bookings and profile</p>
+    <div className="space-y-5 pb-6">
+      {/* ── Hero header ───────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-3xl border border-amber-500/[0.12] bg-gradient-to-br from-amber-500/[0.08] via-[#0f0f1a] to-[#0f0f1a] p-5">
+        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-amber-500/[0.12] blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-40 h-24 bg-gradient-to-t from-amber-500/[0.05] to-transparent pointer-events-none" />
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-amber-400/90 font-bold">Dashboard</p>
+            <h1 className="text-[26px] font-bold text-white mt-1.5 leading-tight truncate">
+              Hi {firstName} <span className="inline-block">👋</span>
+            </h1>
+            <p className="text-sm text-white/45 mt-1">Here&apos;s how today is going</p>
+          </div>
+          <button
+            onClick={handleToggleOnline}
+            disabled={togglingOnline}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-full border text-xs font-semibold transition-all disabled:opacity-50 shrink-0 ${
+              isOnline
+                ? 'bg-green-500/15 border-green-500/40 text-green-400 hover:bg-green-500/25 shadow-lg shadow-green-500/10'
+                : 'bg-white/[0.04] border-white/[0.08] text-white/60 hover:text-white hover:border-white/20'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-400 animate-pulse' : 'bg-white/30'}`} />
+            {isOnline ? 'Online' : 'Offline'}
+          </button>
         </div>
+      </div>
 
-        <button
-          onClick={handleToggleOnline}
-          disabled={togglingOnline}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-colors disabled:opacity-50 ${
-            isOnline
-              ? 'bg-green-500/15 border-green-500/40 text-green-400 hover:bg-green-500/25'
-              : 'bg-charcoal-surface border-white/[0.06] text-white/50 hover:text-white hover:border-white/20'
-          }`}
-        >
-          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-400 animate-pulse' : 'bg-white/30'}`} />
-          {isOnline ? 'Online' : 'Offline'}
-        </button>
+      {/* ── Today's earnings spotlight ────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-gradient-to-br from-[#12121d] via-[#0f0f1a] to-[#0f0f1a] p-5">
+        <div className="absolute -top-8 -right-12 w-48 h-48 rounded-full bg-gradient-to-bl from-amber-500/[0.12] to-transparent blur-3xl pointer-events-none" />
+        <div className="relative">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <p className="text-[10px] text-white/35 uppercase tracking-[0.14em] font-semibold">Today&apos;s Earnings</p>
+              <p className="text-[38px] font-bold text-white tabular-nums mt-1 leading-none bg-gradient-to-br from-white to-amber-100 bg-clip-text text-transparent">
+                {fmt(today?.total ?? 0)}
+              </p>
+            </div>
+            <Link
+              href="/companion/earnings"
+              className="text-[11px] text-amber-400 font-semibold bg-amber-500/10 border border-amber-500/25 rounded-full px-3 py-1.5 hover:bg-amber-500/15 transition-colors shrink-0 flex items-center gap-1"
+            >
+              Full Report
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              {
+                label: 'Chats',
+                value: today?.chats ?? 0,
+                icon: (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Calls',
+                value: today?.calls ?? 0,
+                icon: (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Bookings',
+                value: today?.bookings ?? 0,
+                icon: (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                ),
+              },
+            ].map(({ label, value, icon }) => (
+              <div key={label} className="rounded-2xl p-3 bg-white/[0.03] border border-white/[0.06] hover:border-amber-500/20 transition-colors">
+                <div className="flex items-center gap-1.5 text-amber-400/80 mb-1.5">
+                  {icon}
+                  <span className="text-[10px] uppercase tracking-wider font-semibold">{label}</span>
+                </div>
+                <p className="text-[15px] font-bold text-white tabular-nums">{fmt(value)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* ── Availability Section ── */}
@@ -370,10 +437,10 @@ export default function CompanionDashboard() {
               availableNow
                 ? 'bg-green-500/15 border border-green-500/30'
                 : isAvailabilitySet
-                  ? 'bg-gold/10 border border-gold/20'
+                  ? 'bg-amber-500/10 border border-amber-500/20'
                   : 'bg-white/[0.04] border border-white/[0.06]'
             }`}>
-              <svg className={`w-5 h-5 ${availableNow ? 'text-green-400' : isAvailabilitySet ? 'text-gold' : 'text-white/30'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className={`w-5 h-5 ${availableNow ? 'text-green-400' : isAvailabilitySet ? 'text-amber-400' : 'text-white/30'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -389,7 +456,7 @@ export default function CompanionDashboard() {
           {!editingAvailability && (
             <button
               onClick={openEditor}
-              className="text-xs text-gold font-medium hover:text-gold/80 transition-colors px-3 py-1.5 rounded-lg hover:bg-gold/5"
+              className="text-xs text-amber-400 font-semibold hover:text-amber-300 transition-colors px-3 py-1.5 rounded-lg bg-amber-500/[0.06] border border-amber-500/20 hover:bg-amber-500/10"
             >
               {isAvailabilitySet ? 'Edit' : 'Set up'}
             </button>
@@ -464,7 +531,7 @@ export default function CompanionDashboard() {
                             onClick={() => toggleSlot(day.key, slot.key)}
                             className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-all duration-150 ${
                               active
-                                ? 'bg-gold/20 text-gold border border-gold/30'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                                 : 'bg-white/[0.03] text-white/25 border border-transparent hover:bg-white/[0.06] hover:text-white/40'
                             }`}
                           >
@@ -478,7 +545,7 @@ export default function CompanionDashboard() {
                     {daySlots.length > 0 && (
                       <button
                         onClick={() => applyToAllDays(day.key)}
-                        className="text-[10px] text-white/25 hover:text-gold transition-colors whitespace-nowrap"
+                        className="text-[10px] text-white/25 hover:text-amber-400 transition-colors whitespace-nowrap"
                         title="Apply to all days"
                       >
                         All
@@ -500,7 +567,7 @@ export default function CompanionDashboard() {
               <button
                 onClick={saveSchedule}
                 disabled={savingAvailability}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-black bg-gold hover:bg-gold/90 transition-colors disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-black bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-50"
               >
                 {savingAvailability ? 'Saving...' : 'Save'}
               </button>
@@ -509,69 +576,60 @@ export default function CompanionDashboard() {
         )}
       </div>
 
-      {/* Active session ticker */}
+      {/* ── Active session ticker ─────────────────────────────────────── */}
       {activeSession?.active && (
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-green-500/10 border border-green-500/30">
-          <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-green-400">
-              Active {activeSession.type === 'VOICE' ? 'Voice' : 'Chat'} session
+        <div className="relative overflow-hidden flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-green-500/15 via-green-500/[0.08] to-green-500/[0.04] border border-green-500/30">
+          <div className="absolute -left-6 -top-6 w-24 h-24 rounded-full bg-green-500/20 blur-2xl pointer-events-none" />
+          <div className="relative w-10 h-10 rounded-xl bg-green-500/20 border border-green-500/30 flex items-center justify-center shrink-0">
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          </div>
+          <div className="relative flex-1 min-w-0">
+            <p className="text-sm font-semibold text-green-300">
+              Live {activeSession.type === 'VOICE' ? 'voice call' : 'chat'}
               {activeSession.clientName ? ` · ${activeSession.clientName}` : ''}
             </p>
-            <p className="text-xs text-white/50 mt-0.5">
-              Earned so far: {fmt(activeSession.totalCharged ?? 0)} · updates every 30s
+            <p className="text-xs text-white/55 mt-0.5 tabular-nums">
+              Earned so far: <span className="text-green-400 font-semibold">{fmt(activeSession.totalCharged ?? 0)}</span>
             </p>
           </div>
           {activeSession.clientId && (
-            <Link href={`/companion/inbox/${activeSession.clientId}`} className="text-xs text-green-400 hover:underline shrink-0">
-              Go to chat →
+            <Link
+              href={`/companion/inbox?active=${activeSession.clientId}`}
+              className="relative text-xs text-green-300 font-semibold bg-green-500/15 border border-green-500/25 rounded-full px-3 py-1.5 hover:bg-green-500/25 transition-colors shrink-0"
+            >
+              Open →
             </Link>
           )}
         </div>
       )}
 
-      {/* Today's earnings breakdown */}
+      {/* ── Pending Requests ──────────────────────────────────────────── */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-medium text-white">Today&apos;s Earnings</h2>
-          <Link href="/companion/earnings" className="text-sm text-gold hover:underline">
-            View Full Report
-          </Link>
-        </div>
-        <div className="grid grid-cols-3 gap-3 mb-3">
-          {[
-            { icon: '💬', label: 'Chats', value: today?.chats ?? 0 },
-            { icon: '📞', label: 'Calls', value: today?.calls ?? 0 },
-            { icon: '📅', label: 'Bookings', value: today?.bookings ?? 0 },
-          ].map(({ icon, label, value }) => (
-            <div key={label} className="rounded-xl p-3 bg-charcoal-surface border border-white/[0.06] text-center">
-              <p className="text-base mb-0.5">{icon}</p>
-              <p className="text-sm font-bold text-white">{fmt(value)}</p>
-              <p className="text-xs text-white/40">{label}</p>
-            </div>
-          ))}
-        </div>
-        <Card className="text-center py-3">
-          <p className="text-xs text-white/40 mb-0.5">Total today</p>
-          <p className="text-xl font-bold text-gold">{fmt(today?.total ?? 0)}</p>
-        </Card>
-      </div>
-
-      {/* Pending Requests */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-medium text-white">Pending Requests</h2>
-          <Link href="/companion/bookings" className="text-sm text-gold hover:underline">
-            View All
+        <div className="flex items-center justify-between mb-3 px-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Pending</h2>
+            {pendingBookings.length > 0 && (
+              <span className="min-w-[18px] h-[18px] px-1.5 rounded-full bg-amber-500 text-black text-[10px] font-bold flex items-center justify-center">
+                {pendingBookings.length}
+              </span>
+            )}
+          </div>
+          <Link href="/companion/bookings" className="text-xs text-amber-400 font-medium hover:text-amber-300 transition-colors">
+            View all →
           </Link>
         </div>
 
         {pendingBookings.length === 0 ? (
-          <Card className="text-center py-8">
-            <p className="text-white/60">No pending requests</p>
-          </Card>
+          <div className="rounded-2xl border border-white/[0.06] bg-[#0f0f1a] p-6 flex flex-col items-center gap-2 text-center">
+            <div className="w-10 h-10 rounded-full bg-white/[0.04] flex items-center justify-center">
+              <svg className="w-5 h-5 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-xs text-white/35">No pending requests</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {pendingBookings.slice(0, 3).map((booking: any) => (
               <BookingCard
@@ -585,11 +643,16 @@ export default function CompanionDashboard() {
         )}
       </div>
 
-      {/* Upcoming Bookings */}
+      {/* ── Upcoming Bookings ─────────────────────────────────────────── */}
       {confirmedBookings.length > 0 && (
         <div>
-          <h2 className="font-medium text-white mb-4">Upcoming</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Upcoming</h2>
+            <Link href="/companion/bookings" className="text-xs text-amber-400 font-medium hover:text-amber-300 transition-colors">
+              View all →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {confirmedBookings.slice(0, 3).map((booking: any) => (
               <BookingCard
@@ -603,46 +666,73 @@ export default function CompanionDashboard() {
         </div>
       )}
 
-      {/* Recent Sessions */}
+      {/* ── Recent Sessions ───────────────────────────────────────────── */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-medium text-white">Recent Sessions</h2>
-          <Link href="/companion/earnings" className="text-sm text-gold hover:underline">
-            View All
+        <div className="flex items-center justify-between mb-3 px-1">
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider">Recent sessions</h2>
+          <Link href="/companion/earnings" className="text-xs text-amber-400 font-medium hover:text-amber-300 transition-colors">
+            View all →
           </Link>
         </div>
 
-        <Card>
+        <div className="rounded-2xl border border-white/[0.06] bg-[#0f0f1a] overflow-hidden">
           {sessions.length === 0 ? (
-            <p className="text-white/50 text-center py-6 text-sm">No sessions yet</p>
+            <div className="py-10 flex flex-col items-center gap-2 text-center">
+              <div className="w-10 h-10 rounded-full bg-white/[0.04] flex items-center justify-center">
+                <svg className="w-5 h-5 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-xs text-white/35">No sessions yet</p>
+            </div>
           ) : (
-            <div className="divide-y divide-white/[0.06]">
-              {sessions.map((s) => (
-                <div key={s.id} className="py-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    {s.clientAvatar ? (
-                      <img src={s.clientAvatar} alt={s.clientName}
-                        className="w-9 h-9 rounded-full object-cover shrink-0" />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
-                        <span className="text-sm font-medium text-white">{s.clientName[0]}</span>
+            <div className="divide-y divide-white/[0.04]">
+              {sessions.map((s) => {
+                const typeIcon = s.type === 'VOICE' ? (
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                ) : s.type === 'CHAT' ? (
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                ) : (
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                );
+                return (
+                  <div key={s.id} className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        {s.clientAvatar ? (
+                          <img src={s.clientAvatar} alt={s.clientName}
+                            className="w-10 h-10 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/20 flex items-center justify-center">
+                            <span className="text-sm font-semibold text-amber-300">{s.clientName[0]}</span>
+                          </div>
+                        )}
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#0f0f1a] border border-white/[0.08] flex items-center justify-center text-white/60">
+                          {typeIcon}
+                        </div>
                       </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-white truncate">{s.clientName}</p>
-                      <p className="text-xs text-white/40">
-                        {s.type} · {s.durationMinutes}m · {s.endedAt ? formatDateTime(s.endedAt) : ''}
-                      </p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate leading-tight">{s.clientName}</p>
+                        <p className="text-[11px] text-white/35 mt-0.5 tabular-nums">
+                          {s.durationMinutes}m · {s.endedAt ? formatDateTime(s.endedAt) : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 text-green-400 font-bold text-sm tabular-nums">
+                      <span className="text-xs">+</span>{fmt(s.earned)}
                     </div>
                   </div>
-                  <span className="text-sm font-semibold text-green-400 shrink-0">
-                    +{fmt(s.earned)}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
-        </Card>
+        </div>
       </div>
     </div>
   );

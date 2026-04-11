@@ -1,6 +1,6 @@
 "use client";
 import { cn } from '@/lib/utils';
-import { HTMLAttributes, forwardRef, useState } from 'react';
+import { HTMLAttributes, forwardRef, useState, useEffect, useRef } from 'react';
 import { Button } from './Button';
 
 export interface ModalProps extends HTMLAttributes<HTMLDivElement> {
@@ -25,6 +25,28 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
     ref
   ) => {
     const [isClosing, setIsClosing] = useState(false);
+    const handleCloseRef = useRef<() => void>(() => {});
+
+    // Lock body scroll while modal is open — prevents background scrolling
+    // on iOS and desktop when the modal content is taller than the viewport.
+    useEffect(() => {
+      if (!isOpen) return;
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }, [isOpen]);
+
+    // Close on Escape
+    useEffect(() => {
+      if (!isOpen) return;
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') handleCloseRef.current();
+      };
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -35,6 +57,7 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
         onClose();
       }, 200);
     };
+    handleCloseRef.current = handleClose;
 
     const sizes = {
       sm: 'max-w-md',
@@ -58,10 +81,14 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
         {/* Modal */}
         <div
           ref={ref}
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
           className={cn(
             'relative w-full bg-charcoal-surface rounded-2xl shadow-2xl',
             'border border-white/[0.06]',
             'transform transition-all duration-200',
+            'max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden',
             isClosing ? 'scale-95 opacity-0' : 'scale-100 opacity-100',
             sizes[size],
             className
@@ -70,7 +97,7 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
         >
           {/* Header */}
           {(title || showCloseButton) && (
-            <div className="flex items-center justify-between p-6 border-b border-white/[0.06]">
+            <div className="flex items-center justify-between p-6 border-b border-white/[0.06] shrink-0">
               {title && (
                 <h3 className="text-xl font-semibold text-white">{title}</h3>
               )}
@@ -99,8 +126,8 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
             </div>
           )}
 
-          {/* Content */}
-          <div className="p-6">{children}</div>
+          {/* Content — scrollable when taller than viewport */}
+          <div className="p-6 overflow-y-auto flex-1">{children}</div>
         </div>
       </div>
     );

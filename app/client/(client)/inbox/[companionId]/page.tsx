@@ -617,6 +617,25 @@ function ClientChatView({
   // instantly (no smooth-scroll animation) — otherwise the user briefly sees
   // the top of the conversation before it scrolls down.
   const initialScrollDoneRef = useRef(false);
+  // Tracks whether the user is scrolled near the bottom. If they've scrolled
+  // up to read older messages we don't auto-follow new messages — instead we
+  // surface a "new messages" pill they can tap to jump back down.
+  const isNearBottomRef = useRef(true);
+  const prevLastMsgIdRef = useRef<string | null>(null);
+  const [showNewMessagesPill, setShowNewMessagesPill] = useState(false);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    isNearBottomRef.current = nearBottom;
+    if (nearBottom) setShowNewMessagesPill(false);
+  }, []);
+
+  const scrollToLatest = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowNewMessagesPill(false);
+  }, []);
 
   // ── Load history from DB on mount ─────────────────────────────────────────
   useEffect(() => {
@@ -662,19 +681,47 @@ function ClientChatView({
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
   // First render after history loads: snap instantly so the latest message
-  // is visible immediately when the chat opens. Subsequent updates use smooth
-  // scroll so new messages animate in.
+  // is visible immediately when the chat opens. Afterwards we only follow new
+  // messages if the user is still near the bottom OR the new message was sent
+  // by the user themselves. If they've scrolled up to read older messages,
+  // incoming messages surface a "new messages" pill instead.
   useEffect(() => {
     if (!historyLoaded) return;
     const container = scrollContainerRef.current;
     if (!container) return;
+
     if (!initialScrollDoneRef.current) {
       container.scrollTop = container.scrollHeight;
       initialScrollDoneRef.current = true;
+      isNearBottomRef.current = true;
+      prevLastMsgIdRef.current = allMessages[allMessages.length - 1]?.id ?? null;
       return;
     }
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [allMessages, isOtherTyping, historyLoaded]);
+
+    const lastMsg = allMessages[allMessages.length - 1];
+    if (!lastMsg || lastMsg.id === prevLastMsgIdRef.current) return;
+    prevLastMsgIdRef.current = lastMsg.id;
+
+    const isOwn = lastMsg.senderId === userId;
+    if (isOwn || isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setShowNewMessagesPill(false);
+    } else {
+      setShowNewMessagesPill(true);
+    }
+  }, [allMessages, historyLoaded, userId]);
+
+  // Typing indicator: if the user is already near the bottom, keep the typing
+  // dots in view by following them. Never show the "new messages" pill for
+  // typing — it's transient and noisy. If they're scrolled up, just leave them
+  // alone.
+  useEffect(() => {
+    if (!historyLoaded || !isOtherTyping) return;
+    if (!initialScrollDoneRef.current) return;
+    if (isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [isOtherTyping, historyLoaded]);
 
   // ── Send ──────────────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
@@ -714,7 +761,7 @@ function ClientChatView({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0C0C14]">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0C0C14]" style={{ height: '100dvh' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center gap-3 px-4 bg-[#0C0C14] border-b border-white/[0.06]"
@@ -764,12 +811,13 @@ function ClientChatView({
       )}
 
       {/* ── Messages ────────────────────────────────────────────────────── */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+      <div className="relative flex-1 min-h-0">
+      <div ref={scrollContainerRef} onScroll={handleScroll} className="h-full overflow-y-auto overscroll-contain px-4 py-4">
         {!historyLoaded ? (
           <div className="flex justify-center py-8">
             <div className="w-6 h-6 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
           </div>
-        ) : allMessages.length === 0 ? (
+        ) : allMessages.length === 0 && !isOtherTyping ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-center py-16">
             <span className="text-3xl">👋</span>
             <p className="text-white/30 text-sm">Say hello to {companionName}!</p>
@@ -836,6 +884,18 @@ function ClientChatView({
             <div ref={messagesEndRef} />
           </div>
         )}
+      </div>
+      {showNewMessagesPill && (
+        <button
+          onClick={scrollToLatest}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-full bg-amber-500 text-black text-xs font-semibold shadow-lg shadow-amber-500/30 active:scale-95 transition-transform flex items-center gap-1.5"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+          New messages
+        </button>
+      )}
       </div>
 
       {/* ── Input bar ───────────────────────────────────────────────────── */}

@@ -9,22 +9,45 @@ export default function PendingPage() {
   const router = useRouter();
   const [okycStatus, setOkycStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const checkStatus = async (manual = false) => {
+    if (manual) setRefreshing(true);
+    try {
+      // Check OKYC status
+      const okycRes = await fetch('/api/auth/okyc/status');
+      if (okycRes.ok) {
+        const data = await okycRes.json();
+        setOkycStatus(data.data?.status ?? 'NOT_STARTED');
+      }
+      // Check overall approval status — route when APPROVED/REJECTED
+      const meRes = await fetch('/api/users/me', { cache: 'no-store' });
+      if (meRes.ok) {
+        const me = await meRes.json();
+        const clientStatus = me.user?.clientStatus;
+        if (clientStatus === 'APPROVED') {
+          router.replace('/client/dashboard');
+          return;
+        }
+        if (clientStatus === 'REJECTED') {
+          router.replace('/client/rejected');
+          return;
+        }
+      }
+    } catch {
+      // non-fatal
+    } finally {
+      setLoading(false);
+      if (manual) setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const check = async () => {
-      try {
-        const res = await fetch('/api/auth/okyc/status');
-        if (res.ok) {
-          const data = await res.json();
-          setOkycStatus(data.data?.status ?? 'NOT_STARTED');
-        }
-      } catch {
-        // non-fatal
-      } finally {
-        setLoading(false);
-      }
-    };
-    check();
+    checkStatus();
+    // Auto-poll every 30 seconds — catches approval without forcing refresh
+    const interval = setInterval(() => checkStatus(), 30000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const okycComplete = okycStatus === 'SUCCESS';
@@ -52,6 +75,16 @@ export default function PendingPage() {
               once a decision has been made — typically within{' '}
               <strong className="text-white">24–48 hours</strong>.
             </p>
+            <button
+              onClick={() => checkStatus(true)}
+              disabled={refreshing}
+              className="inline-flex items-center gap-2 text-xs text-gold hover:text-gold/80 transition-colors disabled:opacity-50"
+            >
+              <svg className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {refreshing ? 'Checking…' : 'Check status'}
+            </button>
           </div>
 
           {/* Identity verification section */}
@@ -64,12 +97,12 @@ export default function PendingPage() {
                 <div className="animate-spin h-6 w-6 border-2 border-gold border-t-transparent rounded-full" />
               </div>
             ) : okycComplete ? (
-              <div className="flex items-center gap-3 bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-                <svg className="w-5 h-5 text-green-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex items-center gap-3 bg-success/10 border border-success/20 rounded-lg p-3">
+                <svg className="w-5 h-5 text-success-fg shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p className="text-green-400 text-sm">Aadhaar identity verified</p>
+                <p className="text-success-fg text-sm">Aadhaar identity verified</p>
               </div>
             ) : (
               <div className="space-y-3">

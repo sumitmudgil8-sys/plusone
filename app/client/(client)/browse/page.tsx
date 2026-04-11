@@ -199,8 +199,30 @@ export default function BrowsePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
+      <div className="space-y-4">
+        {/* Search bar skeleton */}
+        <div className="h-11 rounded-xl bg-white/[0.04] animate-pulse" />
+        {/* Filter chips skeleton */}
+        <div className="flex gap-2 overflow-hidden">
+          {[60, 80, 70, 90, 65].map((w, i) => (
+            <div key={i} style={{ width: `${w}px` }} className="h-8 shrink-0 rounded-full bg-white/[0.04] animate-pulse" />
+          ))}
+        </div>
+        {/* Card grid skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="aspect-[3/4] rounded-xl bg-gradient-to-br from-white/[0.04] to-white/[0.02] animate-pulse relative overflow-hidden"
+              style={{ animationDelay: `${i * 60}ms` }}
+            >
+              <div className="absolute inset-x-0 bottom-0 p-3 space-y-2">
+                <div className="h-3 w-2/3 rounded bg-white/[0.06]" />
+                <div className="h-2.5 w-1/2 rounded bg-white/[0.04]" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -265,11 +287,11 @@ export default function BrowsePage() {
           onClick={() => setFilterAvailableNow(!filterAvailableNow)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-colors ${
             filterAvailableNow
-              ? 'bg-green-500/15 border-green-500/30 text-green-400'
+              ? 'bg-success/15 border-success/30 text-success-fg'
               : 'bg-charcoal-surface border-white/[0.06] text-white/50 hover:text-white/70'
           }`}
         >
-          <span className={`w-1.5 h-1.5 rounded-full ${filterAvailableNow ? 'bg-green-400' : 'bg-white/20'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full ${filterAvailableNow ? 'bg-success-fg' : 'bg-white/20'}`} />
           Available Now
         </button>
 

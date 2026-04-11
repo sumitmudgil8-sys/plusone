@@ -66,11 +66,11 @@ function relativeTime(dateStr: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-const STATUS_BADGE: Record<Withdrawal['status'], string> = {
-  PENDING: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  APPROVED: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  PAID: 'bg-green-500/15 text-green-400 border-green-500/30',
-  REJECTED: 'bg-red-500/15 text-red-400 border-red-500/30',
+const STATUS_BADGE: Record<Withdrawal['status'], { cls: string; label: string; icon: string }> = {
+  PENDING:  { cls: 'bg-warning/15 text-warning-fg border-warning/30', label: 'Pending',  icon: '⏳' },
+  APPROVED: { cls: 'bg-info/15 text-info-fg border-info/30',           label: 'Approved', icon: '✓'  },
+  PAID:     { cls: 'bg-success/15 text-success-fg border-success/30',   label: 'Paid',     icon: '✓'  },
+  REJECTED: { cls: 'bg-error/15 text-error-fg border-error/30',         label: 'Rejected', icon: '✕'  },
 };
 
 const TYPE_ICON: Record<string, string> = { CHAT: '💬', CALL: '📞', BOOKING: '📅' };
@@ -118,7 +118,7 @@ function WithdrawalModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={onClose}>
       <div className="w-full max-w-md bg-charcoal-elevated border border-charcoal-border rounded-2xl p-7 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-white mb-1">Request Withdrawal</h2>
-        <p className="text-sm text-white/50 mb-5">Available: <span className="text-green-400 font-semibold">{fmt(availableBalance)}</span></p>
+        <p className="text-sm text-white/50 mb-5">Available: <span className="text-success-fg font-semibold">{fmt(availableBalance)}</span></p>
 
         {/* Quick amounts */}
         <div className="flex gap-2 mb-4 flex-wrap">
@@ -146,10 +146,10 @@ function WithdrawalModal({
             className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold placeholder:text-white/30"
           />
           {parsedRupees > 0 && parsedRupees < 500 && (
-            <p className="text-xs text-red-400 mt-1">Minimum withdrawal is ₹500</p>
+            <p className="text-xs text-error-fg mt-1">Minimum withdrawal is ₹500</p>
           )}
           {parsedRupees > maxRupees && maxRupees > 0 && (
-            <p className="text-xs text-red-400 mt-1">Exceeds available balance</p>
+            <p className="text-xs text-error-fg mt-1">Exceeds available balance</p>
           )}
         </div>
 
@@ -165,7 +165,7 @@ function WithdrawalModal({
           />
         </div>
 
-        {error && <p className="text-sm text-red-400 mb-4">{error}</p>}
+        {error && <p className="text-sm text-error-fg mb-4">{error}</p>}
 
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-charcoal-border text-sm text-white/50 hover:text-white transition-colors">
@@ -237,7 +237,7 @@ export default function EarningsPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-green-500/15 border border-green-500/30 text-green-400 text-sm font-medium shadow-lg">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-success/15 border border-success/30 text-success-fg text-sm font-medium shadow-lg">
           {toast}
         </div>
       )}
@@ -259,13 +259,13 @@ export default function EarningsPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-xl p-4 bg-green-500/10 border border-green-500/20">
-          <p className="text-xl font-bold text-green-400">{fmt(summary.availableBalance)}</p>
+        <div className="rounded-xl p-4 bg-success/10 border border-success/20">
+          <p className="text-xl font-bold text-success-fg">{fmt(summary.availableBalance)}</p>
           <p className="text-xs text-white/50 mt-1">Available Balance</p>
           <p className="text-xs text-white/30 mt-0.5">Ready to withdraw</p>
         </div>
-        <div className="rounded-xl p-4 bg-amber-500/10 border border-amber-500/20">
-          <p className="text-xl font-bold text-amber-400">{fmt(summary.pendingWithdrawal)}</p>
+        <div className="rounded-xl p-4 bg-warning/10 border border-warning/20">
+          <p className="text-xl font-bold text-warning-fg">{fmt(summary.pendingWithdrawal)}</p>
           <p className="text-xs text-white/50 mt-1">Pending Withdrawal</p>
           <p className="text-xs text-white/30 mt-0.5">Under review</p>
         </div>
@@ -333,7 +333,7 @@ export default function EarningsPage() {
                     {relativeTime(tx.createdAt)}
                   </p>
                 </div>
-                <span className="text-sm font-semibold text-green-400 shrink-0">+{fmt(tx.amount)}</span>
+                <span className="text-sm font-semibold text-success-fg shrink-0">+{fmt(tx.amount)}</span>
               </div>
             ))}
           </div>
@@ -352,8 +352,9 @@ export default function EarningsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-white">{fmt(w.amount)}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_BADGE[w.status]}`}>
-                      {w.status}
+                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_BADGE[w.status].cls}`}>
+                      <span aria-hidden>{STATUS_BADGE[w.status].icon}</span>
+                      {STATUS_BADGE[w.status].label}
                     </span>
                   </div>
                   <p className="text-xs text-white/40 mt-0.5">{formatDateTime(w.createdAt)}</p>

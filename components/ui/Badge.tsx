@@ -10,9 +10,9 @@ const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
     const variants = {
       default: 'bg-white/[0.08] text-white',
       gold: 'bg-gold/20 text-gold border border-gold/30',
-      success: 'bg-success/20 text-success border border-success/30',
-      error: 'bg-error/20 text-error border border-error/30',
-      warning: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
+      success: 'bg-success/15 text-success-fg border border-success/30',
+      error: 'bg-error/15 text-error-fg border border-error/30',
+      warning: 'bg-warning/15 text-warning-fg border border-warning/30',
       outline: 'border border-white/[0.08] text-white/80',
     };
 

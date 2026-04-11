@@ -287,7 +287,7 @@ export default function CompanionProfilePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-2 border-pink-500 border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -338,7 +338,7 @@ export default function CompanionProfilePage() {
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-500/20 to-purple-500/20">
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-amber-500/20 to-amber-400/10">
               <div className="text-center">
                 <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-3">
                   <svg className="w-10 h-10 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -430,7 +430,7 @@ export default function CompanionProfilePage() {
             onClick={() => setActiveTab(tab)}
             className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
               activeTab === tab
-                ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-400 text-black font-semibold shadow-lg shadow-amber-500/20'
                 : 'text-white/50 hover:text-white'
             }`}
           >
@@ -472,7 +472,7 @@ export default function CompanionProfilePage() {
               <h3 className="text-sm font-semibold text-white/80 mb-3">Photos ({images.length})</h3>
               <div className="grid grid-cols-3 gap-2">
                 {images.map(img => (
-                  <div key={img.id} className={`aspect-square rounded-xl overflow-hidden ${img.isPrimary ? 'ring-2 ring-pink-500' : ''}`}>
+                  <div key={img.id} className={`aspect-square rounded-xl overflow-hidden ${img.isPrimary ? 'ring-2 ring-amber-500' : ''}`}>
                     <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
                   </div>
                 ))}
@@ -508,7 +508,7 @@ export default function CompanionProfilePage() {
                 </div>
                 {uploadingAvatar && (
                   <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
-                    <div className="animate-spin w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full" />
+                    <div className="animate-spin w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full" />
                   </div>
                 )}
               </div>
@@ -542,7 +542,7 @@ export default function CompanionProfilePage() {
               <Input label="City" value={section1.city} onChange={(e) => setSection1({ ...section1, city: e.target.value })} />
               <Input label="Education" value={section1.education} onChange={(e) => setSection1({ ...section1, education: e.target.value })} placeholder="e.g. B.Tech, Delhi University" />
               <Input label="Occupation" value={section1.occupation} onChange={(e) => setSection1({ ...section1, occupation: e.target.value })} placeholder="e.g. Freelancer" />
-              <Button className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 border-0"
+              <Button className="w-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-semibold border-0 shadow-lg shadow-amber-500/20"
                 isLoading={saving['s1']}
                 onClick={() => saveSection('s1', {
                   name: section1.name, bio: section1.bio, tagline: section1.tagline,
@@ -574,7 +574,7 @@ export default function CompanionProfilePage() {
                 <SelectField label="Drinking" value={section2.drinking} onChange={(v) => setSection2({ ...section2, drinking: v })} options={HABIT_OPTIONS} placeholder="Select" />
                 <SelectField label="Smoking" value={section2.smoking} onChange={(v) => setSection2({ ...section2, smoking: v })} options={HABIT_OPTIONS} placeholder="Select" />
               </div>
-              <Button className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 border-0"
+              <Button className="w-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-semibold border-0 shadow-lg shadow-amber-500/20"
                 isLoading={saving['s2']}
                 onClick={() => saveSection('s2', {
                   height: section2.height || undefined, weight: section2.weight || undefined,
@@ -603,14 +603,14 @@ export default function CompanionProfilePage() {
                       return { personalityTags: [...prev.personalityTags, tag] };
                     })}
                     className={`px-3 py-1.5 rounded-full text-sm border transition-all ${
-                      selected ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white border-transparent font-medium' : 'bg-transparent text-white/50 border-white/10 hover:border-pink-500/40 hover:text-white'
+                      selected ? 'bg-gradient-to-r from-amber-500 to-amber-400 text-black border-transparent font-semibold shadow-md shadow-amber-500/20' : 'bg-transparent text-white/50 border-white/10 hover:border-amber-500/40 hover:text-white'
                     }`}>
                     {tag}
                   </button>
                 );
               })}
             </div>
-            <Button className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 border-0"
+            <Button className="w-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-semibold border-0 shadow-lg shadow-amber-500/20"
               isLoading={saving['s3']}
               onClick={() => saveSection('s3', { personalityTags: section3.personalityTags })}>
               Save
@@ -625,7 +625,7 @@ export default function CompanionProfilePage() {
                 <p className="text-xs text-white/30 mt-0.5">JPG, PNG, WebP · Max 5 MB</p>
               </div>
               <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-500 to-purple-500 text-white text-xs font-medium disabled:opacity-50">
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-400 text-black text-xs font-semibold shadow-md shadow-amber-500/20 disabled:opacity-50">
                 {uploading ? '...' : '+ Upload'}
               </button>
               <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageUpload} />
@@ -636,10 +636,10 @@ export default function CompanionProfilePage() {
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {images.map((img) => (
-                  <div key={img.id} className={`relative group aspect-square rounded-xl overflow-hidden ${img.isPrimary ? 'ring-2 ring-pink-500' : ''}`}>
+                  <div key={img.id} className={`relative group aspect-square rounded-xl overflow-hidden ${img.isPrimary ? 'ring-2 ring-amber-500' : ''}`}>
                     <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
                     {img.isPrimary && (
-                      <span className="absolute top-1 left-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-500 text-white leading-none">Main</span>
+                      <span className="absolute top-1 left-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500 text-black leading-none">Main</span>
                     )}
                     <button onClick={() => setPendingDeleteId(img.id)}
                       className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
@@ -647,7 +647,7 @@ export default function CompanionProfilePage() {
                     </button>
                     {!img.isPrimary && (
                       <button onClick={() => handleSetPrimary(img.id)} disabled={settingPrimary === img.id}
-                        className="absolute bottom-0 inset-x-0 py-1.5 text-[10px] font-medium text-white bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-pink-500 disabled:opacity-50">
+                        className="absolute bottom-0 inset-x-0 py-1.5 text-[10px] font-medium text-white bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-amber-500 hover:text-black disabled:opacity-50">
                         {settingPrimary === img.id ? '...' : 'Set as Main'}
                       </button>
                     )}
@@ -671,7 +671,7 @@ export default function CompanionProfilePage() {
               <Input label="Confirm" type="password" value={pwForm.confirmPassword} onChange={(e) => setPwForm({ ...pwForm, confirmPassword: e.target.value })} placeholder="Repeat new password" required />
               {pwError && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{pwError}</p>}
               {pwSuccess && <p className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">Password updated</p>}
-              <Button type="submit" className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 border-0" isLoading={pwLoading}>
+              <Button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-semibold border-0 shadow-lg shadow-amber-500/20" isLoading={pwLoading}>
                 Update Password
               </Button>
             </form>

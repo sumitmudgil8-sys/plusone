@@ -139,38 +139,53 @@ export default function CompanionOnboardingPage() {
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h1 className="text-3xl font-serif font-bold text-gold mb-2">Set Up Your Profile</h1>
           <p className="text-white/60">Complete your profile to get approved and start earning</p>
         </div>
 
-        {/* Step indicators */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          {STEPS.map((step, i) => (
-            <div key={step} className="flex items-center gap-2">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                  i < currentStep
-                    ? 'bg-gold text-charcoal'
-                    : i === currentStep
-                    ? 'bg-gold/30 text-gold border border-gold'
-                    : 'bg-white/10 text-white/40'
-                }`}
-              >
-                {i < currentStep ? '✓' : i + 1}
+        {/* Progress bar */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-white/50 uppercase tracking-wider font-medium">
+              Step {currentStep + 1} of {STEPS.length}
+            </span>
+            <span className="text-xs text-gold font-semibold">
+              {Math.round(((currentStep + 1) / STEPS.length) * 100)}% complete
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-gold via-amber-400 to-gold transition-all duration-500 ease-out"
+              style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%` }}
+            />
+          </div>
+
+          {/* Step indicators */}
+          <div className="flex items-center justify-between mt-4">
+            {STEPS.map((step, i) => (
+              <div key={step} className="flex flex-col items-center gap-1.5 flex-1">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
+                    i < currentStep
+                      ? 'bg-gold text-charcoal shadow-lg shadow-gold/20'
+                      : i === currentStep
+                      ? 'bg-gold/20 text-gold border-2 border-gold ring-4 ring-gold/10'
+                      : 'bg-white/[0.06] text-white/40 border border-white/10'
+                  }`}
+                >
+                  {i < currentStep ? '✓' : i + 1}
+                </div>
+                <span
+                  className={`text-[10px] sm:text-xs font-medium text-center ${
+                    i === currentStep ? 'text-gold' : i < currentStep ? 'text-white/60' : 'text-white/30'
+                  }`}
+                >
+                  {step}
+                </span>
               </div>
-              <span
-                className={`text-sm hidden sm:block ${
-                  i === currentStep ? 'text-gold' : 'text-white/40'
-                }`}
-              >
-                {step}
-              </span>
-              {i < STEPS.length - 1 && (
-                <div className={`w-8 h-px ${i < currentStep ? 'bg-gold' : 'bg-white/20'}`} />
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         <Card className="p-6 space-y-6">
