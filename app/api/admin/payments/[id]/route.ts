@@ -129,9 +129,9 @@ export async function PATCH(
         await tx.user.update({
           where: { id: payment.userId },
           data: {
-            subscriptionTier: 'PREMIUM',
+            subscriptionTier: 'GOLD',
             subscriptionStatus: 'ACTIVE',
-            subscriptionPlan: 'MONTHLY_2999',
+            subscriptionPlan: 'MONTHLY_4999',
             subscriptionExpiresAt: expiresAt,
           },
         });

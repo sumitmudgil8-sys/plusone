@@ -62,6 +62,26 @@ export async function POST(request: NextRequest) {
     data: { status: 'ACTIVE', startedAt: now, lastTickAt: now },
   });
 
+  // Track response time for ranking system
+  const responseTimeSeconds = Math.round((now.getTime() - session.createdAt.getTime()) / 1000);
+  try {
+    const profile = await prisma.companionProfile.findUnique({
+      where: { userId: auth.user.id },
+      select: { avgResponseTime: true, totalRatedSessions: true },
+    });
+    if (profile) {
+      // Rolling average: weight existing avg 80%, new sample 20% (approximation of last ~50 sessions)
+      const prevAvg = profile.avgResponseTime ?? responseTimeSeconds;
+      const newAvg = Math.round(prevAvg * 0.8 + responseTimeSeconds * 0.2);
+      await prisma.companionProfile.update({
+        where: { userId: auth.user.id },
+        data: { avgResponseTime: newAvg },
+      });
+    }
+  } catch (err) {
+    console.error('Response time tracking error (non-fatal):', err);
+  }
+
   // Notify client: session is active, redirect to inbox
   // Notify companion (self): confirmed, redirect to chat
   try {

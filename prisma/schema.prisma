@@ -108,6 +108,7 @@ model User {
   manualPayments           ManualPayment[]
   companionVisibility      ClientVisibility[]    @relation("CompanionVisibility")
   clientVisibility         ClientVisibility[]    @relation("ClientVisibility")
+  clientScheduledSessions  ScheduledSession[]    @relation("ClientScheduledSessions")
 }
 
 model ClientProfile {
@@ -174,6 +175,21 @@ model CompanionProfile {
   // e.g. {"mon":["MORNING","AFTERNOON"],"tue":["EVENING"],...}
   weeklyAvailability String            @default("{}")
   availableNow       Boolean           @default(false)
+
+  // Premium platform fields — ranking, trust, and quality signals
+  audioIntroUrl      String?                          // Cloudinary URL for 15s audio intro
+  rankingScore       Float             @default(0)    // precomputed 0-100, used for browse sort
+  avgResponseTime    Int?                             // seconds, rolling avg of last 50 session acceptances
+  totalRatedSessions Int               @default(0)    // sessions that received a rating
+  lastSessionAt      DateTime?                        // last completed session timestamp
+  profileComplete    Boolean           @default(false) // has audio + photos + bio
+
+  // Relations
+  badges             CompanionBadge[]
+  scheduledSessions  ScheduledSession[] @relation("CompanionScheduledSessions")
+
+  @@index([rankingScore])
+  @@index([availableNow, rankingScore])
 }
 
 model MessageThread {
@@ -243,17 +259,19 @@ model Favorite {
 }
 
 model Review {
-  id          String   @id @default(cuid())
-  bookingId   String   @unique
-  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  reviewerId  String
-  reviewedId  String
-  reviewer    User     @relation("Reviewer", fields: [reviewerId], references: [id])
-  reviewed    User     @relation("ReviewedUser", fields: [reviewedId], references: [id])
-  rating      Int
-  comment     String?
-  isPublic    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id               String          @id @default(cuid())
+  bookingId        String?         @unique   // nullable — set for booking reviews
+  booking          Booking?        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  billingSessionId String?         @unique   // nullable — set for chat/voice session reviews
+  billingSession   BillingSession? @relation(fields: [billingSessionId], references: [id], onDelete: Cascade)
+  reviewerId       String
+  reviewedId       String
+  reviewer         User            @relation("Reviewer", fields: [reviewerId], references: [id])
+  reviewed         User            @relation("ReviewedUser", fields: [reviewedId], references: [id])
+  rating           Int
+  comment          String?
+  isPublic         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
 
   @@index([reviewedId])
 }
@@ -331,8 +349,13 @@ model BillingSession {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  // Relations
+  review          Review?
+  scheduledSession ScheduledSession?
+
   @@index([clientId, status])
   @@index([companionId, status])
+  @@index([status, lastTickAt])              // for billing sweep cron
 }
 
 model Wallet {
@@ -515,6 +538,48 @@ model ClientVisibility {
   @@unique([companionId, clientId])
   @@index([companionId, status])
   @@index([clientId])
+}
+
+// ─── Scheduled Sessions (GOLD only) ─────────────────────────────────────────
+// Pre-booked chat/voice sessions with fixed duration and upfront payment.
+model ScheduledSession {
+  id               String    @id @default(cuid())
+  clientId         String
+  companionId      String
+  client           User      @relation("ClientScheduledSessions", fields: [clientId], references: [id])
+  companion        CompanionProfile @relation("CompanionScheduledSessions", fields: [companionId], references: [userId])
+  type             String    // CHAT | VOICE
+  duration         Int       // minutes (30 or 60)
+  totalAmount      Int       // paise — charged upfront from wallet
+  companionShare   Int       // paise — 80% of totalAmount
+  scheduledAt      DateTime  // when session should start
+  status           String    @default("BOOKED") // BOOKED | ACTIVE | COMPLETED | CANCELLED | CLIENT_NO_SHOW | COMPANION_NO_SHOW
+  billingSessionId String?   @unique  // linked BillingSession once activated
+  billingSession   BillingSession?   @relation(fields: [billingSessionId], references: [id])
+  cancelledAt      DateTime?
+  refundAmount     Int?      // paise, if cancelled/no-show
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([clientId, status])
+  @@index([companionId, status])
+  @@index([scheduledAt, status])
+  @@index([status])
+}
+
+// ─── Companion Badges ───────────────────────────────────────────────────────
+// Earned badges based on quality, responsiveness, and tenure. Recalculated daily.
+model CompanionBadge {
+  id            String           @id @default(cuid())
+  companionId   String
+  companion     CompanionProfile @relation(fields: [companionId], references: [userId], onDelete: Cascade)
+  type          String           // TOP_RATED | FAST_RESPONDER | ELITE | RISING_STAR
+  earnedAt      DateTime         @default(now())
+  lostAt        DateTime?        // null = currently active
+  isActive      Boolean          @default(true)
+
+  @@unique([companionId, type])
+  @@index([companionId, isActive])
 }
 
 // Immutable audit trail for admin actions. Every privileged mutation (ban,

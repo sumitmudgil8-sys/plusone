@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
             data: {
               subscriptionStatus: 'ACTIVE',
               subscriptionExpiresAt: expiresAt,
-              subscriptionPlan: (meta?.plan as string | undefined) ?? 'MONTHLY_2999',
+              subscriptionPlan: (meta?.plan as string | undefined) ?? 'MONTHLY_4999',
             },
           });
 

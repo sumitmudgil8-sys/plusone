@@ -16,9 +16,37 @@ export const WALLET_MIN_RECHARGE = 10000;   // ₹100
 export const WALLET_MAX_RECHARGE = 5000000; // ₹50,000
 export const WALLET_RECHARGE_PRESETS = [10000, 20000, 50000, 100000, 200000]; // ₹100/200/500/1000/2000
 
-export const MAX_FREE_COMPANIONS = 6;          // free tier sees first 6 cards; rest are blurred
-export const SUBSCRIPTION_PRICE_PAISE = 299900; // ₹2,999/month
+export const MAX_FREE_COMPANIONS = 10;          // free tier sees first 10 cards; rest are blurred
+export const SUBSCRIPTION_PRICE_PAISE = 499900; // ₹4,999/month (GOLD tier)
 export const DEPOSIT_PERCENTAGE = 20; // 20% deposit required
+
+// Scheduled sessions (GOLD only)
+export const SCHEDULED_DURATIONS = [30, 60] as const;          // minutes
+export const SCHEDULED_CANCEL_WINDOW_MINUTES = 120;            // free cancel if > 2h before
+export const SCHEDULED_NO_SHOW_WINDOW_MINUTES = 5;             // 5 min grace after scheduled start
+
+// Ranking score weights (must sum to 1.0)
+export const RANKING_WEIGHT_AVAILABILITY = 0.40;
+export const RANKING_WEIGHT_QUALITY = 0.25;
+export const RANKING_WEIGHT_RESPONSIVENESS = 0.20;
+export const RANKING_WEIGHT_RECENCY = 0.15;
+
+// Companion badges
+export const BADGE_TOP_RATED_MIN_RATING = 4.5;
+export const BADGE_TOP_RATED_MIN_SESSIONS = 20;
+export const BADGE_FAST_RESPONDER_MAX_SECONDS = 60;
+export const BADGE_ELITE_MIN_SESSIONS = 100;
+export const BADGE_ELITE_MIN_MONTHS = 6;
+export const BADGE_RISING_STAR_MAX_DAYS = 60;
+export const BADGE_RISING_STAR_MIN_RATING = 4.3;
+export const BADGE_RISING_STAR_MIN_SESSIONS = 5;
+
+// Session reviews
+export const MIN_SESSION_DURATION_FOR_REVIEW = 120; // seconds — must last ≥2 min to leave review
+
+// Presence
+export const PRESENCE_OFFLINE_THRESHOLD_MS = 90_000;  // 90s without heartbeat → offline
+export const FAVORITE_NOTIFICATION_THROTTLE_S = 21600; // 6 hours between "X is online" pushes
 
 export const COLORS = {
   background: '#1C1C1C',

@@ -282,7 +282,7 @@ export default function ProfilePage() {
           </div>
         ) : (
           <div className="flex items-center justify-between">
-            <p className="text-sm text-white/55">Unlock all companions for ₹2,999/month</p>
+            <p className="text-sm text-white/55">Unlock all companions for ₹4,999/month</p>
             <a href="/client/subscription" className="text-xs text-gold font-semibold hover:underline whitespace-nowrap ml-3">
               Subscribe →
             </a>

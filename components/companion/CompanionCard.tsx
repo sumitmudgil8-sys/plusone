@@ -198,7 +198,7 @@ export const CompanionCard = React.memo(function CompanionCard({
                   </svg>
                 </div>
                 <p className="text-sm font-semibold text-white leading-tight">Unlock all companions</p>
-                <p className="text-xs text-gold mt-0.5">₹2,999/month — unlimited access</p>
+                <p className="text-xs text-gold mt-0.5">₹4,999/month — unlimited access</p>
                 <p className="text-xs text-white/40 mt-1">[Subscribe Now]</p>
               </div>
             </div>

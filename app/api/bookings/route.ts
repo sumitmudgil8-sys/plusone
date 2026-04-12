@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       select: { subscriptionTier: true },
     });
 
-    const isPremium = currentUser?.subscriptionTier === 'PREMIUM';
+    const isPremium = currentUser?.subscriptionTier === 'GOLD';
 
     // Check if companion is accessible (first 20 only for free users)
     if (!isPremium) {

@@ -1,0 +1,219 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth';
+import { calculateDistance } from '@/lib/utils';
+import { MAX_FREE_COMPANIONS } from '@/lib/constants';
+
+export const runtime = 'nodejs';
+
+// Shared select for companion card data — avoids over-fetching
+const companionCardSelect = {
+  id: true,
+  companionProfile: {
+    select: {
+      name: true,
+      bio: true,
+      tagline: true,
+      avatarUrl: true,
+      hourlyRate: true,
+      chatRatePerMinute: true,
+      callRatePerMinute: true,
+      isVerified: true,
+      averageRating: true,
+      reviewCount: true,
+      rankingScore: true,
+      availableNow: true,
+      availabilityStatus: true,
+      gender: true,
+      age: true,
+      city: true,
+      lat: true,
+      lng: true,
+      personalityTags: true,
+      interests: true,
+      audioIntroUrl: true,
+      lastSessionAt: true,
+      badges: {
+        where: { isActive: true },
+        select: { type: true },
+      },
+    },
+  },
+  companionImages: {
+    where: { isPrimary: true },
+    take: 1,
+    select: { imageUrl: true },
+  },
+} as const;
+
+type CompanionRow = Awaited<ReturnType<typeof prisma.user.findMany<{ select: typeof companionCardSelect }>>>[0];
+
+function mapCompanionCard(
+  c: CompanionRow,
+  clientLat: number,
+  clientLng: number,
+  isSubscribed: boolean,
+  index: number,
+  favoriteSet: Set<string>,
+) {
+  const p = c.companionProfile!;
+  return {
+    id: c.id,
+    name: p.name,
+    tagline: p.tagline,
+    bio: p.bio,
+    avatarUrl: p.avatarUrl,
+    primaryImageUrl: c.companionImages[0]?.imageUrl ?? null,
+    hourlyRatePaise: p.hourlyRate,
+    chatRatePerMinute: p.chatRatePerMinute,
+    callRatePerMinute: p.callRatePerMinute,
+    isVerified: p.isVerified,
+    averageRating: p.averageRating,
+    reviewCount: p.reviewCount,
+    rankingScore: p.rankingScore,
+    availableNow: p.availableNow,
+    availabilityStatus: p.availabilityStatus,
+    gender: p.gender,
+    age: p.age,
+    city: p.city,
+    personalityTags: JSON.parse(p.personalityTags || '[]'),
+    interests: JSON.parse(p.interests || '[]'),
+    audioIntroUrl: p.audioIntroUrl,
+    badges: p.badges.map((b) => b.type),
+    distance: calculateDistance(clientLat, clientLng, p.lat, p.lng),
+    isFavorited: favoriteSet.has(c.id),
+    accessible: isSubscribed || index < MAX_FREE_COMPANIONS,
+  };
+}
+
+// GET /api/companions/sections
+// Returns categorized companion sections for the homepage:
+//   availableNow, recentlyActive, topRated, newCompanions
+export async function GET(request: NextRequest) {
+  const auth = requireAuth(request, ['CLIENT']);
+  if (auth.user === null) return auth.response;
+
+  const user = auth.user;
+  const { searchParams } = new URL(request.url);
+  const userLat = searchParams.get('lat') ? parseFloat(searchParams.get('lat')!) : null;
+  const userLng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : null;
+
+  try {
+    // Parallel lookups
+    const [clientProfile, clientUser, favorites, rejectedIds] = await Promise.all([
+      prisma.clientProfile.findUnique({
+        where: { userId: user.id },
+        select: { lat: true, lng: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { subscriptionStatus: true, subscriptionExpiresAt: true },
+      }),
+      prisma.favorite.findMany({
+        where: { clientId: user.id },
+        select: { companionId: true },
+      }),
+      prisma.clientVisibility.findMany({
+        where: { clientId: user.id, status: 'REJECTED' },
+        select: { companionId: true },
+      }),
+    ]);
+
+    const clientLat = userLat ?? clientProfile?.lat ?? 28.6139;
+    const clientLng = userLng ?? clientProfile?.lng ?? 77.2090;
+    const now = new Date();
+    const isSubscribed =
+      clientUser?.subscriptionStatus === 'ACTIVE' &&
+      (clientUser.subscriptionExpiresAt == null || clientUser.subscriptionExpiresAt > now);
+
+    const favoriteSet = new Set(favorites.map((f) => f.companionId));
+    const rejectedSet = new Set(rejectedIds.map((r) => r.companionId));
+
+    const baseWhere = {
+      role: 'COMPANION' as const,
+      isActive: true,
+      isBanned: false,
+      companionProfile: { isApproved: true },
+      id: rejectedSet.size > 0 ? { notIn: Array.from(rejectedSet) } : undefined,
+    };
+
+    // Fetch all four sections in parallel
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60_000);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60_000);
+
+    const [availableNowRaw, recentlyActiveRaw, topRatedRaw, newCompanionsRaw] = await Promise.all([
+      // Available Now — online, sorted by ranking
+      prisma.user.findMany({
+        where: {
+          ...baseWhere,
+          companionProfile: { ...baseWhere.companionProfile, availableNow: true },
+        },
+        select: companionCardSelect,
+        orderBy: { companionProfile: { rankingScore: 'desc' } },
+        take: 20,
+      }),
+      // Recently Active — had session in last 2h, not currently online
+      prisma.user.findMany({
+        where: {
+          ...baseWhere,
+          companionProfile: {
+            ...baseWhere.companionProfile,
+            availableNow: false,
+            lastSessionAt: { gte: twoHoursAgo },
+          },
+        },
+        select: companionCardSelect,
+        orderBy: { companionProfile: { lastSessionAt: 'desc' } },
+        take: 10,
+      }),
+      // Top Rated — highest quality, regardless of availability
+      prisma.user.findMany({
+        where: {
+          ...baseWhere,
+          companionProfile: { ...baseWhere.companionProfile, averageRating: { gte: 4.0 }, reviewCount: { gte: 3 } },
+        },
+        select: companionCardSelect,
+        orderBy: { companionProfile: { averageRating: 'desc' } },
+        take: 10,
+      }),
+      // New Companions — joined in last 30 days
+      prisma.user.findMany({
+        where: {
+          ...baseWhere,
+          createdAt: { gte: thirtyDaysAgo },
+        },
+        select: companionCardSelect,
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+    ]);
+
+    // Track global index for subscription gating across all sections
+    let globalIndex = 0;
+    const mapSection = (rows: CompanionRow[]) =>
+      rows
+        .filter((c) => c.companionProfile)
+        .map((c) => {
+          const card = mapCompanionCard(c, clientLat, clientLng, isSubscribed, globalIndex, favoriteSet);
+          globalIndex++;
+          return card;
+        });
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        availableNow: mapSection(availableNowRaw),
+        recentlyActive: mapSection(recentlyActiveRaw),
+        topRated: isSubscribed ? mapSection(topRatedRaw) : [],
+        newCompanions: isSubscribed ? mapSection(newCompanionsRaw) : [],
+      },
+      isSubscribed,
+    });
+  } catch (error) {
+    console.error('Sections fetch error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to fetch companion sections' },
+      { status: 500 }
+    );
+  }
+}

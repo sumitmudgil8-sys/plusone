@@ -30,7 +30,7 @@ async function main() {
       email: 'admin@plusone.com',
       passwordHash: adminPassword,
       role: 'ADMIN',
-      subscriptionTier: 'PREMIUM',
+      subscriptionTier: 'GOLD',
     },
   });
   console.log('Created admin:', admin.email);
@@ -162,11 +162,11 @@ async function main() {
       email: 'client2@test.com',
       passwordHash: client2Password,
       role: 'CLIENT',
-      subscriptionTier: 'PREMIUM',
+      subscriptionTier: 'GOLD',
       clientProfile: {
         create: {
           name: 'Amit Kumar',
-          bio: 'Premium member who enjoys fine dining and cultural events.',
+          bio: 'Gold member who enjoys fine dining and cultural events.',
           lat: 28.6229,
           lng: 77.2190,
           avatarUrl: 'https://i.pravatar.cc/300?img=11',
@@ -182,7 +182,7 @@ async function main() {
       },
     },
   });
-  console.log('Created client (PREMIUM):', client2.email);
+  console.log('Created client (GOLD):', client2.email);
 
   // Create sample bookings
   const bookings = [
@@ -386,7 +386,7 @@ async function main() {
   console.log('\nTest accounts:');
   console.log('Admin: admin@plusone.com / admin123');
   console.log('Client (FREE): client1@test.com / client123');
-  console.log('Client (PREMIUM): client2@test.com / client123');
+  console.log('Client (GOLD): client2@test.com / client123');
   console.log('All Companions: companion123');
   console.log('\nCompanion emails:', companions.map(c => c.email).join(', '));
 }

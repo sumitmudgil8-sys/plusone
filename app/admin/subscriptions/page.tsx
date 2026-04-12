@@ -58,7 +58,7 @@ export default function AdminSubscriptionsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: grantModal.id,
-          subscriptionTier: 'PREMIUM',
+          subscriptionTier: 'GOLD',
           subscriptionStatus: 'ACTIVE',
           subscriptionPlan: grantForm.plan,
           subscriptionExpiresAt: expiresAt,
@@ -99,8 +99,8 @@ export default function AdminSubscriptionsPage() {
     }
   };
 
-  const premiumUsers = users.filter(u => u.subscriptionTier === 'PREMIUM');
-  const freeUsers = users.filter(u => u.subscriptionTier !== 'PREMIUM');
+  const goldUsers = users.filter(u => u.subscriptionTier === 'GOLD');
+  const freeUsers = users.filter(u => u.subscriptionTier !== 'GOLD');
 
   if (loading) {
     return (
@@ -114,7 +114,7 @@ export default function AdminSubscriptionsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Subscriptions</h1>
-        <p className="text-white/60">Grant or revoke premium access after verifying payment</p>
+        <p className="text-white/60">Grant or revoke gold access after verifying payment</p>
       </div>
 
       {/* Stats */}
@@ -124,8 +124,8 @@ export default function AdminSubscriptionsPage() {
           <p className="text-sm text-white/60">Total Clients</p>
         </Card>
         <Card className="text-center">
-          <p className="text-3xl font-bold text-gold">{premiumUsers.length}</p>
-          <p className="text-sm text-white/60">Premium</p>
+          <p className="text-3xl font-bold text-gold">{goldUsers.length}</p>
+          <p className="text-sm text-white/60">Gold</p>
         </Card>
         <Card className="text-center">
           <p className="text-3xl font-bold text-white">{freeUsers.length}</p>
@@ -133,12 +133,12 @@ export default function AdminSubscriptionsPage() {
         </Card>
       </div>
 
-      {/* Premium users */}
-      {premiumUsers.length > 0 && (
+      {/* Gold users */}
+      {goldUsers.length > 0 && (
         <Card>
-          <h2 className="text-lg font-semibold text-white mb-4">Active Premium</h2>
+          <h2 className="text-lg font-semibold text-white mb-4">Active Gold</h2>
           <div className="divide-y divide-charcoal-border">
-            {premiumUsers.map(user => (
+            {goldUsers.map(user => (
               <div key={user.id} className="py-3 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-9 h-9 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
@@ -151,7 +151,7 @@ export default function AdminSubscriptionsPage() {
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
-                    <Badge variant="gold">{user.subscriptionPlan ?? 'PREMIUM'}</Badge>
+                    <Badge variant="gold">{user.subscriptionPlan ?? 'GOLD'}</Badge>
                     {user.subscriptionExpiresAt && (
                       <p className="text-xs text-white/40 mt-0.5">
                         Expires {new Date(user.subscriptionExpiresAt).toLocaleDateString('en-IN')}
@@ -177,7 +177,7 @@ export default function AdminSubscriptionsPage() {
       <Card>
         <h2 className="text-lg font-semibold text-white mb-4">Free Users</h2>
         {freeUsers.length === 0 ? (
-          <p className="text-white/40 text-sm text-center py-8">All clients have premium</p>
+          <p className="text-white/40 text-sm text-center py-8">All clients have gold</p>
         ) : (
           <div className="divide-y divide-charcoal-border">
             {freeUsers.map(user => (
@@ -195,7 +195,7 @@ export default function AdminSubscriptionsPage() {
                   size="sm"
                   onClick={() => setGrantModal(user)}
                 >
-                  Grant Premium
+                  Grant Gold
                 </Button>
               </div>
             ))}
@@ -208,7 +208,7 @@ export default function AdminSubscriptionsPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-charcoal-surface border border-charcoal-border rounded-xl p-6 w-full max-w-md space-y-4">
             <h3 className="font-semibold text-white">
-              Grant Premium to {grantModal.clientProfile?.name}
+              Grant Gold to {grantModal.clientProfile?.name}
             </h3>
             <p className="text-sm text-white/60">
               Verify payment has been received before granting access.

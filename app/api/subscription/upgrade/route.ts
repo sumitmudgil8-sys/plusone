@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     // For MVP, we just upgrade the user
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
-      data: { subscriptionTier: 'PREMIUM' },
+      data: { subscriptionTier: 'GOLD' },
       include: { clientProfile: true },
     });
 

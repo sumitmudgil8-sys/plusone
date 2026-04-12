@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   const languages = searchParams.get('languages');
   const interests = searchParams.get('interests');
   const search = searchParams.get('search');
-  const sortBy = searchParams.get('sortBy') || 'distance';
+  const sortBy = searchParams.get('sortBy') || 'ranking';
   const userLat = searchParams.get('lat') ? parseFloat(searchParams.get('lat')!) : null;
   const userLng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : null;
   const radius = searchParams.get('radius') ? parseFloat(searchParams.get('radius')!) : 50;
@@ -95,7 +95,14 @@ export async function GET(request: NextRequest) {
     const companions = await prisma.user.findMany({
       where: whereClause,
       include: {
-        companionProfile: true,
+        companionProfile: {
+          include: {
+            badges: {
+              where: { isActive: true },
+              select: { type: true },
+            },
+          },
+        },
         companionImages: {
           where: { isPrimary: true },
           take: 1,
@@ -147,6 +154,9 @@ export async function GET(request: NextRequest) {
           personalityTags: JSON.parse(profile.personalityTags || '[]'),
           weeklyAvailability: JSON.parse(profile.weeklyAvailability || '{}'),
           availableNow: profile.availableNow,
+          rankingScore: profile.rankingScore,
+          audioIntroUrl: profile.audioIntroUrl,
+          badges: profile.badges.map((b: { type: string }) => b.type),
           distance,
           isFavorited: companion.favorites.length > 0,
         };
@@ -165,8 +175,11 @@ export async function GET(request: NextRequest) {
       companionsWithDistance.sort((a, b) => a.hourlyRatePaise - b.hourlyRatePaise);
     } else if (sortBy === 'rating') {
       companionsWithDistance.sort((a, b) => b.averageRating - a.averageRating);
-    } else {
+    } else if (sortBy === 'distance') {
       companionsWithDistance.sort((a, b) => a.distance - b.distance);
+    } else {
+      // Default: ranking score (highest first)
+      companionsWithDistance.sort((a, b) => b.rankingScore - a.rankingScore);
     }
 
     // Filter by availability if requested

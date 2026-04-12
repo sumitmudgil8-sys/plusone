@@ -14,6 +14,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Companion ID required' }, { status: 400 });
     }
 
+    const take = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20', 10) || 20));
+    const skip = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0);
+
     const reviews = await prisma.review.findMany({
       where: {
         reviewedId: companionId,
@@ -27,11 +30,26 @@ export async function GET(req: NextRequest) {
             },
           },
         },
+        billingSession: {
+          select: { type: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
+      take,
+      skip,
     });
 
-    return NextResponse.json({ reviews });
+    const mapped = reviews.map((r) => ({
+      id: r.id,
+      rating: r.rating,
+      comment: r.comment,
+      createdAt: r.createdAt,
+      reviewerName: r.reviewer.clientProfile?.name ?? 'Anonymous',
+      reviewerAvatar: r.reviewer.clientProfile?.avatarUrl ?? null,
+      sessionType: r.billingSession?.type ?? (r.bookingId ? 'BOOKING' : null),
+    }));
+
+    return NextResponse.json({ reviews: mapped, hasMore: reviews.length === take });
   } catch (error) {
     console.error('Get reviews error:', error);
     return NextResponse.json({ error: 'Failed to fetch reviews' }, { status: 500 });

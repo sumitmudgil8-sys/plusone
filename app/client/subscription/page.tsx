@@ -490,7 +490,7 @@ export default function SubscriptionPage() {
       {/* Price card */}
       <div className="rounded-2xl bg-charcoal-surface border border-white/5 p-6 space-y-6">
         <div className="text-center py-3 border-b border-white/[0.06]">
-          <p className="text-4xl font-bold text-gold">₹2,999</p>
+          <p className="text-4xl font-bold text-gold">₹4,999</p>
           <p className="text-white/40 text-sm mt-1">per month</p>
         </div>
 
@@ -530,7 +530,7 @@ export default function SubscriptionPage() {
               Creating payment...
             </>
           ) : (
-            'Subscribe Now — ₹2,999/month'
+            'Subscribe Now — ₹4,999/month'
           )}
         </button>
       </div>

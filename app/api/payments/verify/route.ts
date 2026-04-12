@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     if (payment.type === 'SUBSCRIPTION') {
       await prisma.user.update({
         where: { id: payment.userId },
-        data: { subscriptionTier: 'PREMIUM' },
+        data: { subscriptionTier: 'GOLD' },
       });
 
       // Send confirmation email

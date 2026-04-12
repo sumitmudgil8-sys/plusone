@@ -1,16 +1,26 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { CompanionCard } from '@/components/CompanionCard';
 import type { CompanionCardData } from '@/components/CompanionCard';
 
-interface Companion extends CompanionCardData {
+interface SectionCompanion extends CompanionCardData {
   distance: number;
   isFavorited: boolean;
+  rankingScore: number;
+  audioIntroUrl: string | null;
+  badges: string[];
 }
 
-const SCARCITY_LABELS = ['Just joined', 'High demand', 'Top rated', 'Rising star', 'Popular'];
+interface SectionsData {
+  availableNow: SectionCompanion[];
+  recentlyActive: SectionCompanion[];
+  topRated: SectionCompanion[];
+  newCompanions: SectionCompanion[];
+}
+
+type QuickFilter = 'all' | 'online' | 'new' | 'top';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -21,25 +31,26 @@ function getGreeting() {
 
 export default function ClientHome() {
   const [user, setUser] = useState<{ clientProfile?: { name?: string }; subscriptionStatus?: string } | null>(null);
-  const [companions, setCompanions] = useState<Companion[]>([]);
+  const [sections, setSections] = useState<SectionsData | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState<QuickFilter>('all');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [userRes, companionsRes, walletRes] = await Promise.all([
+        const [userRes, sectionsRes, walletRes] = await Promise.all([
           fetch('/api/users/me'),
-          fetch('/api/companions'),
+          fetch('/api/companions/sections'),
           fetch('/api/wallet'),
         ]);
         if (userRes.ok) {
           const userData = await userRes.json();
           setUser(userData.user);
         }
-        if (companionsRes.ok) {
-          const data = await companionsRes.json();
-          setCompanions(data.companions ?? []);
+        if (sectionsRes.ok) {
+          const data = await sectionsRes.json();
+          if (data.success) setSections(data.data);
         }
         if (walletRes.ok) {
           const walletData = await walletRes.json();
@@ -56,19 +67,34 @@ export default function ClientHome() {
 
   const isSubscribed = user?.subscriptionStatus === 'ACTIVE';
 
-  const { todaysPicks, availableNow, recommended } = useMemo(() => {
-    const accessible = companions.filter((c) => c.accessible);
-    const online = companions.filter((c) => c.availabilityStatus === 'AVAILABLE');
-    const topRated = [...companions].sort((a, b) => b.averageRating - a.averageRating);
+  // Quick filter logic — filters the availableNow section
+  const getFilteredCompanions = useCallback((): SectionCompanion[] => {
+    if (!sections) return [];
+    const all = [
+      ...sections.availableNow,
+      ...sections.recentlyActive,
+      ...sections.topRated,
+      ...sections.newCompanions,
+    ];
+    // Deduplicate
+    const seen = new Set<string>();
+    const unique = all.filter((c) => {
+      if (seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
 
-    const picks = accessible.length > 0 ? accessible.slice(0, 6) : companions.slice(0, 6);
-    const available = online.slice(0, 6);
-
-    const pickIds = new Set(picks.map((p) => p.id));
-    const recs = topRated.filter((c) => !pickIds.has(c.id)).slice(0, 6);
-
-    return { todaysPicks: picks, availableNow: available, recommended: recs };
-  }, [companions]);
+    switch (activeFilter) {
+      case 'online':
+        return unique.filter((c) => c.availabilityStatus === 'AVAILABLE');
+      case 'new':
+        return sections.newCompanions;
+      case 'top':
+        return [...unique].sort((a, b) => b.averageRating - a.averageRating).slice(0, 20);
+      default:
+        return unique;
+    }
+  }, [sections, activeFilter]);
 
   if (loading) {
     return (
@@ -79,12 +105,12 @@ export default function ClientHome() {
   }
 
   const firstName = user?.clientProfile?.name?.split(' ')[0] || 'there';
+  const hasAvailableNow = (sections?.availableNow.length ?? 0) > 0;
 
   return (
     <div className="space-y-8 pb-6">
       {/* Hero */}
       <div className="relative rounded-2xl overflow-hidden">
-        {/* Ambient glow */}
         <div className="absolute inset-0 bg-gold-subtle" />
         <div className="absolute top-0 right-0 w-48 h-48 bg-gold/[0.05] rounded-full blur-3xl -translate-y-1/3 translate-x-1/4" />
 
@@ -107,6 +133,31 @@ export default function ClientHome() {
             </svg>
           </Link>
         </div>
+      </div>
+
+      {/* Quick Filters */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+        {[
+          { key: 'all' as const, label: 'All' },
+          { key: 'online' as const, label: 'Online Now', dot: true },
+          { key: 'new' as const, label: 'New' },
+          { key: 'top' as const, label: 'Top Rated' },
+        ].map(({ key, label, dot }) => (
+          <button
+            key={key}
+            onClick={() => setActiveFilter(key)}
+            className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium transition-all ${
+              activeFilter === key
+                ? 'bg-gold text-black'
+                : 'bg-white/[0.06] text-white/50 hover:text-white/70 hover:bg-white/[0.1]'
+            }`}
+          >
+            {dot && (
+              <span className={`w-1.5 h-1.5 rounded-full ${activeFilter === key ? 'bg-black/40' : 'bg-emerald-400'}`} />
+            )}
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Wallet balance widget */}
@@ -137,56 +188,106 @@ export default function ClientHome() {
         </Link>
       )}
 
-      {/* Today's Picks */}
-      {todaysPicks.length > 0 && (
+      {/* Filtered results (when a quick filter is active other than 'all') */}
+      {activeFilter !== 'all' && (
         <section>
-          <SectionHeader title="Today's Picks" href="/client/browse" />
+          <SectionHeader
+            title={activeFilter === 'online' ? 'Online Now' : activeFilter === 'new' ? 'New Companions' : 'Top Rated'}
+            href="/client/browse"
+          />
           <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
-            {todaysPicks.map((c, i) => (
-              <CompanionCard
-                key={c.id}
-                companion={c}
-                scarcityLabel={i < 2 ? SCARCITY_LABELS[i % SCARCITY_LABELS.length] : undefined}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Available Now */}
-      {availableNow.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-3.5">
-            <div className="flex items-center gap-2.5">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success-fg opacity-60" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-success-fg" />
-              </span>
-              <h2 className="text-white font-semibold text-[15px]">Available Now</h2>
-            </div>
-            <span className="text-white/20 text-xs">{availableNow.length} online</span>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
-            {availableNow.map((c) => (
+            {getFilteredCompanions().map((c) => (
               <CompanionCard key={c.id} companion={c} />
             ))}
           </div>
+          {getFilteredCompanions().length === 0 && (
+            <p className="text-white/30 text-sm text-center py-8">No companions match this filter right now</p>
+          )}
         </section>
       )}
 
-      {/* Recommended */}
-      {recommended.length > 0 && (
-        <section>
-          <SectionHeader title="Recommended" />
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
-            {recommended.map((c) => (
-              <CompanionCard key={c.id} companion={c} />
-            ))}
-          </div>
-        </section>
+      {/* Sections (show when 'all' filter is active) */}
+      {activeFilter === 'all' && (
+        <>
+          {/* Available Now */}
+          {hasAvailableNow && (
+            <section>
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-2.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success-fg opacity-60" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-success-fg" />
+                  </span>
+                  <h2 className="text-white font-semibold text-[15px]">Available Now</h2>
+                </div>
+                <span className="text-white/20 text-xs">{sections!.availableNow.length} online</span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
+                {sections!.availableNow.map((c) => (
+                  <CompanionCard key={c.id} companion={c} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Recently Active */}
+          {(sections?.recentlyActive.length ?? 0) > 0 && (
+            <section>
+              <SectionHeader title="Recently Active" href="/client/browse" />
+              <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
+                {sections!.recentlyActive.map((c) => (
+                  <CompanionCard key={c.id} companion={c} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Top Rated (GOLD only) */}
+          {(sections?.topRated.length ?? 0) > 0 && (
+            <section>
+              <SectionHeader title="Top Rated" href="/client/browse?sortBy=rating" />
+              <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
+                {sections!.topRated.map((c) => (
+                  <CompanionCard key={c.id} companion={c} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* New Companions (GOLD only) */}
+          {(sections?.newCompanions.length ?? 0) > 0 && (
+            <section>
+              <SectionHeader title="New Companions" />
+              <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
+                {sections!.newCompanions.map((c) => (
+                  <CompanionCard key={c.id} companion={c} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Empty state — no one online */}
+          {!hasAvailableNow && (sections?.recentlyActive.length ?? 0) === 0 && (
+            <section className="text-center py-10">
+              <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-white/[0.04] flex items-center justify-center">
+                <svg className="w-7 h-7 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-white/40 text-sm">No companions available right now</p>
+              <p className="text-white/20 text-xs mt-1">Check back soon or browse all profiles</p>
+              <Link
+                href="/client/browse"
+                className="inline-block mt-4 text-gold text-sm font-medium hover:text-gold-hover transition-colors"
+              >
+                Browse All Companions
+              </Link>
+            </section>
+          )}
+        </>
       )}
 
-      {/* Premium CTA */}
+      {/* GOLD CTA */}
       {!isSubscribed && (
         <section>
           <div className="relative rounded-2xl overflow-hidden border border-gold/10 gold-border-glow">
@@ -194,7 +295,7 @@ export default function ClientHome() {
             <div className="relative flex items-center justify-between gap-4 p-5">
               <div>
                 <p className="text-sm font-bold text-white">Unlock all companions</p>
-                <p className="text-[11px] text-white/30 mt-0.5">Premium — unlimited profiles & priority access</p>
+                <p className="text-[11px] text-white/30 mt-0.5">GOLD — unlimited profiles, scheduling & priority</p>
               </div>
               <Link
                 href="/client/subscription"

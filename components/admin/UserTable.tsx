@@ -105,8 +105,8 @@ export function UserTable({
                 <div className="flex flex-wrap gap-1">
                   {user.isBanned && <Badge variant="error">Banned</Badge>}
                   {!user.isBanned && <Badge variant="success">Active</Badge>}
-                  {user.subscriptionTier === 'PREMIUM' && (
-                    <Badge variant="gold">Premium</Badge>
+                  {user.subscriptionTier === 'GOLD' && (
+                    <Badge variant="gold">Gold</Badge>
                   )}
                 </div>
               </td>
@@ -120,10 +120,10 @@ export function UserTable({
                       size="sm"
                       variant="ghost"
                       onClick={() =>
-                        onUpgradeUser(user.id, user.subscriptionTier === 'PREMIUM' ? 'FREE' : 'PREMIUM')
+                        onUpgradeUser(user.id, user.subscriptionTier === 'GOLD' ? 'FREE' : 'GOLD')
                       }
                     >
-                      {user.subscriptionTier === 'PREMIUM' ? 'Downgrade' : 'Upgrade'}
+                      {user.subscriptionTier === 'GOLD' ? 'Downgrade' : 'Upgrade'}
                     </Button>
                   )}
                   {user.role === 'COMPANION' && user.companionProfile && (

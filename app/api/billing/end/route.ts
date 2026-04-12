@@ -69,6 +69,12 @@ export async function POST(request: NextRequest) {
       data: { status: 'ENDED', endedAt: new Date() },
     });
 
+    // Update companion's lastSessionAt for ranking score
+    await prisma.companionProfile.update({
+      where: { userId: ended.companionId },
+      data: { lastSessionAt: new Date() },
+    }).catch(() => {}); // non-fatal
+
     // Notify both participants that the session has ended
     try {
       const ably = getAblyClient();

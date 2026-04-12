@@ -4,7 +4,7 @@ export interface User {
   role: 'CLIENT' | 'COMPANION' | 'ADMIN';
   isActive: boolean;
   isBanned: boolean;
-  subscriptionTier: 'FREE' | 'PREMIUM';
+  subscriptionTier: 'FREE' | 'GOLD';
   createdAt: string;
   updatedAt: string;
   clientProfile?: ClientProfile;

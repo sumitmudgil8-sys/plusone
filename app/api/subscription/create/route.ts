@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         qrCode: link.qrCode,
         shortUrl: link.shortUrl,
         expiresAt: new Date(link.expiresAt),
-        metadata: { type: 'subscription', plan: 'MONTHLY_2999' },
+        metadata: { type: 'subscription', plan: 'MONTHLY_4999' },
       },
     });
 

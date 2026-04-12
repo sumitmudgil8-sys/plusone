@@ -389,7 +389,7 @@ export default function BrowsePage() {
         <div className="rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/5 to-transparent p-6 text-center space-y-3">
           <h3 className="text-lg font-semibold text-white">Unlock all companions</h3>
           <p className="text-white/55 text-sm">
-            ₹2,999/month — unlimited access to all profiles, bios, photos &amp; rates
+            ₹4,999/month — unlimited access to all profiles, bios, photos &amp; rates
           </p>
           <Button onClick={() => router.push('/client/subscription')} className="mx-auto">
             Subscribe Now
