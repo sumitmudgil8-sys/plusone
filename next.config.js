@@ -48,7 +48,14 @@ const nextConfig = {
   // Experimental features
   experimental: {
     optimizeCss: true,
+    optimizePackageImports: ['ably', 'firebase', 'zod', 'clsx', 'tailwind-merge'],
   },
+
+  // Keep heavy server-only packages out of the client bundle
+  serverExternalPackages: [
+    'firebase-admin', 'cloudinary', 'razorpay', 'nodemailer',
+    'bcryptjs', 'agora-token', 'web-push', '@prisma/client', 'prisma',
+  ],
 
   // Security headers
   async headers() {
@@ -117,7 +124,25 @@ const nextConfig = {
         ],
       },
       {
-        source: '/api/:path*',
+        source: '/api/auth/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, max-age=0',
+          },
+        ],
+      },
+      {
+        source: '/api/billing/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, max-age=0',
+          },
+        ],
+      },
+      {
+        source: '/api/wallet/:path*',
         headers: [
           {
             key: 'Cache-Control',
@@ -140,7 +165,7 @@ const nextConfig = {
   },
 
   // Webpack configuration
-  webpack: (config, { isServer, dev }) => {
+  webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -149,24 +174,8 @@ const nextConfig = {
         tls: false,
       };
     }
-
-    // Production optimizations
-    if (!dev && !isServer) {
-      config.optimization = {
-        ...config.optimization,
-        splitChunks: {
-          chunks: 'all',
-          cacheGroups: {
-            vendor: {
-              test: /[\\/]node_modules[\\/]/,
-              name: 'vendors',
-              chunks: 'all',
-            },
-          },
-        },
-      };
-    }
-
+    // Let Next.js handle splitChunks — its defaults are much better than
+    // lumping all node_modules into a single 655 kB vendors chunk.
     return config;
   },
 

@@ -12,11 +12,11 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const fadeTimer = setTimeout(() => setPhase('fading'), 2200);
+    const fadeTimer = setTimeout(() => setPhase('fading'), 1000);
     const doneTimer = setTimeout(() => {
       setPhase('done');
       sessionStorage.setItem('splash_shown', '1');
-    }, 2900);
+    }, 1500);
 
     return () => {
       clearTimeout(fadeTimer);

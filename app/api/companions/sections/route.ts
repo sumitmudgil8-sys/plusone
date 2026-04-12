@@ -203,7 +203,7 @@ export async function GET(request: NextRequest) {
           return card;
         });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         availableNow: mapSection(availableNowRaw),
@@ -213,6 +213,9 @@ export async function GET(request: NextRequest) {
       },
       isSubscribed,
     });
+    // Allow CDN/browser to cache for 30s, serve stale for 60s while revalidating
+    response.headers.set('Cache-Control', 'private, s-maxage=30, stale-while-revalidate=60');
+    return response;
   } catch (error) {
     console.error('Sections fetch error:', error);
     return NextResponse.json(

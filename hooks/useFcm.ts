@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { getToken } from 'firebase/messaging';
 import { getFirebaseMessaging } from '@/lib/firebase-client';
 
 const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
@@ -113,6 +112,7 @@ export function useFcm(): UseFcmReturn {
       if (!messaging) return false;
 
       const swReg = await registerFcmSw();
+      const { getToken } = await import('firebase/messaging');
       const token = await getToken(messaging, {
         vapidKey: VAPID_KEY,
         serviceWorkerRegistration: swReg,
@@ -139,6 +139,7 @@ export function useFcm(): UseFcmReturn {
       if (!messaging) return;
 
       const swReg = await registerFcmSw();
+      const { getToken } = await import('firebase/messaging');
       const token = await getToken(messaging, {
         vapidKey: VAPID_KEY,
         serviceWorkerRegistration: swReg,

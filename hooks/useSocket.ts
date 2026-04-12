@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { flushSync } from 'react-dom';
-import Ably from 'ably';
+import type Ably from 'ably';
 
 // ─── Session event callback types ─────────────────────────────────────────────
 
@@ -124,11 +124,32 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
     if (!userId) return;
 
     console.log(`[useSocket] connecting for clientId=${userId}`);
-    const realtime = new Ably.Realtime({ authUrl: '/api/ably/token', clientId: userId });
-    realtimeRef.current = realtime;
+    let cancelled = false;
 
+    import('ably').then((AblyModule) => {
+      if (cancelled) return;
+      const realtime = new AblyModule.default.Realtime({ authUrl: '/api/ably/token', clientId: userId! });
+      realtimeRef.current = realtime;
+      setupConnection(realtime, userId!);
+    });
+
+    return () => {
+      cancelled = true;
+      if (realtimeRef.current) {
+        privateChannelRef.current?.unsubscribe();
+        realtimeRef.current.close();
+        realtimeRef.current = null;
+        privateChannelRef.current = null;
+        setIsConnected(false);
+      }
+    };
+  }, [userId]);
+
+  // Extracted connection setup so it can run after async import
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const setupConnection = useCallback((realtime: Ably.Realtime, uid: string) => {
     realtime.connection.on('connected', () => {
-      console.log(`[useSocket] connected — clientId=${userId}`);
+      console.log(`[useSocket] connected — clientId=${uid}`);
       setIsConnected(true);
     });
     realtime.connection.on('disconnected', (stateChange) => {
@@ -144,7 +165,7 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
       setIsConnected(false);
     });
 
-    const ch = realtime.channels.get(`private:user-${userId}`);
+    const ch = realtime.channels.get(`private:user-${uid}`);
     privateChannelRef.current = ch;
 
     ch.subscribe('message', (msg) => messageCBs.current.forEach(cb => cb(msg.data)));
@@ -167,7 +188,6 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
         status: 'DECLINED',
       }));
     });
-    // Voice call declined — route through same callback set as chat:declined
     ch.subscribe('call:declined', (msg) => {
       const d = msg.data as Record<string, unknown>;
       chatRequestResponseCBs.current.forEach(cb => cb({
@@ -177,15 +197,7 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
     });
     ch.subscribe('chat:ended', (msg) => chatEndedCBs.current.forEach(cb => cb(msg.data)));
     ch.subscribe('chat:balance_low', (msg) => balanceLowCBs.current.forEach(cb => cb(msg.data)));
-
-    return () => {
-      ch.unsubscribe();
-      realtime.close();
-      realtimeRef.current = null;
-      privateChannelRef.current = null;
-      setIsConnected(false);
-    };
-  }, [userId]);
+  }, []);
 
   // ── Chat room subscription ────────────────────────────────────────────────
   //
