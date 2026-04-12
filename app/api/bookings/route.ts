@@ -23,9 +23,11 @@ export async function GET(request: NextRequest) {
     if (user.role === 'CLIENT') {
       bookings = await prisma.booking.findMany({
         where: { clientId: user.id },
-        include: {
+        select: {
+          id: true, date: true, duration: true, status: true, totalAmount: true,
+          depositAmount: true, paymentStatus: true, notes: true, createdAt: true,
           companion: {
-            include: { companionProfile: true },
+            select: { id: true, companionProfile: { select: { name: true, avatarUrl: true, city: true } } },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -35,9 +37,11 @@ export async function GET(request: NextRequest) {
     } else {
       bookings = await prisma.booking.findMany({
         where: { companionId: user.id },
-        include: {
+        select: {
+          id: true, date: true, duration: true, status: true, totalAmount: true,
+          depositAmount: true, paymentStatus: true, notes: true, createdAt: true,
           client: {
-            include: { clientProfile: true },
+            select: { id: true, clientProfile: { select: { name: true, avatarUrl: true, city: true } } },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -100,7 +104,7 @@ export async function POST(request: NextRequest) {
           isBanned: false,
           companionProfile: { isApproved: true },
         },
-        include: { companionProfile: true },
+        select: { id: true, companionProfile: { select: { lat: true, lng: true } } },
       });
 
       const sortedCompanions = allCompanions

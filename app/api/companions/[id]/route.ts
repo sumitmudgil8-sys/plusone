@@ -66,9 +66,10 @@ export async function GET(
     if (!accessible) {
       // Also accessible if within free limit (by distance order)
       const { MAX_FREE_COMPANIONS } = await import('@/lib/constants');
+      // Lightweight query: only fetch id + coordinates to determine free-tier rank
       const allCompanions = await prisma.user.findMany({
-        where: { role: 'COMPANION', isActive: true, isBanned: false },
-        include: { companionProfile: { select: { lat: true, lng: true } } },
+        where: { role: 'COMPANION', isActive: true, isBanned: false, companionProfile: { isApproved: true } },
+        select: { id: true, companionProfile: { select: { lat: true, lng: true } } },
       });
       const sorted = allCompanions
         .filter((c) => c.companionProfile)

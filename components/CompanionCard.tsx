@@ -58,6 +58,7 @@ export function CompanionCard({ companion, scarcityLabel }: { companion: Compani
             alt={companion.name}
             fill
             sizes="(max-width: 640px) 42vw, 172px"
+            loading="lazy"
             className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (

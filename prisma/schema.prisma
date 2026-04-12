@@ -109,6 +109,8 @@ model User {
   companionVisibility      ClientVisibility[]    @relation("CompanionVisibility")
   clientVisibility         ClientVisibility[]    @relation("ClientVisibility")
   clientScheduledSessions  ScheduledSession[]    @relation("ClientScheduledSessions")
+
+  @@index([role, isActive, isBanned])
 }
 
 model ClientProfile {
@@ -190,6 +192,7 @@ model CompanionProfile {
 
   @@index([rankingScore])
   @@index([availableNow, rankingScore])
+  @@index([isApproved, availableNow])
 }
 
 model MessageThread {
@@ -537,7 +540,7 @@ model ClientVisibility {
 
   @@unique([companionId, clientId])
   @@index([companionId, status])
-  @@index([clientId])
+  @@index([clientId, status])
 }
 
 // ─── Scheduled Sessions (GOLD only) ─────────────────────────────────────────
