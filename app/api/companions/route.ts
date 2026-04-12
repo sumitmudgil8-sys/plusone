@@ -84,6 +84,14 @@ export async function GET(request: NextRequest) {
       ];
     }
 
+    // Privacy gate: hide companions who have explicitly REJECTED this client.
+    // Companions with no visibility row (not yet reviewed) or APPROVED are shown.
+    const rejectedByCompanionIds = await prisma.clientVisibility.findMany({
+      where: { clientId: user.id, status: 'REJECTED' },
+      select: { companionId: true },
+    });
+    const rejectedSet = new Set(rejectedByCompanionIds.map((r) => r.companionId));
+
     const companions = await prisma.user.findMany({
       where: whereClause,
       include: {
@@ -98,7 +106,10 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    let companionsWithDistance = companions
+    // Remove companions who rejected this client
+    const visibleCompanions = companions.filter((c) => !rejectedSet.has(c.id));
+
+    let companionsWithDistance = visibleCompanions
       .filter((c) => c.companionProfile)
       .map((companion) => {
         const profile = companion.companionProfile!;

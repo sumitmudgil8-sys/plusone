@@ -49,6 +49,15 @@ export async function GET(
       return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
     }
 
+    // Privacy gate: if this companion explicitly rejected this client, hide.
+    // No row (not reviewed yet) or APPROVED = visible.
+    const visibility = await prisma.clientVisibility.findUnique({
+      where: { companionId_clientId: { companionId: id, clientId: user.id } },
+    });
+    if (visibility?.status === 'REJECTED') {
+      return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
+    }
+
     const profile = companion.companionProfile;
     const distance = calculateDistance(clientLat, clientLng, profile.lat, profile.lng);
 

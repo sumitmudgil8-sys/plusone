@@ -106,6 +106,8 @@ model User {
   fcmTokens                FcmToken[]
   withdrawalRequests       WithdrawalRequest[]
   manualPayments           ManualPayment[]
+  companionVisibility      ClientVisibility[]    @relation("CompanionVisibility")
+  clientVisibility         ClientVisibility[]    @relation("ClientVisibility")
 }
 
 model ClientProfile {
@@ -488,6 +490,26 @@ model ManualPayment {
   @@index([userId, status])
   @@index([uniqueAmount, status])
   @@index([status, createdAt])
+}
+
+// ─── Client Visibility ──────────────────────────────────────────────────────
+// Each companion can approve or reject individual clients. A client's profile
+// is only shown to them after the companion has approved the client. This
+// protects companion privacy — people who know the companion IRL can't see
+// their profile unless the companion explicitly allows it.
+model ClientVisibility {
+  id          String   @id @default(cuid())
+  companionId String
+  clientId    String
+  companion   User     @relation("CompanionVisibility", fields: [companionId], references: [id], onDelete: Cascade)
+  client      User     @relation("ClientVisibility", fields: [clientId], references: [id], onDelete: Cascade)
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companionId, clientId])
+  @@index([companionId, status])
+  @@index([clientId])
 }
 
 // Immutable audit trail for admin actions. Every privileged mutation (ban,
