@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/cron/ranking",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/cron/billing-sweep",
-      "schedule": "*/2 * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }

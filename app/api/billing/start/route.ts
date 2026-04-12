@@ -6,7 +6,7 @@ import { getOrCreateWallet } from '@/lib/wallet';
 import { getRatePerMinute } from '@/lib/billing';
 import { getAblyClient, getUserChannelName } from '@/lib/ably';
 import { getCallChannelName } from '@/lib/agora';
-import { BILLING_MIN_BALANCE_MINUTES } from '@/lib/constants';
+import { BILLING_MIN_BALANCE_MINUTES, BILLING_GRACE_SECONDS } from '@/lib/constants';
 import { sendPushToUser } from '@/lib/push';
 
 export const runtime = 'nodejs';
@@ -38,6 +38,14 @@ export async function POST(request: NextRequest) {
   const { companionId, type } = parsed.data;
 
   try {
+    // Opportunistic cleanup: end any stale ACTIVE sessions for this client
+    // (compensates for daily-only billing-sweep cron on Hobby plan)
+    const staleThreshold = new Date(Date.now() - BILLING_GRACE_SECONDS * 1000);
+    prisma.billingSession.updateMany({
+      where: { clientId: user.id, status: 'ACTIVE', lastTickAt: { lt: staleThreshold } },
+      data: { status: 'ENDED', endedAt: new Date() },
+    }).catch(() => {}); // fire-and-forget, non-blocking
+
     // Run all three lookups in parallel — they are independent
     const [companion, block, existing] = await Promise.all([
       prisma.user.findUnique({
