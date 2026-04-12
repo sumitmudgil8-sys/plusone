@@ -189,6 +189,8 @@ model MessageThread {
   updatedAt    DateTime  @updatedAt
 
   @@unique([clientId, companionId])
+  @@index([clientId])
+  @@index([companionId])
 }
 
 model Message {
@@ -202,6 +204,8 @@ model Message {
   content    String
   isRead     Boolean       @default(false)
   createdAt  DateTime      @default(now())
+
+  @@index([threadId, createdAt])
 }
 
 model Booking {
@@ -235,6 +239,7 @@ model Favorite {
   createdAt   DateTime @default(now())
 
   @@unique([clientId, companionId])
+  @@index([clientId])
 }
 
 model Review {

@@ -26,7 +26,19 @@ export async function GET(request: NextRequest) {
     const [companions, total] = await Promise.all([
       prisma.user.findMany({
         where,
-        include: { companionProfile: true },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          isActive: true,
+          isBanned: true,
+          isOnline: true,
+          isTemporaryPassword: true,
+          subscriptionTier: true,
+          createdAt: true,
+          updatedAt: true,
+          companionProfile: true,
+        },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
@@ -34,14 +46,8 @@ export async function GET(request: NextRequest) {
       prisma.user.count({ where }),
     ]);
 
-    // Remove password hashes
-    const companionsWithoutPassword = (companions as any[]).map((user) => {
-      const { passwordHash, ...userWithoutPassword } = user;
-      return userWithoutPassword;
-    });
-
     return NextResponse.json({
-      companions: companionsWithoutPassword,
+      companions,
       pagination: {
         page,
         limit,

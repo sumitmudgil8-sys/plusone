@@ -14,6 +14,10 @@ export async function GET(request: NextRequest) {
   const user = auth.user;
 
   try {
+    const { searchParams } = new URL(request.url);
+    const take = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
+    const skip = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0);
+
     let bookings;
 
     if (user.role === 'CLIENT') {
@@ -25,6 +29,8 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: { createdAt: 'desc' },
+        take,
+        skip,
       });
     } else {
       bookings = await prisma.booking.findMany({
@@ -35,10 +41,12 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: { createdAt: 'desc' },
+        take,
+        skip,
       });
     }
 
-    return NextResponse.json({ bookings });
+    return NextResponse.json({ bookings, hasMore: bookings.length === take });
   } catch (error) {
     console.error('Error fetching bookings:', error);
     return NextResponse.json(

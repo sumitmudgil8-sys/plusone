@@ -24,15 +24,15 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  if (phase === 'done') return <>{children}</>;
-
   return (
     <>
-      {/* Preload content underneath */}
-      <div className="sr-only">{children}</div>
+      {/* Render children once — hidden during splash, visible when done */}
+      <div style={phase !== 'done' ? { visibility: 'hidden', position: 'fixed', inset: 0, overflow: 'hidden' } : undefined}>
+        {children}
+      </div>
 
       {/* Splash overlay */}
-      <div
+      {phase !== 'done' && <div
         className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black transition-opacity duration-700 ${
           phase === 'fading' ? 'opacity-0' : 'opacity-100'
         }`}
@@ -104,7 +104,7 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
             <div className="splash-shimmer" />
           </div>
         </div>
-      </div>
+      </div>}
     </>
   );
 }

@@ -14,8 +14,14 @@ export async function GET(request: NextRequest) {
   try {
     const isClient = user.role === 'CLIENT';
 
+    const { searchParams } = new URL(request.url);
+    const take = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
+    const skip = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0);
+
     const threads = await prisma.messageThread.findMany({
       where: isClient ? { clientId: user.id } : { companionId: user.id },
+      take,
+      skip,
       include: {
         client: {
           select: {

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 
 export interface CompanionCardData {
   id: string;
@@ -39,11 +40,12 @@ export function CompanionCard({ companion, scarcityLabel }: { companion: Compani
       <div className="relative rounded-2xl overflow-hidden bg-charcoal-surface" style={{ aspectRatio: '3/4' }}>
         {/* Image */}
         {companion.primaryImageUrl || companion.avatarUrl ? (
-          <img
+          <Image
             src={companion.primaryImageUrl || companion.avatarUrl || ''}
             alt={companion.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            loading="lazy"
+            fill
+            sizes="(max-width: 640px) 42vw, 172px"
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-4xl font-medium text-white/20 bg-charcoal-elevated">

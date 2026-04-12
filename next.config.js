@@ -36,8 +36,13 @@ const nextConfig = {
 
   // Image optimization
   images: {
-    unoptimized: true,
     formats: ['image/webp', 'image/avif'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+      },
+    ],
   },
 
   // Experimental features

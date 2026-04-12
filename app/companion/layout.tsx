@@ -350,17 +350,28 @@ function CompanionFloatingCall({
 // ─── Layout (outer wrapper — provides call context) ─────────────────────────
 export default function CompanionLayout({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string | undefined>();
+  const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
 
+  // Single fetch for both userId and password state (eliminates duplicate /api/users/me call)
   useEffect(() => {
     fetch('/api/users/me')
       .then((r) => r.json())
-      .then((d) => { if (d.user?.id) setUserId(d.user.id); })
+      .then((d) => {
+        if (d.user?.id) {
+          setUserId(d.user.id);
+          setNeedsPasswordChange(d.user.isTemporaryPassword === true);
+        }
+      })
       .catch(() => {});
   }, []);
 
   return (
     <CompanionCallProvider userId={userId}>
-      <CompanionLayoutInner userId={userId} setUserId={setUserId}>
+      <CompanionLayoutInner
+        userId={userId}
+        needsPasswordChange={needsPasswordChange}
+        setNeedsPasswordChange={setNeedsPasswordChange}
+      >
         {children}
       </CompanionLayoutInner>
     </CompanionCallProvider>
@@ -368,16 +379,16 @@ export default function CompanionLayout({ children }: { children: React.ReactNod
 }
 
 // ─── Layout inner (uses call context) ────────────────────────────────────────
-function CompanionLayoutInner({ children, userId, setUserId }: {
+function CompanionLayoutInner({ children, userId, needsPasswordChange, setNeedsPasswordChange }: {
   children: React.ReactNode;
   userId: string | undefined;
-  setUserId: (id: string | undefined) => void;
+  needsPasswordChange: boolean;
+  setNeedsPasswordChange: (v: boolean) => void;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const companionCall = useCompanionCall();
   const { foregroundNotification, dismissNotification, requestPermission: requestFcmPermission } = useFcm();
-  const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [incomingChatRequest, setIncomingChatRequest] = useState<IncomingChatRequest | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -397,19 +408,6 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
     if (!userId) return;
     requestFcmPermission();
   }, [userId, requestFcmPermission]);
-
-  // Fetch password state for the current user
-  useEffect(() => {
-    if (!userId) return;
-    fetch('/api/users/me')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.user?.id) {
-          setNeedsPasswordChange(d.user.isTemporaryPassword === true);
-        }
-      })
-      .catch(() => {});
-  }, [userId]);
 
   // Extend the auth cookie once per app open (sliding 1-year window)
   useEffect(() => {
@@ -503,7 +501,7 @@ function CompanionLayoutInner({ children, userId, setUserId }: {
 
   const handlePasswordChangeSuccess = useCallback(() => {
     setNeedsPasswordChange(false);
-  }, []);
+  }, [setNeedsPasswordChange]);
 
   const handleAcceptCall = useCallback(async () => {
     if (!incomingCall) return;

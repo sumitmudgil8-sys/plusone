@@ -28,6 +28,11 @@ export async function GET(
       actualCompanionId = user.id;
     }
 
+    // Pagination: latest N messages (default 100)
+    const { searchParams } = new URL(request.url);
+    const take = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '100', 10) || 100));
+    const cursor = searchParams.get('before'); // message ID cursor for older messages
+
     // Find the thread
     const thread = await prisma.messageThread.findUnique({
       where: {
@@ -47,7 +52,9 @@ export async function GET(
               },
             },
           },
-          orderBy: { createdAt: 'asc' },
+          orderBy: { createdAt: 'desc' },
+          take,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
         },
       },
     });
@@ -60,8 +67,11 @@ export async function GET(
       });
     }
 
+    // Messages fetched desc for pagination — reverse to chronological for client
+    const messages = thread.messages.reverse();
+
     return NextResponse.json({
-      messages: thread.messages.map((msg: { id: string; content: string; senderId: string; createdAt: Date; sender: { clientProfile: { name: string | null; avatarUrl: string | null } | null; companionProfile: { name: string | null; avatarUrl: string | null } | null } }) => ({
+      messages: messages.map((msg: { id: string; content: string; senderId: string; createdAt: Date; sender: { clientProfile: { name: string | null; avatarUrl: string | null } | null; companionProfile: { name: string | null; avatarUrl: string | null } | null } }) => ({
         id: msg.id,
         content: msg.content,
         senderId: msg.senderId,
@@ -73,6 +83,7 @@ export async function GET(
         createdAt: msg.createdAt,
       })),
       messageCount: thread.messageCount,
+      hasMore: thread.messages.length === take,
     });
   } catch (error) {
     console.error('Error fetching messages:', error);

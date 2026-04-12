@@ -12,6 +12,10 @@ export async function GET(request: NextRequest) {
   const user = auth.user;
 
   try {
+    const { searchParams } = new URL(request.url);
+    const take = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
+    const skip = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0);
+
     const favorites = await prisma.favorite.findMany({
       where: { clientId: user.id },
       include: {
@@ -19,9 +23,12 @@ export async function GET(request: NextRequest) {
           include: { companionProfile: true },
         },
       },
+      orderBy: { createdAt: 'desc' },
+      take,
+      skip,
     });
 
-    return NextResponse.json({ favorites });
+    return NextResponse.json({ favorites, hasMore: favorites.length === take });
   } catch (error) {
     console.error('Error fetching favorites:', error);
     return NextResponse.json(

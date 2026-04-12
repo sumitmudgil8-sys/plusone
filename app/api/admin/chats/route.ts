@@ -32,9 +32,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: { messages } });
     }
 
-    // Otherwise return all threads
+    // Otherwise return paginated threads
+    const take = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
+    const skip = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0);
+
     const threads = await prisma.messageThread.findMany({
       orderBy: { updatedAt: 'desc' },
+      take,
+      skip,
       include: {
         client: {
           include: { clientProfile: { select: { name: true, avatarUrl: true } } },
@@ -64,7 +69,7 @@ export async function GET(request: NextRequest) {
       updatedAt: t.updatedAt.toISOString(),
     }));
 
-    return NextResponse.json({ success: true, data: { threads: data } });
+    return NextResponse.json({ success: true, data: { threads: data, hasMore: threads.length === take } });
   } catch (error) {
     console.error('Admin chats error:', error);
     return NextResponse.json(

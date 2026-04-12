@@ -38,11 +38,19 @@ export async function POST(request: NextRequest) {
   const { companionId, type } = parsed.data;
 
   try {
-    // Check companion exists and is active
-    const companion = await prisma.user.findUnique({
-      where: { id: companionId, role: 'COMPANION', isActive: true, isBanned: false },
-      include: { companionProfile: true },
-    });
+    // Run all three lookups in parallel — they are independent
+    const [companion, block, existing] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: companionId, role: 'COMPANION', isActive: true, isBanned: false },
+        include: { companionProfile: true },
+      }),
+      prisma.blockedUser.findUnique({
+        where: { companionId_clientId: { companionId, clientId: user.id } },
+      }),
+      prisma.billingSession.findFirst({
+        where: { clientId: user.id, companionId, status: { in: ['PENDING', 'ACTIVE'] } },
+      }),
+    ]);
 
     if (!companion?.companionProfile) {
       return NextResponse.json(
@@ -51,22 +59,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if companion has blocked this client
-    const block = await prisma.blockedUser.findUnique({
-      where: { companionId_clientId: { companionId, clientId: user.id } },
-    });
     if (block) {
       return NextResponse.json(
         { success: false, error: 'Unable to start session with this companion' },
         { status: 403 }
       );
     }
-
-    // Return existing PENDING or ACTIVE session (idempotent for both CHAT and VOICE)
-    const existingStatuses = ['PENDING', 'ACTIVE'];
-    const existing = await prisma.billingSession.findFirst({
-      where: { clientId: user.id, companionId, status: { in: existingStatuses } },
-    });
 
     if (existing) {
       // Auto-expire if pending and past expiry time

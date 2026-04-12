@@ -90,19 +90,18 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Update companion average rating
-    const reviews = await prisma.review.findMany({
+    // Update companion average rating using aggregate (avoids fetching all rows)
+    const stats = await prisma.review.aggregate({
       where: { reviewedId: booking.companionId },
-      select: { rating: true },
+      _avg: { rating: true },
+      _count: { rating: true },
     });
-
-    const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
 
     await prisma.companionProfile.update({
       where: { userId: booking.companionId },
       data: {
-        averageRating: avgRating,
-        reviewCount: reviews.length,
+        averageRating: stats._avg.rating ?? 0,
+        reviewCount: stats._count.rating,
       },
     });
 

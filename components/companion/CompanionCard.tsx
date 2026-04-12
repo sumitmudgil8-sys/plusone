@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import Image from 'next/image';
+import React, { useState, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { formatDistance, cn } from '@/lib/utils';
 
@@ -28,7 +29,7 @@ interface CompanionCardProps {
   availableNow?: boolean;
 }
 
-export function CompanionCard({
+export const CompanionCard = React.memo(function CompanionCard({
   id,
   name,
   hourlyRatePaise,
@@ -47,14 +48,13 @@ export function CompanionCard({
   availableNow = false,
 }: CompanionCardProps) {
   const [isFavorited, setIsFavorited] = useState(initialFavorited);
-  const [isHovered, setIsHovered] = useState(false);
 
   const displayImage = primaryImageUrl ?? avatarUrl ?? null;
   const bookingRateDisplay = hourlyRatePaise > 0
     ? `₹${Math.round(hourlyRatePaise / 100).toLocaleString('en-IN')}/hr`
     : null;
 
-  const toggleFavorite = async (e: React.MouseEvent) => {
+  const toggleFavorite = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     try {
@@ -68,27 +68,27 @@ export function CompanionCard({
     } catch (error) {
       console.error('Error toggling favorite:', error);
     }
-  };
+  }, [id]);
 
   return (
     <Link href={accessible ? `/client/booking/${id}` : '/client/subscription'}>
       <Card
         className={cn(
-          'relative overflow-hidden transition-all duration-300 p-0',
+          'group relative overflow-hidden transition-all duration-300 p-0',
           accessible ? 'cursor-pointer hover:shadow-xl hover:border-gold/30' : 'cursor-pointer'
         )}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
       >
         {/* Image */}
         <div className="relative aspect-[3/4] bg-charcoal-surface overflow-hidden">
           {displayImage ? (
-            <img
+            <Image
               src={displayImage}
               alt={name}
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className={cn(
-                'w-full h-full object-cover transition-transform duration-300',
-                isHovered && accessible && 'scale-105',
+                'object-cover transition-transform duration-300',
+                accessible && 'group-hover:scale-105',
                 !accessible && 'blur-sm scale-105'
               )}
             />
@@ -207,4 +207,4 @@ export function CompanionCard({
       </Card>
     </Link>
   );
-}
+});
