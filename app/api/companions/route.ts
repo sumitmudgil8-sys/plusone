@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { calculateDistance } from '@/lib/utils';
 import { MAX_FREE_COMPANIONS } from '@/lib/constants';
+import { markStaleCompanionsOffline } from '@/lib/auto-offline';
 
 export const runtime = 'nodejs';
 
@@ -30,6 +31,9 @@ export async function GET(request: NextRequest) {
   const availableNow = searchParams.get('availableNow');   // "true" to filter
 
   try {
+    // Lazy auto-offline: mark stale companions as unavailable (fire-and-forget)
+    markStaleCompanionsOffline().catch(() => {});
+
     const [clientProfile, clientUser] = await Promise.all([
       prisma.clientProfile.findUnique({ where: { userId: user.id } }),
       prisma.user.findUnique({

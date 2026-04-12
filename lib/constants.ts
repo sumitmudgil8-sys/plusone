@@ -46,6 +46,7 @@ export const MIN_SESSION_DURATION_FOR_REVIEW = 120; // seconds — must last ≥
 
 // Presence
 export const PRESENCE_OFFLINE_THRESHOLD_MS = 90_000;  // 90s without heartbeat → offline
+export const AUTO_OFFLINE_MINUTES = 10;               // auto-offline if no heartbeat for 10 min
 export const FAVORITE_NOTIFICATION_THROTTLE_S = 21600; // 6 hours between "X is online" pushes
 
 export const COLORS = {

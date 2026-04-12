@@ -106,5 +106,19 @@ export async function PUT(request: NextRequest) {
     data: updateData,
   });
 
+  // When going available, reset the heartbeat timer so auto-offline
+  // starts counting from now (10 min inactivity threshold)
+  if (updateData.availableNow === true) {
+    await prisma.user.update({
+      where: { id: auth.user.id },
+      data: { isOnline: true, locationUpdatedAt: new Date() },
+    });
+  } else if (updateData.availableNow === false) {
+    await prisma.user.update({
+      where: { id: auth.user.id },
+      data: { isOnline: false },
+    });
+  }
+
   return NextResponse.json({ success: true });
 }
