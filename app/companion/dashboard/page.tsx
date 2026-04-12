@@ -81,6 +81,45 @@ function buildSummary(schedule: WeeklySchedule): string {
   return `${dayLabels} · ${slotLabels.join(', ')}`;
 }
 
+const BADGE_DEFS = [
+  {
+    type: 'TOP_RATED',
+    label: 'Top Rated',
+    icon: '\u2B50',
+    description: '4.5+ rating with 20+ sessions',
+    bgActive: 'bg-amber-500/10',
+    borderActive: 'border-amber-500/25',
+    iconColor: 'text-amber-400',
+  },
+  {
+    type: 'FAST_RESPONDER',
+    label: 'Fast Responder',
+    icon: '\u26A1',
+    description: 'Avg response under 60 seconds',
+    bgActive: 'bg-emerald-500/10',
+    borderActive: 'border-emerald-500/25',
+    iconColor: 'text-emerald-400',
+  },
+  {
+    type: 'ELITE',
+    label: 'Elite',
+    icon: '\uD83D\uDC8E',
+    description: '100+ sessions over 6+ months',
+    bgActive: 'bg-purple-500/10',
+    borderActive: 'border-purple-500/25',
+    iconColor: 'text-purple-400',
+  },
+  {
+    type: 'RISING_STAR',
+    label: 'Rising Star',
+    icon: '\uD83D\uDE80',
+    description: '4.3+ rating, 5+ sessions in 60 days',
+    bgActive: 'bg-blue-500/10',
+    borderActive: 'border-blue-500/25',
+    iconColor: 'text-blue-400',
+  },
+] as const;
+
 export default function CompanionDashboard() {
   const toast = useToast();
   const [user, setUser] = useState<{ isOnline?: boolean; companionProfile?: { name?: string } } | null>(null);
@@ -100,6 +139,10 @@ export default function CompanionDashboard() {
   const [draftSchedule, setDraftSchedule] = useState<WeeklySchedule>(emptySchedule());
   const [savingAvailability, setSavingAvailability] = useState(false);
   const [togglingAvailableNow, setTogglingAvailableNow] = useState(false);
+
+  // Badge state
+  const [badges, setBadges] = useState<{ type: string; isActive: boolean; earnedAt: string | null }[]>([]);
+  const [rankingScore, setRankingScore] = useState<number | null>(null);
 
   // Fetch availability
   const fetchAvailability = useCallback(async () => {
@@ -146,11 +189,12 @@ export default function CompanionDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [userRes, bookingsRes, earningsRes, sessionsRes] = await Promise.all([
+        const [userRes, bookingsRes, earningsRes, sessionsRes, badgesRes] = await Promise.all([
           fetch('/api/users/me'),
           fetch('/api/bookings'),
           fetch('/api/companion/earnings'),
           fetch('/api/companion/sessions?limit=5'),
+          fetch('/api/companion/badges'),
         ]);
         if (userRes.ok) {
           const d = await userRes.json();
@@ -167,6 +211,13 @@ export default function CompanionDashboard() {
         if (sessionsRes.ok) {
           const d = await sessionsRes.json();
           setSessions(d.data?.sessions ?? []);
+        }
+        if (badgesRes.ok) {
+          const d = await badgesRes.json();
+          if (d.success) {
+            setBadges(d.data.badges ?? []);
+            setRankingScore(d.data.rankingScore ?? null);
+          }
         }
       } catch (error) {
         console.error('Dashboard fetch error:', error);
@@ -384,6 +435,56 @@ export default function CompanionDashboard() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
       </Link>
+
+      {/* ── Badges & Ranking ──────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-white/[0.06] bg-[#0f0f1a] overflow-hidden">
+        <div className="p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+              <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">Your Badges</p>
+              {rankingScore !== null && (
+                <p className="text-xs text-white/40 mt-0.5">Ranking score: <span className="text-amber-400 font-semibold">{rankingScore.toFixed(0)}/100</span></p>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="px-4 pb-4">
+          <div className="grid grid-cols-2 gap-2">
+            {BADGE_DEFS.map((def) => {
+              const badge = badges.find((b) => b.type === def.type);
+              const earned = badge?.isActive ?? false;
+              return (
+                <div
+                  key={def.type}
+                  className={`relative rounded-xl p-3 border transition-colors ${
+                    earned
+                      ? `${def.bgActive} ${def.borderActive}`
+                      : 'bg-white/[0.02] border-white/[0.06]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-base ${earned ? def.iconColor : 'grayscale opacity-30'}`}>{def.icon}</span>
+                    <span className={`text-xs font-semibold ${earned ? 'text-white' : 'text-white/30'}`}>{def.label}</span>
+                  </div>
+                  <p className={`text-[10px] leading-tight ${earned ? 'text-white/50' : 'text-white/20'}`}>{def.description}</p>
+                  {earned && (
+                    <div className="absolute top-2 right-2">
+                      <svg className="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
       {/* ── Today's earnings spotlight ────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-gradient-to-br from-[#12121d] via-[#0f0f1a] to-[#0f0f1a] p-5">

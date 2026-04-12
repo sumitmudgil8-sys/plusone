@@ -16,7 +16,7 @@ function getCloudinary() {
   return cloudinary;
 }
 
-export type UploadFolder = 'avatars' | 'companion-gallery' | 'companion-avatars' | 'verification-docs';
+export type UploadFolder = 'avatars' | 'companion-gallery' | 'companion-avatars' | 'verification-docs' | 'audio-intros';
 
 export interface UploadResult {
   url: string;
@@ -39,6 +39,9 @@ const FOLDER_TRANSFORMS: Record<UploadFolder, object> = {
   },
   'verification-docs': {
     // No transformation — preserve document fidelity for ID verification
+  },
+  'audio-intros': {
+    // No transformation — store raw audio as-is
   },
 };
 

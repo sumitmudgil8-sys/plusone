@@ -15,7 +15,7 @@ export const runtime = 'nodejs';
 // Disable Next.js body parsing — we handle the multipart stream directly.
 export const dynamic = 'force-dynamic';
 
-type UploadType = 'avatar' | 'gallery' | 'document';
+type UploadType = 'avatar' | 'gallery' | 'document' | 'audio';
 
 const UPLOAD_TYPE_CONFIG: Record<
   UploadType,
@@ -35,6 +35,11 @@ const UPLOAD_TYPE_CONFIG: Record<
     folder: 'verification-docs',
     maxBytes: UPLOAD_MAX_DOCUMENT_BYTES,
     allowedTypes: UPLOAD_ALLOWED_DOCUMENT_TYPES,
+  },
+  audio: {
+    folder: 'audio-intros',
+    maxBytes: 2 * 1024 * 1024, // 2 MB
+    allowedTypes: ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav'],
   },
 };
 
@@ -70,7 +75,7 @@ export async function POST(request: NextRequest) {
 
   if (!typeRaw || typeof typeRaw !== 'string') {
     return NextResponse.json(
-      { success: false, error: 'Upload type is required (avatar | gallery | document)' },
+      { success: false, error: 'Upload type is required (avatar | gallery | document | audio)' },
       { status: 400 }
     );
   }
@@ -80,7 +85,7 @@ export async function POST(request: NextRequest) {
 
   if (!config) {
     return NextResponse.json(
-      { success: false, error: `Invalid type. Must be one of: avatar, gallery, document` },
+      { success: false, error: `Invalid type. Must be one of: avatar, gallery, document, audio` },
       { status: 400 }
     );
   }
@@ -117,6 +122,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (uploadType === 'audio' && user.role !== 'COMPANION') {
+    return NextResponse.json(
+      { success: false, error: 'Only companions can upload audio intros' },
+      { status: 403 }
+    );
+  }
+
   // Gallery cap check
   if (uploadType === 'gallery') {
     const profile = await prisma.companionProfile.findUnique({
@@ -135,8 +147,13 @@ export async function POST(request: NextRequest) {
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // For avatars, use a deterministic public_id so re-uploading replaces the old one.
-    const publicId = uploadType === 'avatar' ? `avatar_${user.id}` : undefined;
+    // For avatars and audio intros, use a deterministic public_id so re-uploading replaces the old one.
+    const publicId =
+      uploadType === 'avatar'
+        ? `avatar_${user.id}`
+        : uploadType === 'audio'
+          ? `audio_intro_${user.id}`
+          : undefined;
 
     // If replacing avatar, clean up old one from Cloudinary (best-effort)
     if (uploadType === 'avatar') {
@@ -176,6 +193,21 @@ export async function POST(request: NextRequest) {
       await prisma.companionProfile.update({
         where: { userId: user.id },
         data: { images: JSON.stringify([...current, result.url]) },
+      });
+    } else if (uploadType === 'audio') {
+      // Persist audio intro URL and recalculate profileComplete
+      const profile = await prisma.companionProfile.findUnique({
+        where: { userId: user.id },
+        select: { avatarUrl: true, bio: true },
+      });
+      const profileComplete =
+        !!result.url &&
+        !!profile?.avatarUrl &&
+        !!profile?.bio &&
+        profile.bio.length > 0;
+      await prisma.companionProfile.update({
+        where: { userId: user.id },
+        data: { audioIntroUrl: result.url, profileComplete },
       });
     }
     // For 'document', the caller submits to POST /api/verification/documents with the returned URL.

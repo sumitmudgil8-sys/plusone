@@ -24,6 +24,19 @@ export interface CompanionCardData {
   interests: string[];
   accessible: boolean;
   scarcityLabel?: string;
+  badges?: string[];
+  audioIntroUrl?: string | null;
+}
+
+const BADGE_LABELS: Record<string, string> = {
+  TOP_RATED: 'Top Rated',
+  FAST_RESPONDER: 'Fast',
+  ELITE: 'Elite',
+  RISING_STAR: 'Rising Star',
+};
+
+function badgeLabel(badge: string): string {
+  return BADGE_LABELS[badge] ?? badge;
 }
 
 export function CompanionCard({ companion, scarcityLabel }: { companion: CompanionCardData; scarcityLabel?: string }) {
@@ -79,6 +92,20 @@ export function CompanionCard({ companion, scarcityLabel }: { companion: Compani
             <svg className="w-4 h-4 text-gold" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
+          </div>
+        )}
+
+        {/* Trust badges (bottom-left, above info) */}
+        {companion.badges && companion.badges.length > 0 && (
+          <div className="absolute bottom-[72px] left-2.5 flex gap-1">
+            {companion.badges.slice(0, 2).map((badge) => (
+              <span
+                key={badge}
+                className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-gold/30 text-gold"
+              >
+                {badgeLabel(badge)}
+              </span>
+            ))}
           </div>
         )}
 

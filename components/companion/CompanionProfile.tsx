@@ -56,7 +56,16 @@ interface CompanionData {
   accessible: boolean;
   weeklyAvailability?: Record<string, string[]>;
   availableNow?: boolean;
+  badges?: string[];
+  audioIntroUrl?: string | null;
 }
+
+const BADGE_CONFIG: Record<string, { label: string; color: string }> = {
+  TOP_RATED: { label: 'Top Rated', color: 'bg-gold/15 text-gold border-gold/25' },
+  FAST_RESPONDER: { label: 'Fast Responder', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' },
+  ELITE: { label: 'Elite', color: 'bg-purple-500/15 text-purple-400 border-purple-500/25' },
+  RISING_STAR: { label: 'Rising Star', color: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
+};
 
 interface CompanionProfileProps {
   companion: CompanionData;
@@ -276,6 +285,59 @@ export function CompanionProfile({
             </div>
           )}
         </div>
+
+        {/* Badges */}
+        {companion.badges && companion.badges.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {companion.badges.map((badge) => {
+              const config = BADGE_CONFIG[badge];
+              if (!config) return null;
+              return (
+                <span
+                  key={badge}
+                  className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${config.color}`}
+                >
+                  {badge === 'TOP_RATED' && (
+                    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  )}
+                  {badge === 'FAST_RESPONDER' && (
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  )}
+                  {badge === 'ELITE' && (
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
+                  )}
+                  {badge === 'RISING_STAR' && (
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                  )}
+                  {config.label}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Audio intro */}
+        {companion.audioIntroUrl && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+            <div className="w-8 h-8 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-white/50 font-medium">Audio Introduction</p>
+              <audio src={companion.audioIntroUrl} controls className="w-full h-8 mt-1" />
+            </div>
+          </div>
+        )}
 
         {/* Action buttons */}
         {showActions && companion.accessible && (
