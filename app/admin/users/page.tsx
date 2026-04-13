@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { UserTable } from '@/components/admin/UserTable';
 import { cn } from '@/lib/utils';
@@ -485,6 +486,8 @@ function CompanionsSection() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     name: '',
@@ -548,13 +551,19 @@ function CompanionsSection() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure?')) return;
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
     try {
-      const res = await fetch(`/api/admin/companions?id=${id}`, { method: 'DELETE' });
-      if (res.ok) fetchCompanions();
+      const res = await fetch(`/api/admin/companions?id=${deleteTarget.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setDeleteTarget(null);
+        fetchCompanions();
+      }
     } catch (error) {
       console.error('Error deleting companion:', error);
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -653,7 +662,7 @@ function CompanionsSection() {
                         <Button
                           size="sm"
                           variant="danger"
-                          onClick={() => handleDelete(companion.id)}
+                          onClick={() => setDeleteTarget({ id: companion.id, name: companion.companionProfile?.name ?? 'this companion' })}
                         >
                           Delete
                         </Button>
@@ -753,6 +762,18 @@ function CompanionsSection() {
           </Button>
         </div>
       </Modal>
+
+      {/* Delete Companion Confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete companion?"
+        message={`This will permanently delete ${deleteTarget?.name ?? 'this companion'} and all their data. This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        busy={deleteBusy}
+      />
     </>
   );
 }

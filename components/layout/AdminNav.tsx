@@ -9,6 +9,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 const navItems = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: HomeIcon },
   { href: '/admin/users', label: 'Users', icon: UsersIcon },
+  { href: '/admin/bookings', label: 'Bookings', icon: BookingsIcon },
   { href: '/admin/payments', label: 'Payments', icon: PaymentIcon },
   { href: '/admin/chats', label: 'Chats', icon: ChatIcon },
   { href: '/admin/withdrawals', label: 'Payouts', icon: WalletIcon },
@@ -168,6 +169,14 @@ function WalletIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
+  );
+}
+
+function BookingsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
     </svg>
   );
 }

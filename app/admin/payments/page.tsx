@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 
 interface ManualPayment {
@@ -56,6 +57,7 @@ export default function AdminPaymentsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [rejectModal, setRejectModal] = useState<ManualPayment | null>(null);
   const [rejectNote, setRejectNote] = useState('');
+  const [approveTarget, setApproveTarget] = useState<ManualPayment | null>(null);
 
   const fetchPayments = useCallback(async (status: StatusFilter) => {
     setLoading(true);
@@ -85,20 +87,19 @@ export default function AdminPaymentsPage() {
     return () => clearInterval(interval);
   }, [activeFilter, fetchPayments]);
 
-  const handleApprove = async (id: string) => {
-    const payment = payments.find((p) => p.id === id);
-    const msg = payment?.type === 'SUBSCRIPTION'
-      ? 'Approve this payment? This will activate the client\'s subscription for 30 days.'
-      : 'Approve this payment? This will credit the client\'s wallet.';
-    if (!confirm(msg)) return;
-    setActionLoading(id);
+  const handleApproveConfirm = async () => {
+    if (!approveTarget) return;
+    setActionLoading(approveTarget.id);
     try {
-      const res = await fetch(`/api/admin/payments/${id}`, {
+      const res = await fetch(`/api/admin/payments/${approveTarget.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'approve' }),
       });
-      if (res.ok) fetchPayments(activeFilter);
+      if (res.ok) {
+        setApproveTarget(null);
+        fetchPayments(activeFilter);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -280,7 +281,7 @@ export default function AdminPaymentsPage() {
                       <div className="flex gap-2 shrink-0">
                         <Button
                           size="sm"
-                          onClick={() => handleApprove(payment.id)}
+                          onClick={() => setApproveTarget(payment)}
                           isLoading={actionLoading === payment.id}
                         >
                           Approve
@@ -302,6 +303,23 @@ export default function AdminPaymentsPage() {
           </div>
         )}
       </Card>
+
+      {/* Approve Confirmation */}
+      <ConfirmDialog
+        isOpen={!!approveTarget}
+        onClose={() => setApproveTarget(null)}
+        onConfirm={handleApproveConfirm}
+        title="Approve payment?"
+        message={
+          approveTarget
+            ? approveTarget.type === 'SUBSCRIPTION'
+              ? `Approve ${formatPaise(approveTarget.uniqueAmount)} from ${approveTarget.user.clientProfile?.name ?? approveTarget.user.email}? This will activate their subscription for 30 days.`
+              : `Approve ${formatPaise(approveTarget.uniqueAmount)} from ${approveTarget.user.clientProfile?.name ?? approveTarget.user.email}? This will credit their wallet.`
+            : ''
+        }
+        confirmLabel="Approve"
+        busy={!!approveTarget && actionLoading === approveTarget.id}
+      />
 
       {/* Reject Modal */}
       {rejectModal && (

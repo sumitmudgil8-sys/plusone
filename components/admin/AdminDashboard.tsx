@@ -11,9 +11,14 @@ interface Stats {
   totalCompanions: number;
   pendingCompanions: number;
   pendingVerifications: number;
+  pendingClientReviews: number;
   totalBookings: number;
   pendingBookings: number;
+  confirmedBookings: number;
   completedBookings: number;
+  todayBookings: number;
+  pendingPayments: number;
+  pendingWithdrawals: number;
   totalRevenue: number;
 }
 
@@ -108,7 +113,7 @@ export function AdminDashboard() {
     {
       label: 'Bookings',
       value: stats.totalBookings,
-      subtitle: `${stats.pendingBookings} pending · ${stats.completedBookings} done`,
+      subtitle: `${stats.pendingBookings} pending · ${stats.confirmedBookings ?? 0} confirmed · ${stats.completedBookings} done`,
       href: '/admin/bookings',
       gradient: 'from-emerald-500/20 to-teal-500/20',
       iconBg: 'bg-emerald-500/20',
@@ -121,8 +126,8 @@ export function AdminDashboard() {
     },
     {
       label: 'Pending Approvals',
-      value: stats.pendingCompanions,
-      subtitle: `${stats.pendingVerifications} verifications`,
+      value: stats.pendingCompanions + (stats.pendingClientReviews ?? 0),
+      subtitle: `${stats.pendingClientReviews ?? 0} clients · ${stats.pendingCompanions} companions · ${stats.pendingVerifications} docs`,
       href: '/admin/users',
       gradient: 'from-amber-500/20 to-orange-500/20',
       iconBg: 'bg-amber-500/20',
@@ -150,8 +155,37 @@ export function AdminDashboard() {
     },
   ];
 
+  // Attention items — things that need admin action
+  const attentionItems = [
+    stats.pendingClientReviews > 0 && {
+      label: `${stats.pendingClientReviews} client${stats.pendingClientReviews !== 1 ? 's' : ''} awaiting review`,
+      href: '/admin/users',
+      color: 'text-amber-400',
+      bg: 'bg-amber-500/10',
+    },
+    stats.pendingPayments > 0 && {
+      label: `${stats.pendingPayments} payment${stats.pendingPayments !== 1 ? 's' : ''} to verify`,
+      href: '/admin/payments',
+      color: 'text-blue-400',
+      bg: 'bg-blue-500/10',
+    },
+    stats.pendingWithdrawals > 0 && {
+      label: `${stats.pendingWithdrawals} withdrawal${stats.pendingWithdrawals !== 1 ? 's' : ''} pending`,
+      href: '/admin/withdrawals',
+      color: 'text-purple-400',
+      bg: 'bg-purple-500/10',
+    },
+    stats.todayBookings > 0 && {
+      label: `${stats.todayBookings} booking${stats.todayBookings !== 1 ? 's' : ''} today`,
+      href: '/admin/bookings',
+      color: 'text-emerald-400',
+      bg: 'bg-emerald-500/10',
+    },
+  ].filter(Boolean) as { label: string; href: string; color: string; bg: string }[];
+
   const quickActions = [
     { label: 'View Clients', href: '/admin/users', icon: '→' },
+    { label: 'View Bookings', href: '/admin/bookings', icon: '→' },
     { label: 'Verify Payments', href: '/admin/payments', icon: '→' },
     { label: 'Monitor Chats', href: '/admin/chats', icon: '→' },
     { label: 'Process Payouts', href: '/admin/withdrawals', icon: '→' },
@@ -206,8 +240,30 @@ export function AdminDashboard() {
         })}
       </div>
 
+      {/* Attention Items */}
+      {attentionItems.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          {attentionItems.map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-2 px-3.5 py-2 rounded-xl border border-white/[0.06] transition-all duration-200 hover:border-white/20',
+                item.bg
+              )}
+            >
+              <span className="relative flex h-2 w-2">
+                <span className={cn('animate-ping absolute inline-flex h-full w-full rounded-full opacity-75', item.bg.replace('/10', '/40'))} />
+                <span className={cn('relative inline-flex rounded-full h-2 w-2', item.bg.replace('/10', '/60'))} />
+              </span>
+              <span className={cn('text-xs font-medium', item.color)}>{item.label}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
         {quickActions.map((action) => (
           <Link
             key={action.label}

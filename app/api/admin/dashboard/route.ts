@@ -18,6 +18,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
     // Get stats
     const [
       totalUsers,
@@ -25,9 +28,14 @@ export async function GET(req: NextRequest) {
       totalCompanions,
       pendingCompanions,
       pendingVerifications,
+      pendingClientReviews,
       totalBookings,
       pendingBookings,
+      confirmedBookings,
       completedBookings,
+      todayBookings,
+      pendingPayments,
+      pendingWithdrawals,
       totalRevenue,
       recentUsers,
       recentBookings,
@@ -39,9 +47,14 @@ export async function GET(req: NextRequest) {
         where: { isApproved: false, verificationStatus: 'PENDING' },
       }),
       prisma.verificationDocument.count({ where: { status: 'PENDING' } }),
+      prisma.user.count({ where: { role: 'CLIENT', clientStatus: 'PENDING_REVIEW' } }),
       prisma.booking.count(),
       prisma.booking.count({ where: { status: 'PENDING' } }),
+      prisma.booking.count({ where: { status: 'CONFIRMED' } }),
       prisma.booking.count({ where: { status: 'COMPLETED' } }),
+      prisma.booking.count({ where: { date: { gte: todayStart } } }),
+      prisma.manualPayment.count({ where: { status: 'PENDING' } }).catch(() => 0),
+      prisma.withdrawalRequest.count({ where: { status: 'PENDING' } }).catch(() => 0),
       prisma.booking.aggregate({
         where: { paymentStatus: 'PAID' },
         _sum: { totalAmount: true },
@@ -83,9 +96,14 @@ export async function GET(req: NextRequest) {
         totalCompanions,
         pendingCompanions,
         pendingVerifications,
+        pendingClientReviews,
         totalBookings,
         pendingBookings,
+        confirmedBookings,
         completedBookings,
+        todayBookings,
+        pendingPayments,
+        pendingWithdrawals,
         totalRevenue: totalRevenue._sum.totalAmount || 0,
       },
       recentUsers,
