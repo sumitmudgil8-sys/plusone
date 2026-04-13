@@ -210,8 +210,8 @@ export async function POST(request: NextRequest) {
       // If neither data source is populated, skip the check (legacy accounts).
     }
 
-    // Calculate total amount and deposit (both in paise).
-    // The deposit is held on the client's wallet as an anti-no-show bond.
+    // Calculate total amount and hold (both in paise).
+    // The full amount is held on the client's wallet.
     // On REJECTED/CANCELLED it's released back. On COMPLETED it's retained
     // as platform revenue (not credited to anyone).
     const hourlyRate = companion.companionProfile.hourlyRate;
@@ -300,7 +300,7 @@ export async function POST(request: NextRequest) {
             type: 'HOLD',
             amount: depositAmount,
             balanceAfter: newBalance,
-            description: `Booking deposit · ${companionDisplayName}`,
+            description: `Booking hold · ${companionDisplayName}`,
             metadata: JSON.stringify({ companionId, bookingDate: date, duration }),
           },
         });
@@ -336,7 +336,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: 'INSUFFICIENT_BALANCE',
-            message: `You need ₹${(depositAmount / 100).toLocaleString('en-IN')} in your wallet for the booking deposit. Please recharge and try again.`,
+            message: `You need ₹${(depositAmount / 100).toLocaleString('en-IN')} in your wallet. Full amount is held until the booking is confirmed. Please recharge and try again.`,
             depositAmount,
           },
           { status: 402 }

@@ -242,7 +242,7 @@ export default function BookingPage() {
       const data = await res.json();
       if (!res.ok || !data.success) {
         if (data.error === 'INSUFFICIENT_BALANCE') {
-          setScheduleError(`Insufficient balance. Need ₹${Math.ceil((data.required ?? 0) / 100)} for the 30% hold.`);
+          setScheduleError(`Insufficient balance. Need ₹${Math.ceil((data.required ?? 0) / 100)} for the hold.`);
         } else {
           setScheduleError(data.error || 'Booking failed');
         }
@@ -344,7 +344,7 @@ export default function BookingPage() {
         {companion.accessible && (
           <Card id="schedule-form">
             <h2 className="text-lg font-bold text-white mb-1">Schedule a Chat</h2>
-            <p className="text-white/50 text-xs mb-4">Book a guaranteed chat slot. 30% hold from your wallet secures the booking.</p>
+            <p className="text-white/50 text-xs mb-4">Book a guaranteed chat slot. Full amount held from your wallet.</p>
 
             {scheduleStatus === 'success' && scheduleResult ? (
               <div className="text-center space-y-3 py-2">
@@ -355,7 +355,7 @@ export default function BookingPage() {
                 </div>
                 <p className="text-white font-semibold">Session Booked!</p>
                 <div className="text-xs text-white/50 space-y-1">
-                  <p>Hold: ₹{(scheduleResult.holdAmount / 100).toFixed(0)} (30% of ₹{(scheduleResult.estimatedTotal / 100).toFixed(0)})</p>
+                  <p>Hold: ₹{(scheduleResult.holdAmount / 100).toFixed(0)}</p>
                   <p>Scheduled: {new Date(scheduleResult.scheduledAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
                 <p className="text-[10px] text-white/30">You&apos;ll be able to start the chat near the scheduled time.</p>
@@ -476,8 +476,8 @@ export default function BookingPage() {
                       <span className="text-white">₹{((companion.chatRatePerMinute * scheduleDuration) / 100).toFixed(0)}</span>
                     </div>
                     <div className="border-t border-white/[0.06] pt-1 flex justify-between text-xs">
-                      <span className="text-gold font-medium">Hold (30%)</span>
-                      <span className="text-gold font-medium">₹{Math.ceil((companion.chatRatePerMinute * scheduleDuration * 0.3) / 100)}</span>
+                      <span className="text-gold font-medium">Amount on hold</span>
+                      <span className="text-gold font-medium">₹{Math.ceil((companion.chatRatePerMinute * scheduleDuration) / 100)}</span>
                     </div>
                   </div>
                 )}

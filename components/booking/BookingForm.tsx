@@ -558,11 +558,11 @@ export function BookingForm({
               <span className="font-bold text-gold text-lg">{formatCurrency(totalAmount)}</span>
             </div>
             <div className="flex justify-between text-white/80 bg-gold/5 border border-gold/15 rounded-lg px-3 py-2">
-              <span>Deposit due now ({DEPOSIT_PERCENTAGE}%)</span>
+              <span>Amount on hold</span>
               <span className="font-semibold text-gold">{formatCurrency(depositAmount)}</span>
             </div>
             <p className="text-[11px] text-white/40 leading-snug">
-              Held from your wallet until the booking is confirmed. Refunded in full if the companion declines or you cancel before confirmation.
+              Full amount held from your wallet until the booking is confirmed. Refunded in full if the companion declines or you cancel before confirmation.
             </p>
           </div>
         </Card>

@@ -19,11 +19,11 @@ export const WALLET_RECHARGE_PRESETS = [10000, 20000, 50000, 100000, 200000]; //
 
 export const MAX_FREE_COMPANIONS = 10;          // free tier sees first 10 cards; rest are blurred
 export const SUBSCRIPTION_PRICE_PAISE = 499900; // ₹4,999/month (GOLD tier)
-export const DEPOSIT_PERCENTAGE = 20; // 20% deposit required
+export const DEPOSIT_PERCENTAGE = 100; // full amount held on booking
 
 // Scheduled sessions (available to all users)
 export const SCHEDULED_DURATIONS = [15, 30] as const;          // minutes
-export const SCHEDULED_HOLD_RATE = 0.30;                       // 30% hold on estimated total
+export const SCHEDULED_HOLD_RATE = 1.0;                        // full amount held on scheduled session
 export const SCHEDULED_CANCEL_WINDOW_MINUTES = 60;             // free cancel if > 1h before
 export const SCHEDULED_NO_SHOW_WINDOW_MINUTES = 5;             // 5 min grace after scheduled start
 export const SCHEDULED_MIN_ADVANCE_MINUTES = 60;               // must book at least 1h in advance
