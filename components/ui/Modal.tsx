@@ -1,7 +1,10 @@
 "use client";
 import { cn } from '@/lib/utils';
-import { HTMLAttributes, forwardRef, useState, useEffect, useRef } from 'react';
+import { HTMLAttributes, forwardRef, useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from './Button';
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export interface ModalProps extends HTMLAttributes<HTMLDivElement> {
   isOpen: boolean;
@@ -26,6 +29,8 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
   ) => {
     const [isClosing, setIsClosing] = useState(false);
     const handleCloseRef = useRef<() => void>(() => {});
+    const modalContentRef = useRef<HTMLDivElement | null>(null);
+    const previousFocusRef = useRef<HTMLElement | null>(null);
 
     // Lock body scroll while modal is open — prevents background scrolling
     // on iOS and desktop when the modal content is taller than the viewport.
@@ -38,15 +43,47 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
       };
     }, [isOpen]);
 
-    // Close on Escape
+    // Focus trap: capture previous focus, auto-focus first element, restore on close
     useEffect(() => {
       if (!isOpen) return;
-      const onKey = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') handleCloseRef.current();
+      previousFocusRef.current = document.activeElement as HTMLElement;
+      const timer = setTimeout(() => {
+        const el = modalContentRef.current;
+        if (!el) return;
+        const first = el.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+        first?.focus();
+      }, 50);
+      return () => {
+        clearTimeout(timer);
+        previousFocusRef.current?.focus();
       };
-      window.addEventListener('keydown', onKey);
-      return () => window.removeEventListener('keydown', onKey);
     }, [isOpen]);
+
+    // Trap Tab within modal + close on Escape
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseRef.current();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const el = modalContentRef.current;
+      if (!el) return;
+      const focusable = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) { e.preventDefault(); return; }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }, []);
+
+    useEffect(() => {
+      if (!isOpen) return;
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, handleKeyDown]);
 
     if (!isOpen) return null;
 
@@ -80,7 +117,11 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
 
         {/* Modal */}
         <div
-          ref={ref}
+          ref={(node) => {
+            modalContentRef.current = node;
+            if (typeof ref === 'function') ref(node);
+            else if (ref) ref.current = node;
+          }}
           role="dialog"
           aria-modal="true"
           aria-label={title}

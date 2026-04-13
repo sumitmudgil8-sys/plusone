@@ -144,6 +144,12 @@ export default function CompanionDashboard() {
   const [badges, setBadges] = useState<{ type: string; isActive: boolean; earnedAt: string | null }[]>([]);
   const [rankingScore, setRankingScore] = useState<number | null>(null);
 
+  // Scheduled sessions
+  const [scheduledSessions, setScheduledSessions] = useState<Array<{
+    id: string; duration: number; scheduledAt: string; status: string;
+    clientName: string; clientAvatar: string | null; holdAmount: number; estimatedTotal: number;
+  }>>([]);
+
   // Fetch availability
   const fetchAvailability = useCallback(async () => {
     try {
@@ -189,12 +195,13 @@ export default function CompanionDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [userRes, bookingsRes, earningsRes, sessionsRes, badgesRes] = await Promise.all([
+        const [userRes, bookingsRes, earningsRes, sessionsRes, badgesRes, schedRes] = await Promise.all([
           fetch('/api/users/me'),
           fetch('/api/bookings'),
           fetch('/api/companion/earnings'),
           fetch('/api/companion/sessions?limit=5'),
           fetch('/api/companion/badges'),
+          fetch('/api/scheduled-sessions?status=BOOKED'),
         ]);
         if (userRes.ok) {
           const d = await userRes.json();
@@ -218,6 +225,10 @@ export default function CompanionDashboard() {
             setBadges(d.data.badges ?? []);
             setRankingScore(d.data.rankingScore ?? null);
           }
+        }
+        if (schedRes.ok) {
+          const schedData = await schedRes.json();
+          if (schedData.success) setScheduledSessions(schedData.data);
         }
       } catch (error) {
         console.error('Dashboard fetch error:', error);
@@ -570,7 +581,7 @@ export default function CompanionDashboard() {
               {isAvailabilitySet ? (
                 <p className="text-xs text-white/40 mt-0.5">{summary}</p>
               ) : (
-                <p className="text-xs text-amber-400 mt-0.5">Not set — clients can&apos;t find you</p>
+                <p className="text-xs text-amber-400 mt-0.5">Not set — clients can&apos;t schedule chats</p>
               )}
             </div>
           </div>
@@ -721,6 +732,42 @@ export default function CompanionDashboard() {
               Open →
             </Link>
           )}
+        </div>
+      )}
+
+      {/* ── Scheduled Sessions ────────────────────────────────────────── */}
+      {scheduledSessions.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Scheduled</h2>
+              <span className="min-w-[18px] h-[18px] px-1.5 rounded-full bg-gold text-black text-[10px] font-bold flex items-center justify-center">
+                {scheduledSessions.length}
+              </span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {scheduledSessions.map((s) => {
+              const dt = new Date(s.scheduledAt);
+              return (
+                <div key={s.id} className="rounded-xl bg-charcoal-surface border border-white/[0.06] px-4 py-3 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white font-medium truncate">{s.duration}min chat with {s.clientName}</p>
+                    <p className="text-xs text-white/40">
+                      {dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}{' '}
+                      at {dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      {' · '}Earn ≈ {fmt(Math.round(s.estimatedTotal * 0.8))}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

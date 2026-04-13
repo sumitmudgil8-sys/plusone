@@ -35,14 +35,19 @@ export default function ClientHome() {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<QuickFilter>('all');
+  const [scheduledSessions, setScheduledSessions] = useState<Array<{
+    id: string; duration: number; scheduledAt: string; status: string;
+    companionName: string; companionAvatar: string | null; holdAmount: number; estimatedTotal: number;
+  }>>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [userRes, sectionsRes, walletRes] = await Promise.all([
+        const [userRes, sectionsRes, walletRes, schedRes] = await Promise.all([
           fetch('/api/users/me'),
           fetch('/api/companions/sections'),
           fetch('/api/wallet'),
+          fetch('/api/scheduled-sessions?status=BOOKED'),
         ]);
         if (userRes.ok) {
           const userData = await userRes.json();
@@ -55,6 +60,10 @@ export default function ClientHome() {
         if (walletRes.ok) {
           const walletData = await walletRes.json();
           if (walletData.success) setWalletBalance(walletData.data.balance);
+        }
+        if (schedRes.ok) {
+          const schedData = await schedRes.json();
+          if (schedData.success) setScheduledSessions(schedData.data);
         }
       } catch (error) {
         console.error('Error fetching home data:', error);
@@ -186,6 +195,46 @@ export default function ClientHome() {
             </svg>
           </div>
         </Link>
+      )}
+
+      {/* Upcoming Scheduled Sessions */}
+      {scheduledSessions.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-white font-semibold text-[15px] flex items-center gap-2">
+            <svg className="w-4 h-4 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Upcoming Sessions
+          </h2>
+          {scheduledSessions.map((s) => {
+            const dt = new Date(s.scheduledAt);
+            const isNow = Math.abs(dt.getTime() - Date.now()) < 10 * 60 * 1000;
+            return (
+              <div key={s.id} className="rounded-xl bg-charcoal-surface border border-white/[0.06] px-4 py-3 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0 text-sm font-bold text-gold">
+                  {s.duration}m
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium truncate">Chat with {s.companionName}</p>
+                  <p className="text-xs text-white/40">
+                    {dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}{' '}
+                    at {dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+                {isNow ? (
+                  <Link href={`/client/inbox/${s.id}?activate=true`}
+                    className="shrink-0 bg-gold text-black text-[11px] font-bold px-3 py-1.5 rounded-full">
+                    Start
+                  </Link>
+                ) : (
+                  <span className="shrink-0 text-[10px] text-white/30 font-medium">
+                    {dt > new Date() ? 'Upcoming' : 'Missed'}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </section>
       )}
 
       {/* Filtered results (when a quick filter is active other than 'all') */}

@@ -29,7 +29,7 @@ export interface FcmPayload {
   body: string;
   url?: string;
   icon?: string;
-  type?: 'CHAT_MESSAGE' | 'INCOMING_CALL' | 'CHAT_REQUEST' | 'PAYMENT' | 'FAVORITE_ONLINE' | 'DEFAULT';
+  type?: 'CHAT_MESSAGE' | 'INCOMING_CALL' | 'CHAT_REQUEST' | 'PAYMENT' | 'FAVORITE_ONLINE' | 'SCHEDULED_SESSION' | 'DEFAULT';
   tag?: string;
   /** Extra data fields merged into the FCM data payload */
   extra?: Record<string, string>;

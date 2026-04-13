@@ -108,7 +108,8 @@ model User {
   manualPayments           ManualPayment[]
   companionVisibility      ClientVisibility[]    @relation("CompanionVisibility")
   clientVisibility         ClientVisibility[]    @relation("ClientVisibility")
-  clientScheduledSessions  ScheduledSession[]    @relation("ClientScheduledSessions")
+  clientScheduledSessions     ScheduledSession[]    @relation("ClientScheduledSessions")
+  companionScheduledSessions  ScheduledSession[]    @relation("CompanionScheduledSessions")
 
   @@index([role, isActive, isBanned])
 }
@@ -188,7 +189,6 @@ model CompanionProfile {
 
   // Relations
   badges             CompanionBadge[]
-  scheduledSessions  ScheduledSession[] @relation("CompanionScheduledSessions")
 
   @@index([rankingScore])
   @@index([availableNow, rankingScore])
@@ -543,24 +543,27 @@ model ClientVisibility {
   @@index([clientId, status])
 }
 
-// ─── Scheduled Sessions (GOLD only) ─────────────────────────────────────────
-// Pre-booked chat/voice sessions with fixed duration and upfront payment.
+// ─── Scheduled Sessions ─────────────────────────────────────────────────────
+// Pre-booked chat sessions with 30% wallet hold. Available to all users.
+// Hold is forfeited on client no-show, released on companion no-show or cancel.
 model ScheduledSession {
   id               String    @id @default(cuid())
   clientId         String
   companionId      String
   client           User      @relation("ClientScheduledSessions", fields: [clientId], references: [id])
-  companion        CompanionProfile @relation("CompanionScheduledSessions", fields: [companionId], references: [userId])
-  type             String    // CHAT | VOICE
-  duration         Int       // minutes (30 or 60)
-  totalAmount      Int       // paise — charged upfront from wallet
-  companionShare   Int       // paise — 80% of totalAmount
-  scheduledAt      DateTime  // when session should start
-  status           String    @default("BOOKED") // BOOKED | ACTIVE | COMPLETED | CANCELLED | CLIENT_NO_SHOW | COMPANION_NO_SHOW
-  billingSessionId String?   @unique  // linked BillingSession once activated
+  companion        User      @relation("CompanionScheduledSessions", fields: [companionId], references: [id])
+  duration         Int                           // 15 or 30 minutes
+  ratePerMinute    Int                           // paise — snapshot at booking time
+  estimatedTotal   Int                           // paise — ratePerMinute × duration
+  holdAmount       Int                           // paise — 30% of estimatedTotal
+  holdTransactionId String?                      // WalletTransaction.id for the HOLD debit
+  scheduledAt      DateTime                      // when session should start
+  status           String    @default("BOOKED")  // BOOKED | ACTIVE | COMPLETED | CANCELLED | CLIENT_NO_SHOW | COMPANION_NO_SHOW
+  billingSessionId String?   @unique             // linked BillingSession once activated
   billingSession   BillingSession?   @relation(fields: [billingSessionId], references: [id])
+  cancelledBy      String?                       // CLIENT | COMPANION
   cancelledAt      DateTime?
-  refundAmount     Int?      // paise, if cancelled/no-show
+  resolvedAt       DateTime?                     // when no-show was resolved
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

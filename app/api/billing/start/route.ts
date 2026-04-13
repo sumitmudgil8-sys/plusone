@@ -129,6 +129,7 @@ export async function POST(request: NextRequest) {
     if (wallet.balance < minimumRequired) {
       return NextResponse.json(
         {
+          success: false,
           error: 'INSUFFICIENT_BALANCE',
           required: minimumRequired,
           current: wallet.balance,

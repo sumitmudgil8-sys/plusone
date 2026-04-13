@@ -12,8 +12,40 @@ import { Badge } from '@/components/ui/Badge';
 import { useSocket } from '@/hooks/useSocket';
 
 const CHAT_REQUEST_TIMEOUT_S = 180; // 3 minutes
+const SCHEDULE_DURATIONS = [15, 30] as const;
+
+type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+type SlotKey = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT';
+
+const SLOT_META: Record<SlotKey, { label: string; startHour: number; endHour: number }> = {
+  MORNING:   { label: 'Morning',   startHour: 6,  endHour: 12 },
+  AFTERNOON: { label: 'Afternoon', startHour: 12, endHour: 17 },
+  EVENING:   { label: 'Evening',   startHour: 17, endHour: 21 },
+  NIGHT:     { label: 'Night',     startHour: 21, endHour: 24 },
+};
+
+const DAY_KEYS: DayKey[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+function getTimesForSlot(slot: SlotKey): string[] {
+  const { startHour, endHour } = SLOT_META[slot];
+  const times: string[] = [];
+  for (let h = startHour; h < endHour; h++) {
+    times.push(`${String(h).padStart(2, '0')}:00`);
+    times.push(`${String(h).padStart(2, '0')}:30`);
+  }
+  return times;
+}
+
+function formatTime(t: string): string {
+  const [hStr, mStr] = t.split(':');
+  const h = parseInt(hStr);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${mStr} ${suffix}`;
+}
 
 type ChatRequestStatus = 'idle' | 'sending' | 'waiting' | 'accepted' | 'declined' | 'expired' | 'insufficient_balance';
+type ScheduleStatus = 'idle' | 'form' | 'booking' | 'success' | 'error';
 
 export default function BookingPage() {
   const params = useParams();
@@ -37,6 +69,20 @@ export default function BookingPage() {
     required: number;
     current: number;
     ratePerMinute: number;
+  } | null>(null);
+
+  // Schedule state
+  const [scheduleStatus, setScheduleStatus] = useState<ScheduleStatus>('idle');
+  const [scheduleDuration, setScheduleDuration] = useState<15 | 30>(15);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleSlot, setScheduleSlot] = useState<SlotKey | null>(null);
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduleError, setScheduleError] = useState('');
+  const [scheduleResult, setScheduleResult] = useState<{
+    sessionId: string;
+    holdAmount: number;
+    estimatedTotal: number;
+    scheduledAt: string;
   } | null>(null);
 
   // Fetch current user ID for Ably socket
@@ -166,6 +212,51 @@ export default function BookingPage() {
     }
   }, [companionId, router]);
 
+  const handleScheduleBook = useCallback(async () => {
+    if (!scheduleDate || !scheduleTime) {
+      setScheduleError('Please select a date and time');
+      return;
+    }
+    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`);
+    if (isNaN(scheduledAt.getTime())) {
+      setScheduleError('Invalid date/time');
+      return;
+    }
+    if (scheduledAt.getTime() < Date.now() + 55 * 60 * 1000) {
+      setScheduleError('Must be at least 1 hour from now');
+      return;
+    }
+
+    setScheduleStatus('booking');
+    setScheduleError('');
+    try {
+      const res = await fetch('/api/scheduled-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companionId,
+          duration: scheduleDuration,
+          scheduledAt: scheduledAt.toISOString(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        if (data.error === 'INSUFFICIENT_BALANCE') {
+          setScheduleError(`Insufficient balance. Need ₹${Math.ceil((data.required ?? 0) / 100)} for the 30% hold.`);
+        } else {
+          setScheduleError(data.error || 'Booking failed');
+        }
+        setScheduleStatus('error');
+        return;
+      }
+      setScheduleResult(data.data);
+      setScheduleStatus('success');
+    } catch {
+      setScheduleError('Network error');
+      setScheduleStatus('error');
+    }
+  }, [companionId, scheduleDate, scheduleTime, scheduleDuration]);
+
   const fetchCompanion = async () => {
     try {
       const res = await fetch(`/api/companions/${companionId}`);
@@ -269,6 +360,170 @@ export default function BookingPage() {
             weeklyAvailability={companion.weeklyAvailability}
           />
         </Card>
+
+        {/* Schedule a Chat */}
+        {companion.accessible && (
+          <Card>
+            <h2 className="text-lg font-bold text-white mb-1">Schedule a Chat</h2>
+            <p className="text-white/50 text-xs mb-4">Book a guaranteed chat slot. 30% hold from your wallet secures the booking.</p>
+
+            {scheduleStatus === 'success' && scheduleResult ? (
+              <div className="text-center space-y-3 py-2">
+                <div className="w-14 h-14 rounded-full bg-success/20 flex items-center justify-center mx-auto">
+                  <svg className="w-7 h-7 text-success-fg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="text-white font-semibold">Session Booked!</p>
+                <div className="text-xs text-white/50 space-y-1">
+                  <p>Hold: ₹{(scheduleResult.holdAmount / 100).toFixed(0)} (30% of ₹{(scheduleResult.estimatedTotal / 100).toFixed(0)})</p>
+                  <p>Scheduled: {new Date(scheduleResult.scheduledAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+                <p className="text-[10px] text-white/30">You&apos;ll be able to start the chat near the scheduled time.</p>
+                <Button variant="outline" onClick={() => { setScheduleStatus('idle'); setScheduleResult(null); }} className="w-full">Done</Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Duration */}
+                <div>
+                  <label className="block text-xs text-white/40 mb-1.5">Duration</label>
+                  <div className="flex gap-2">
+                    {SCHEDULE_DURATIONS.map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setScheduleDuration(d)}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+                          scheduleDuration === d
+                            ? 'bg-gold/15 border-gold/40 text-gold'
+                            : 'bg-white/5 border-white/5 text-white/60 hover:border-white/15'
+                        }`}
+                      >
+                        {d} min
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label className="block text-xs text-white/40 mb-1.5">Date</label>
+                  <input
+                    type="date"
+                    value={scheduleDate}
+                    onChange={(e) => { setScheduleDate(e.target.value); setScheduleSlot(null); setScheduleTime(''); setScheduleError(''); }}
+                    min={new Date().toISOString().split('T')[0]}
+                    max={new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]}
+                    className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
+                  />
+                </div>
+
+                {/* Available Slots (from companion's weekly schedule) */}
+                {scheduleDate && (() => {
+                  const weekly = companion.weeklyAvailability ?? {};
+                  const dayIdx = new Date(scheduleDate + 'T00:00').getDay(); // 0=sun
+                  const dayKey = DAY_KEYS[dayIdx];
+                  const slotsForDay: SlotKey[] = weekly[dayKey] ?? [];
+                  const hasSlots = slotsForDay.length > 0;
+
+                  return (
+                    <div>
+                      <label className="block text-xs text-white/40 mb-1.5">
+                        {hasSlots ? 'Available windows' : 'Availability'}
+                      </label>
+                      {!hasSlots ? (
+                        <div className="bg-white/[0.03] rounded-xl p-3 text-center">
+                          <p className="text-xs text-white/40">{companion.name} hasn&apos;t set availability for this day</p>
+                          <p className="text-[10px] text-white/25 mt-1">Try another date or chat now if they&apos;re online</p>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 flex-wrap">
+                          {slotsForDay.map((slot) => (
+                            <button
+                              key={slot}
+                              onClick={() => { setScheduleSlot(slot); setScheduleTime(''); setScheduleError(''); }}
+                              className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+                                scheduleSlot === slot
+                                  ? 'bg-gold/15 border-gold/40 text-gold'
+                                  : 'bg-white/5 border-white/5 text-white/60 hover:border-white/15'
+                              }`}
+                            >
+                              {SLOT_META[slot].label}
+                              <span className="text-[10px] ml-1 opacity-60">
+                                {SLOT_META[slot].startHour > 12 ? SLOT_META[slot].startHour - 12 : SLOT_META[slot].startHour}
+                                {SLOT_META[slot].startHour >= 12 ? 'PM' : 'AM'}
+                                –
+                                {(SLOT_META[slot].endHour % 24) > 12 ? (SLOT_META[slot].endHour % 24) - 12 : SLOT_META[slot].endHour % 24 || 12}
+                                {SLOT_META[slot].endHour >= 12 ? (SLOT_META[slot].endHour === 24 ? 'AM' : 'PM') : 'AM'}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Time picker within selected slot */}
+                {scheduleSlot && (
+                  <div>
+                    <label className="block text-xs text-white/40 mb-1.5">Pick a time</label>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {getTimesForSlot(scheduleSlot).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => { setScheduleTime(t); setScheduleError(''); }}
+                          className={`py-2 rounded-lg text-xs font-medium border transition-all ${
+                            scheduleTime === t
+                              ? 'bg-gold/15 border-gold/40 text-gold'
+                              : 'bg-white/5 border-white/[0.06] text-white/60 hover:border-white/15'
+                          }`}
+                        >
+                          {formatTime(t)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Cost breakdown */}
+                {companion.chatRatePerMinute && (
+                  <div className="bg-white/[0.03] rounded-xl p-3 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">Rate</span>
+                      <span className="text-white">₹{(companion.chatRatePerMinute / 100).toFixed(0)}/min</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">Est. total ({scheduleDuration} min)</span>
+                      <span className="text-white">₹{((companion.chatRatePerMinute * scheduleDuration) / 100).toFixed(0)}</span>
+                    </div>
+                    <div className="border-t border-white/[0.06] pt-1 flex justify-between text-xs">
+                      <span className="text-gold font-medium">Hold (30%)</span>
+                      <span className="text-gold font-medium">₹{Math.ceil((companion.chatRatePerMinute * scheduleDuration * 0.3) / 100)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {scheduleError && (
+                  <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                    {scheduleError}
+                  </p>
+                )}
+
+                <Button
+                  onClick={handleScheduleBook}
+                  disabled={scheduleStatus === 'booking' || !scheduleDate || !scheduleTime}
+                  className="w-full"
+                >
+                  {scheduleStatus === 'booking' ? 'Booking…' : 'Book Scheduled Chat'}
+                </Button>
+
+                <p className="text-[10px] text-white/30 text-center leading-relaxed">
+                  Cancel free up to 1 hour before. Client no-show forfeits the hold. Companion no-show releases it back.
+                </p>
+              </div>
+            )}
+          </Card>
+        )}
       </div>
 
       {/* Chat request overlay */}

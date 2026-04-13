@@ -127,12 +127,12 @@ export function CompanionCard({ companion, scarcityLabel }: { companion: Compani
           {/* Name + age */}
           <div className="flex items-baseline gap-1.5">
             <p className="text-white text-sm font-semibold truncate">{companion.name}</p>
-            {companion.age && <span className="text-white/50 text-xs">{companion.age}</span>}
+            {companion.age && <span className="text-white/70 text-xs">{companion.age}</span>}
           </div>
 
           {/* Tagline or bio snippet */}
           {(companion.tagline || companion.bio) && (
-            <p className="text-white/50 text-[11px] mt-0.5 line-clamp-1">
+            <p className="text-white/70 text-[11px] mt-0.5 line-clamp-1">
               {companion.tagline || companion.bio}
             </p>
           )}

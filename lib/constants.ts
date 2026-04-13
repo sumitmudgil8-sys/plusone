@@ -21,10 +21,14 @@ export const MAX_FREE_COMPANIONS = 10;          // free tier sees first 10 cards
 export const SUBSCRIPTION_PRICE_PAISE = 499900; // ₹4,999/month (GOLD tier)
 export const DEPOSIT_PERCENTAGE = 20; // 20% deposit required
 
-// Scheduled sessions (GOLD only)
-export const SCHEDULED_DURATIONS = [30, 60] as const;          // minutes
-export const SCHEDULED_CANCEL_WINDOW_MINUTES = 120;            // free cancel if > 2h before
+// Scheduled sessions (available to all users)
+export const SCHEDULED_DURATIONS = [15, 30] as const;          // minutes
+export const SCHEDULED_HOLD_RATE = 0.30;                       // 30% hold on estimated total
+export const SCHEDULED_CANCEL_WINDOW_MINUTES = 60;             // free cancel if > 1h before
 export const SCHEDULED_NO_SHOW_WINDOW_MINUTES = 5;             // 5 min grace after scheduled start
+export const SCHEDULED_MIN_ADVANCE_MINUTES = 60;               // must book at least 1h in advance
+export const SCHEDULED_MAX_ADVANCE_DAYS = 7;                   // max 7 days in advance
+export const SCHEDULED_ACTIVATION_WINDOW_MINUTES = 10;         // can activate up to 10 min before/after
 
 // Ranking score weights (must sum to 1.0)
 export const RANKING_WEIGHT_AVAILABILITY = 0.40;
