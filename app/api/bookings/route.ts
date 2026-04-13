@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { DEPOSIT_PERCENTAGE, MAX_FREE_COMPANIONS } from '@/lib/constants';
 import { calculateDistance } from '@/lib/utils';
+import { requireApprovedAvatar } from '@/lib/avatar-guard';
 
 export const runtime = 'nodejs';
 
@@ -68,6 +69,10 @@ export async function POST(request: NextRequest) {
   if (auth.user === null) return auth.response;
 
   const user = auth.user;
+
+  // Avatar approval gate
+  const avatarBlock = await requireApprovedAvatar(user.id);
+  if (avatarBlock) return avatarBlock;
 
   try {
     const body = await request.json();

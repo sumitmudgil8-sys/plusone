@@ -17,6 +17,8 @@ const actionSchema = z.discriminatedUnion('action', [
     action: z.literal('request_info'),
     reason: z.string().min(10, 'Please specify what additional info is needed (at least 10 characters)'),
   }),
+  z.object({ action: z.literal('approve_avatar') }),
+  z.object({ action: z.literal('reject_avatar') }),
 ]);
 
 // PATCH /api/admin/clients/[id] — approve or reject a client application
@@ -105,6 +107,36 @@ export async function PATCH(
       });
 
       return NextResponse.json({ success: true, data: { client: updated } });
+    }
+
+    if (parsed.data.action === 'approve_avatar') {
+      await prisma.clientProfile.update({
+        where: { userId: id },
+        data: { avatarStatus: 'APPROVED' },
+      });
+      await recordAdminAction({
+        adminId: auth.user.id,
+        action: AdminAction.CLIENT_APPROVE,
+        targetType: 'ClientProfile',
+        targetId: id,
+        reason: 'Avatar approved',
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    if (parsed.data.action === 'reject_avatar') {
+      await prisma.clientProfile.update({
+        where: { userId: id },
+        data: { avatarStatus: 'REJECTED' },
+      });
+      await recordAdminAction({
+        adminId: auth.user.id,
+        action: AdminAction.CLIENT_REJECT,
+        targetType: 'ClientProfile',
+        targetId: id,
+        reason: 'Avatar rejected',
+      });
+      return NextResponse.json({ success: true });
     }
 
     // action === 'reject'

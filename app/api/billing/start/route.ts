@@ -8,6 +8,7 @@ import { getAblyClient, getUserChannelName } from '@/lib/ably';
 import { getCallChannelName } from '@/lib/agora';
 import { BILLING_MIN_BALANCE_MINUTES, BILLING_GRACE_SECONDS } from '@/lib/constants';
 import { sendPushToUser } from '@/lib/push';
+import { requireApprovedAvatar } from '@/lib/avatar-guard';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +26,10 @@ export async function POST(request: NextRequest) {
   if (auth.user === null) return auth.response;
 
   const { user } = auth;
+
+  // Avatar approval gate
+  const avatarBlock = await requireApprovedAvatar(user.id);
+  if (avatarBlock) return avatarBlock;
 
   const body = await request.json();
   const parsed = startSchema.safeParse(body);

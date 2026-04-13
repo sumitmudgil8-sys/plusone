@@ -18,6 +18,7 @@ interface UserData {
     name: string | null;
     bio: string | null;
     avatarUrl: string | null;
+    avatarStatus: string | null;
     city: string | null;
     occupation: string | null;
   } | null;
@@ -47,6 +48,7 @@ export default function ProfilePage() {
 
   // Avatar upload
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarStatus, setAvatarStatus] = useState<string>('NONE');
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -67,6 +69,7 @@ export default function ProfilePage() {
         const u: UserData = d.user;
         setUser(u);
         setAvatarUrl(u.clientProfile?.avatarUrl ?? null);
+        setAvatarStatus(u.clientProfile?.avatarStatus ?? 'NONE');
         setInfoForm({
           name: u.clientProfile?.name ?? '',
           phone: u.phone ?? '',
@@ -104,6 +107,7 @@ export default function ProfilePage() {
       const data = await res.json();
       if (data.success && data.data?.url) {
         setAvatarUrl(data.data.url);
+        setAvatarStatus('PENDING');
       }
     } catch {
       // non-fatal
@@ -159,6 +163,43 @@ export default function ProfilePage() {
         <p className="text-white/60">Manage your account</p>
       </div>
 
+      {/* Avatar gate banner */}
+      {(avatarStatus === 'NONE' || avatarStatus === 'REJECTED') && (
+        <div className={`rounded-xl p-4 border ${avatarStatus === 'REJECTED' ? 'bg-red-500/10 border-red-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
+          <div className="flex items-start gap-3">
+            <svg className={`w-5 h-5 shrink-0 mt-0.5 ${avatarStatus === 'REJECTED' ? 'text-red-400' : 'text-amber-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <div>
+              <p className={`text-sm font-medium ${avatarStatus === 'REJECTED' ? 'text-red-400' : 'text-amber-400'}`}>
+                {avatarStatus === 'REJECTED' ? 'Profile picture rejected' : 'Profile picture required'}
+              </p>
+              <p className="text-xs text-white/50 mt-0.5">
+                {avatarStatus === 'REJECTED'
+                  ? 'Your photo was rejected. Please upload a clear, real photo of yourself to chat, call, or book companions.'
+                  : 'Upload a real profile photo to start interacting with companions. Your photo will be reviewed by our team.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {avatarStatus === 'PENDING' && (
+        <div className="rounded-xl p-4 border bg-blue-500/10 border-blue-500/20">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-blue-400">Photo under review</p>
+              <p className="text-xs text-white/50 mt-0.5">
+                Your profile photo is being reviewed. You can browse companions, but chat, call, and booking access will be unlocked once approved.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Avatar + Personal Info */}
       <Card>
         <h2 className="font-medium text-white mb-5">Personal Information</h2>
@@ -195,8 +236,25 @@ export default function ProfilePage() {
             onChange={handleAvatarChange}
           />
           <div>
-            <p className="text-sm text-white font-medium">Profile photo</p>
-            <p className="text-xs text-white/40 mt-0.5">Click to upload · JPG, PNG up to 5 MB</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-white font-medium">Profile photo</p>
+              {avatarStatus === 'PENDING' && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-medium">Pending review</span>
+              )}
+              {avatarStatus === 'APPROVED' && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 font-medium">Approved</span>
+              )}
+              {avatarStatus === 'REJECTED' && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-medium">Rejected — please re-upload</span>
+              )}
+            </div>
+            <p className="text-xs text-white/40 mt-0.5">
+              {avatarStatus === 'NONE'
+                ? 'Upload a profile photo to interact with companions'
+                : avatarStatus === 'PENDING'
+                  ? 'Your photo is being reviewed by admin'
+                  : 'Click to upload · JPG, PNG up to 5 MB'}
+            </p>
           </div>
         </div>
 

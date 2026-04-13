@@ -123,6 +123,7 @@ model ClientProfile {
   name             String
   bio              String?
   avatarUrl        String?
+  avatarStatus     String   @default("NONE")  // NONE | PENDING | APPROVED | REJECTED
   phone            String?
   lat              Float    @default(28.6139)
   lng              Float    @default(77.2090)

@@ -188,9 +188,10 @@ export async function POST(request: NextRequest) {
     // Persist the URL to the DB immediately after upload
     if (uploadType === 'avatar') {
       if (user.role === 'CLIENT') {
+        // Every avatar upload requires admin approval — set to PENDING
         await prisma.clientProfile.update({
           where: { userId: user.id },
-          data: { avatarUrl: result.url },
+          data: { avatarUrl: result.url, avatarStatus: 'PENDING' },
         });
       } else if (user.role === 'COMPANION') {
         await prisma.companionProfile.update({

@@ -86,11 +86,18 @@ export default function BookingPage() {
     scheduledAt: string;
   } | null>(null);
 
-  // Fetch current user ID for Ably socket
+  // Client avatar approval status — gates interactions
+  const [avatarStatus, setAvatarStatus] = useState<string>('NONE');
+  const avatarApproved = avatarStatus === 'APPROVED';
+
+  // Fetch current user ID for Ably socket + avatar status
   useEffect(() => {
     fetch('/api/users/me')
       .then((r) => r.json())
-      .then((d) => { if (d.user?.id) setUserId(d.user.id); })
+      .then((d) => {
+        if (d.user?.id) setUserId(d.user.id);
+        if (d.user?.clientProfile?.avatarStatus) setAvatarStatus(d.user.clientProfile.avatarStatus);
+      })
       .catch(() => {});
   }, []);
 
@@ -297,6 +304,53 @@ export default function BookingPage() {
   }
 
   return (
+    <div className="space-y-4">
+      {/* Avatar approval gate banner */}
+      {!avatarApproved && companion.accessible && (
+        <div className={`rounded-xl p-4 border ${
+          avatarStatus === 'REJECTED'
+            ? 'bg-red-500/10 border-red-500/20'
+            : avatarStatus === 'PENDING'
+              ? 'bg-blue-500/10 border-blue-500/20'
+              : 'bg-amber-500/10 border-amber-500/20'
+        }`}>
+          <div className="flex items-start gap-3">
+            <svg className={`w-5 h-5 shrink-0 mt-0.5 ${
+              avatarStatus === 'REJECTED' ? 'text-red-400' : avatarStatus === 'PENDING' ? 'text-blue-400' : 'text-amber-400'
+            }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {avatarStatus === 'PENDING' ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              )}
+            </svg>
+            <div>
+              <p className={`text-sm font-medium ${
+                avatarStatus === 'REJECTED' ? 'text-red-400' : avatarStatus === 'PENDING' ? 'text-blue-400' : 'text-amber-400'
+              }`}>
+                {avatarStatus === 'PENDING'
+                  ? 'Profile photo under review'
+                  : avatarStatus === 'REJECTED'
+                    ? 'Profile photo rejected'
+                    : 'Profile photo required'}
+              </p>
+              <p className="text-xs text-white/50 mt-0.5">
+                {avatarStatus === 'PENDING'
+                  ? 'You can browse profiles, but chat, call, and booking are locked until your photo is approved.'
+                  : avatarStatus === 'REJECTED'
+                    ? 'Please upload a new profile photo on your profile page to unlock interactions.'
+                    : 'Upload a real profile photo on your profile page to chat, call, or book companions.'}
+              </p>
+              {avatarStatus !== 'PENDING' && (
+                <Link href="/client/profile" className="inline-block mt-2 text-xs text-gold hover:underline font-medium">
+                  Go to Profile →
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="space-y-6">
         {/* Tabs */}
@@ -325,7 +379,7 @@ export default function BookingPage() {
             onChatClick={handleChatRequest}
             onBookClick={() => document.getElementById('booking-form')?.scrollIntoView({ behavior: 'smooth' })}
             onScheduleClick={() => document.getElementById('schedule-form')?.scrollIntoView({ behavior: 'smooth' })}
-            showActions={companion.accessible}
+            showActions={companion.accessible && avatarApproved}
           />
         )}
 
@@ -342,7 +396,7 @@ export default function BookingPage() {
 
       <div id="booking-form" className="space-y-6">
         {/* Schedule a Chat — shown FIRST when companion is offline */}
-        {companion.accessible && (
+        {companion.accessible && avatarApproved && (
           <Card id="schedule-form">
             <h2 className="text-lg font-bold text-white mb-1">Schedule a Chat</h2>
             <p className="text-white/50 text-xs mb-4">Book a guaranteed chat slot. Full amount held from your wallet.</p>
@@ -536,27 +590,49 @@ export default function BookingPage() {
         )}
 
         {/* Offline booking (in-person meeting) */}
-        <Card>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-white">Book a Meeting</h2>
-            {companion.isVerified && (
-              <Badge variant="success">
-                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-                Verified
-              </Badge>
-            )}
-          </div>
+        {avatarApproved ? (
+          <Card>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-white">Book a Meeting</h2>
+              {companion.isVerified && (
+                <Badge variant="success">
+                  <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Verified
+                </Badge>
+              )}
+            </div>
 
-          <BookingForm
-            companionId={companion.id}
-            companionName={companion.name}
-            hourlyRate={companion.hourlyRate}
-            availability={companion.availability || []}
-            weeklyAvailability={companion.weeklyAvailability}
-          />
-        </Card>
+            <BookingForm
+              companionId={companion.id}
+              companionName={companion.name}
+              hourlyRate={companion.hourlyRate}
+              availability={companion.availability || []}
+              weeklyAvailability={companion.weeklyAvailability}
+            />
+          </Card>
+        ) : (
+          <Card>
+            <div className="text-center py-8 space-y-3">
+              <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mx-auto">
+                <svg className="w-7 h-7 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <p className="text-white/60 text-sm">
+                {avatarStatus === 'PENDING'
+                  ? 'Booking unlocks after your profile photo is approved.'
+                  : 'Upload a profile photo to book companions.'}
+              </p>
+              {avatarStatus !== 'PENDING' && (
+                <Link href="/client/profile">
+                  <Button variant="outline" className="text-sm">Upload Photo</Button>
+                </Link>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Chat request overlay */}
@@ -677,6 +753,7 @@ export default function BookingPage() {
           </Card>
         </div>
       )}
+    </div>
     </div>
   );
 }

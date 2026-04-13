@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { getAblyClient, getUserChannelName, getChatRoomChannelName } from '@/lib/ably';
 import { sendPushToUser } from '@/lib/push';
+import { requireApprovedAvatar } from '@/lib/avatar-guard';
 
 export const runtime = 'nodejs';
 
@@ -39,6 +40,12 @@ export async function POST(request: NextRequest) {
   // Verify caller is one of the participants
   if (user.id !== companionUserId && user.id !== clientUserId) {
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
+
+  // Avatar approval gate — only applies when the caller is the CLIENT
+  if (user.role === 'CLIENT') {
+    const avatarBlock = await requireApprovedAvatar(user.id);
+    if (avatarBlock) return avatarBlock;
   }
 
   try {

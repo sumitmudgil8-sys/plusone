@@ -27,6 +27,7 @@ interface Client {
   clientProfile: {
     name: string | null;
     avatarUrl: string | null;
+    avatarStatus: string | null;
     dateOfBirth: string | null;
     govtIdUrl: string | null;
     additionalNotes: string | null;
@@ -34,7 +35,7 @@ interface Client {
 }
 
 // ─── Sub-tab definitions ─────────────────────────────────────────
-type SubTab = 'clients' | 'companions' | 'all';
+type SubTab = 'clients' | 'avatars' | 'companions' | 'all';
 
 const SUB_TABS: { label: string; value: SubTab; icon: React.ReactNode }[] = [
   {
@@ -43,6 +44,16 @@ const SUB_TABS: { label: string; value: SubTab; icon: React.ReactNode }[] = [
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Avatars',
+    value: 'avatars',
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
   },
@@ -118,6 +129,7 @@ export default function AdminUsersPage() {
 
       {/* Content */}
       {activeSubTab === 'clients' && <ClientsSection />}
+      {activeSubTab === 'avatars' && <AvatarReviewSection />}
       {activeSubTab === 'companions' && <CompanionsSection />}
       {activeSubTab === 'all' && <AllUsersSection />}
     </div>
@@ -472,6 +484,154 @@ function ClientsSection() {
                 className="w-full rounded-lg border border-white/10"
               />
             )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Avatar Review Section ───────────────────────────────────────
+function AvatarReviewSection() {
+  const toast = useToast();
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const fetchPending = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/clients?avatarStatus=PENDING&limit=50');
+      if (res.ok) {
+        const data = await res.json();
+        setClients(data.data?.clients ?? []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchPending(); }, [fetchPending]);
+
+  const handleAction = async (clientId: string, action: 'approve_avatar' | 'reject_avatar') => {
+    setActionLoading(clientId);
+    try {
+      const res = await fetch(`/api/admin/clients/${clientId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (res.ok) {
+        toast.success(action === 'approve_avatar' ? 'Avatar approved' : 'Avatar rejected');
+        fetchPending();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error ?? 'Action failed');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  return (
+    <>
+      <Card>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
+          </div>
+        ) : clients.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/5 flex items-center justify-center">
+              <svg className="w-8 h-8 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <p className="text-white/40 text-sm">No pending avatar reviews</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-charcoal-border">
+            {clients.map((client) => {
+              const name = client.clientProfile?.name ?? 'Unknown';
+              const avatarUrl = client.clientProfile?.avatarUrl;
+              return (
+                <div key={client.id} className="py-4 flex items-center gap-4">
+                  {/* Avatar preview */}
+                  <button
+                    onClick={() => avatarUrl && setPreviewUrl(avatarUrl)}
+                    className="shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-white/[0.08] border-2 border-amber-500/30 hover:border-amber-500/60 transition-colors cursor-pointer"
+                  >
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-lg font-medium text-white/30">
+                        {name[0]}
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-white">{name}</p>
+                    <p className="text-xs text-white/40">{client.email}</p>
+                    <p className="text-xs text-white/30 mt-0.5">
+                      Uploaded {new Date(client.createdAt).toLocaleDateString('en-IN')}
+                    </p>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      onClick={() => handleAction(client.id, 'approve_avatar')}
+                      isLoading={actionLoading === client.id}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleAction(client.id, 'reject_avatar')}
+                      disabled={actionLoading === client.id}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Avatar full-size preview */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <div
+            className="bg-charcoal-surface border border-charcoal-border rounded-xl p-4 max-w-sm w-full space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-white">Profile Picture</h3>
+              <button onClick={() => setPreviewUrl(null)} className="text-white/40 hover:text-white">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <img
+              src={previewUrl}
+              alt="Avatar preview"
+              className="w-full rounded-lg border border-white/10"
+            />
           </div>
         </div>
       )}

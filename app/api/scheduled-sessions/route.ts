@@ -12,6 +12,7 @@ import {
   SCHEDULED_MAX_ADVANCE_DAYS,
   PLATFORM_COMMISSION_RATE,
 } from '@/lib/constants';
+import { requireApprovedAvatar } from '@/lib/avatar-guard';
 
 export const runtime = 'nodejs';
 
@@ -29,6 +30,11 @@ export async function POST(request: NextRequest) {
   if (auth.user === null) return auth.response;
 
   const { user } = auth;
+
+  // Avatar approval gate
+  const avatarBlock = await requireApprovedAvatar(user.id);
+  if (avatarBlock) return avatarBlock;
+
   const body = await request.json().catch(() => ({}));
   const parsed = bookSchema.safeParse(body);
   if (!parsed.success) {

@@ -7,6 +7,7 @@ export const runtime = 'nodejs';
 
 const querySchema = z.object({
   status: z.enum(['PENDING_REVIEW', 'APPROVED', 'REJECTED']).optional(),
+  avatarStatus: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'NONE']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -26,13 +27,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { status, page, limit } = parsed.data;
+  const { status, avatarStatus, page, limit } = parsed.data;
   const skip = (page - 1) * limit;
 
   try {
-    const where = {
-      role: 'CLIENT',
+    const where: Record<string, unknown> = {
+      role: 'CLIENT' as const,
       ...(status && { clientStatus: status }),
+      ...(avatarStatus && { clientProfile: { avatarStatus } }),
     };
 
     const [clients, total] = await Promise.all([
@@ -51,7 +53,7 @@ export async function GET(request: NextRequest) {
           rejectionReason: true,
           createdAt: true,
           isBanned: true,
-          clientProfile: { select: { name: true, avatarUrl: true, dateOfBirth: true, govtIdUrl: true, additionalNotes: true } },
+          clientProfile: { select: { name: true, avatarUrl: true, avatarStatus: true, dateOfBirth: true, govtIdUrl: true, additionalNotes: true } },
         },
       }),
       prisma.user.count({ where }),
