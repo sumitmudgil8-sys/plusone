@@ -48,6 +48,8 @@ interface BookingStats {
 }
 
 type StatusFilter = 'ALL' | 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'REJECTED';
+type SortKey = 'date' | 'amount' | 'created';
+type SortDir = 'asc' | 'desc';
 
 const FILTER_TABS: { label: string; value: StatusFilter; color: string }[] = [
   { label: 'All', value: 'ALL', color: 'text-white' },
@@ -100,6 +102,25 @@ export default function AdminBookingsPage() {
   const [searchDebounced, setSearchDebounced] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Booking | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('created');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  };
+
+  const sortedBookings = [...bookings].sort((a, b) => {
+    let cmp = 0;
+    if (sortKey === 'date') cmp = new Date(a.date).getTime() - new Date(b.date).getTime();
+    else if (sortKey === 'amount') cmp = a.totalAmount - b.totalAmount;
+    else cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
 
   // Debounce search input
   useEffect(() => {
@@ -244,11 +265,49 @@ export default function AdminBookingsPage() {
         </div>
       </div>
 
+      {/* Sort controls */}
+      {!loading && bookings.length > 1 && (
+        <div className="flex items-center gap-2 text-xs text-white/40">
+          <span>Sort by:</span>
+          {([
+            { key: 'created' as SortKey, label: 'Created' },
+            { key: 'date' as SortKey, label: 'Booking Date' },
+            { key: 'amount' as SortKey, label: 'Amount' },
+          ]).map((s) => (
+            <button
+              key={s.key}
+              onClick={() => toggleSort(s.key)}
+              className={cn(
+                'px-2.5 py-1 rounded-lg border transition-colors',
+                sortKey === s.key
+                  ? 'border-gold/40 bg-gold/10 text-gold'
+                  : 'border-white/[0.06] hover:border-white/20 text-white/50'
+              )}
+            >
+              {s.label}
+              {sortKey === s.key && (
+                <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Booking List */}
       <Card>
         {loading ? (
-          <div className="flex justify-center py-16">
-            <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
+          <div className="space-y-4 animate-pulse">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="py-4 flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-white/5 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-48 bg-white/5 rounded" />
+                  <div className="h-3 w-64 bg-white/[0.03] rounded" />
+                  <div className="h-3 w-32 bg-white/[0.03] rounded" />
+                </div>
+                <div className="h-6 w-20 bg-white/5 rounded-full" />
+              </div>
+            ))}
           </div>
         ) : bookings.length === 0 ? (
           <div className="text-center py-16">
@@ -263,7 +322,7 @@ export default function AdminBookingsPage() {
           </div>
         ) : (
           <div className="divide-y divide-charcoal-border">
-            {bookings.map((booking) => {
+            {sortedBookings.map((booking) => {
               const clientName = booking.client?.clientProfile?.name ?? booking.client?.email ?? 'Unknown';
               const companionName = booking.companion?.companionProfile?.name ?? booking.companion?.email ?? 'Unknown';
               const clientAvatar = booking.client?.clientProfile?.avatarUrl;

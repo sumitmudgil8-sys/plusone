@@ -109,8 +109,35 @@ export default function ClientHome() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
+      <div className="space-y-8 pb-6 animate-pulse">
+        {/* Hero skeleton */}
+        <div className="rounded-2xl bg-white/[0.03] h-48" />
+        {/* Filter chips skeleton */}
+        <div className="flex gap-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-9 w-20 rounded-full bg-white/[0.06]" />
+          ))}
+        </div>
+        {/* Wallet skeleton */}
+        <div className="rounded-2xl bg-white/[0.03] h-20" />
+        {/* Section skeleton */}
+        <div className="space-y-3">
+          <div className="h-5 w-32 bg-white/[0.06] rounded" />
+          <div className="flex gap-3 overflow-hidden">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="shrink-0 w-44 h-56 rounded-xl bg-white/[0.04]" />
+            ))}
+          </div>
+        </div>
+        {/* Another section */}
+        <div className="space-y-3">
+          <div className="h-5 w-36 bg-white/[0.06] rounded" />
+          <div className="flex gap-3 overflow-hidden">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="shrink-0 w-44 h-56 rounded-xl bg-white/[0.04]" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

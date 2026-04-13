@@ -192,6 +192,7 @@ export default function EarningsPage() {
   const [period, setPeriod] = useState<Period>('today');
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [toast, setToast] = useState('');
+  const [txVisible, setTxVisible] = useState(10);
 
   const load = async () => {
     try {
@@ -216,8 +217,46 @@ export default function EarningsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
+      <div className="max-w-2xl mx-auto space-y-6">
+        {/* Header skeleton */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2 animate-pulse">
+            <div className="h-7 w-32 bg-white/10 rounded-lg" />
+            <div className="h-4 w-52 bg-white/5 rounded-lg" />
+          </div>
+          <div className="h-10 w-40 bg-white/5 rounded-xl animate-pulse" />
+        </div>
+        {/* Summary cards skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl p-4 bg-white/5 border border-white/[0.06] animate-pulse space-y-2">
+              <div className="h-6 w-20 bg-white/10 rounded" />
+              <div className="h-3 w-28 bg-white/5 rounded" />
+            </div>
+          ))}
+        </div>
+        {/* Period tabs skeleton */}
+        <div className="h-10 bg-white/5 rounded-xl animate-pulse" />
+        {/* Breakdown skeleton */}
+        <div className="grid grid-cols-3 gap-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl p-4 bg-white/5 border border-white/[0.06] animate-pulse h-24" />
+          ))}
+        </div>
+        {/* Transaction list skeleton */}
+        <div className="bg-charcoal-surface border border-charcoal-border rounded-xl p-5 space-y-3 animate-pulse">
+          <div className="h-5 w-40 bg-white/10 rounded" />
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex items-center gap-3 py-2">
+              <div className="w-8 h-8 rounded-full bg-white/5" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-4 w-32 bg-white/5 rounded" />
+                <div className="h-3 w-20 bg-white/[0.03] rounded" />
+              </div>
+              <div className="h-4 w-14 bg-white/5 rounded" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -319,24 +358,34 @@ export default function EarningsPage() {
         {transactions.length === 0 ? (
           <p className="text-white/50 text-center py-8 text-sm">No transactions yet</p>
         ) : (
-          <div className="divide-y divide-charcoal-border">
-            {transactions.map((tx, i) => (
-              <div key={i} className="py-3 flex items-center gap-3">
-                <span className="text-xl shrink-0">{TYPE_ICON[tx.type]}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">
-                    {tx.type === 'BOOKING' ? 'Booking' : tx.type === 'CHAT' ? 'Chat session' : 'Voice call'}
-                    {tx.clientName ? ` · ${tx.clientName}` : ''}
-                  </p>
-                  <p className="text-xs text-white/40">
-                    {tx.durationMinutes ? `${tx.durationMinutes} min · ` : ''}
-                    {relativeTime(tx.createdAt)}
-                  </p>
+          <>
+            <div className="divide-y divide-charcoal-border">
+              {transactions.slice(0, txVisible).map((tx, i) => (
+                <div key={i} className="py-3 flex items-center gap-3">
+                  <span className="text-xl shrink-0">{TYPE_ICON[tx.type]}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">
+                      {tx.type === 'BOOKING' ? 'Booking' : tx.type === 'CHAT' ? 'Chat session' : 'Voice call'}
+                      {tx.clientName ? ` · ${tx.clientName}` : ''}
+                    </p>
+                    <p className="text-xs text-white/40">
+                      {tx.durationMinutes ? `${tx.durationMinutes} min · ` : ''}
+                      {relativeTime(tx.createdAt)}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold text-success-fg shrink-0">+{fmt(tx.amount)}</span>
                 </div>
-                <span className="text-sm font-semibold text-success-fg shrink-0">+{fmt(tx.amount)}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            {transactions.length > txVisible && (
+              <button
+                onClick={() => setTxVisible((v) => v + 10)}
+                className="w-full mt-3 py-2 text-sm text-gold hover:text-gold-hover transition-colors"
+              >
+                Show more ({transactions.length - txVisible} remaining)
+              </button>
+            )}
+          </>
         )}
       </Card>
 

@@ -132,10 +132,29 @@ export default function CompanionProfilePage() {
   // Preview card image index
   const [previewIdx, setPreviewIdx] = useState(0);
 
+  // Track initial data for unsaved-changes warning
+  const initialDataRef = useRef<{ s1: typeof section1; s2: typeof section2; s3: typeof section3 } | null>(null);
+
   useEffect(() => {
     fetchUser();
     fetchImages();
   }, []);
+
+  // Unsaved changes warning (beforeunload)
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!initialDataRef.current) return;
+      const dirty =
+        JSON.stringify(section1) !== JSON.stringify(initialDataRef.current.s1) ||
+        JSON.stringify(section2) !== JSON.stringify(initialDataRef.current.s2) ||
+        JSON.stringify(section3) !== JSON.stringify(initialDataRef.current.s3);
+      if (dirty) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [section1, section2, section3]);
 
   const showToast = (msg: string, ok: boolean) => {
     if (ok) toast.success(msg);
@@ -167,6 +186,21 @@ export default function CompanionProfilePage() {
           foodPreference: p.foodPreference ?? '', drinking: p.drinking ?? '', smoking: p.smoking ?? '',
         });
         setSection3({ personalityTags: parsedPTags });
+
+        // Snapshot initial state for dirty-check
+        initialDataRef.current = {
+          s1: {
+            name: p.name ?? '', bio: p.bio ?? '', tagline: p.tagline ?? '',
+            age: p.age != null ? String(p.age) : '', gender: p.gender ?? '', city: p.city ?? '',
+            languages: parsedLangs, education: p.education ?? '', occupation: p.occupation ?? '',
+          },
+          s2: {
+            height: p.height ?? '', weight: p.weight ?? '', bodyType: p.bodyType ?? '',
+            hairColor: p.hairColor ?? '', eyeColor: p.eyeColor ?? '', ethnicity: p.ethnicity ?? '',
+            foodPreference: p.foodPreference ?? '', drinking: p.drinking ?? '', smoking: p.smoking ?? '',
+          },
+          s3: { personalityTags: parsedPTags },
+        };
       }
     } catch { /* */ } finally { setLoading(false); }
   };
@@ -211,6 +245,10 @@ export default function CompanionProfilePage() {
       const data = await res.json();
       if (!res.ok || !data.success) { showToast(data.error ?? 'Save failed', false); return; }
       showToast('Saved', true);
+      // Reset dirty state after successful save
+      if (initialDataRef.current) {
+        initialDataRef.current = { s1: { ...section1 }, s2: { ...section2 }, s3: { ...section3 } };
+      }
     } catch { showToast('Save failed', false); } finally {
       setSaving((p) => ({ ...p, [key]: false }));
     }
@@ -503,7 +541,7 @@ export default function CompanionProfilePage() {
               <div className="grid grid-cols-3 gap-2">
                 {images.map(img => (
                   <div key={img.id} className={`aspect-square rounded-xl overflow-hidden ${img.isPrimary ? 'ring-2 ring-amber-500' : ''}`}>
-                    <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
+                    <img src={img.imageUrl} alt="Gallery photo" className="w-full h-full object-cover" />
                   </div>
                 ))}
               </div>
@@ -667,7 +705,7 @@ export default function CompanionProfilePage() {
               <div className="grid grid-cols-3 gap-2">
                 {images.map((img) => (
                   <div key={img.id} className={`relative group aspect-square rounded-xl overflow-hidden ${img.isPrimary ? 'ring-2 ring-amber-500' : ''}`}>
-                    <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
+                    <img src={img.imageUrl} alt="Gallery photo" className="w-full h-full object-cover" />
                     {img.isPrimary && (
                       <span className="absolute top-1 left-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500 text-black leading-none">Main</span>
                     )}

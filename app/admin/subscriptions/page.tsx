@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface ClientUser {
   id: string;
@@ -31,6 +32,7 @@ export default function AdminSubscriptionsPage() {
     durationDays: 30,
     paymentRef: '',
   });
+  const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -77,7 +79,7 @@ export default function AdminSubscriptionsPage() {
   };
 
   const handleRevoke = async (id: string) => {
-    if (!confirm('Revoke this subscription?')) return;
+    setRevokeTarget(null);
     setActionLoading(id);
     try {
       await fetch('/api/admin/users', {
@@ -104,8 +106,34 @@ export default function AdminSubscriptionsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-2 border-gold border-t-transparent rounded-full" />
+      <div className="space-y-6">
+        <div className="animate-pulse space-y-2">
+          <div className="h-7 w-40 bg-white/10 rounded-lg" />
+          <div className="h-4 w-72 bg-white/5 rounded-lg" />
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-charcoal-surface border border-charcoal-border rounded-xl p-5 animate-pulse text-center space-y-2">
+              <div className="h-8 w-12 bg-white/10 rounded mx-auto" />
+              <div className="h-3 w-20 bg-white/5 rounded mx-auto" />
+            </div>
+          ))}
+        </div>
+        <div className="bg-charcoal-surface border border-charcoal-border rounded-xl p-5 space-y-3 animate-pulse">
+          <div className="h-5 w-28 bg-white/10 rounded" />
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center justify-between py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-white/5" />
+                <div className="space-y-1.5">
+                  <div className="h-4 w-28 bg-white/5 rounded" />
+                  <div className="h-3 w-36 bg-white/[0.03] rounded" />
+                </div>
+              </div>
+              <div className="h-8 w-20 bg-white/5 rounded-lg" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -161,7 +189,7 @@ export default function AdminSubscriptionsPage() {
                   <Button
                     size="sm"
                     variant="danger"
-                    onClick={() => handleRevoke(user.id)}
+                    onClick={() => setRevokeTarget(user.id)}
                     isLoading={actionLoading === user.id}
                   >
                     Revoke
@@ -202,6 +230,19 @@ export default function AdminSubscriptionsPage() {
           </div>
         )}
       </Card>
+
+      {/* Revoke confirmation */}
+      <ConfirmDialog
+        isOpen={revokeTarget !== null}
+        onClose={() => setRevokeTarget(null)}
+        onConfirm={() => {
+          if (revokeTarget) handleRevoke(revokeTarget);
+        }}
+        title="Revoke subscription?"
+        message="This will immediately downgrade the user to the free tier. They will lose access to all Gold features."
+        confirmLabel="Revoke"
+        variant="danger"
+      />
 
       {/* Grant modal */}
       {grantModal && (

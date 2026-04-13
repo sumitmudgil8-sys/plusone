@@ -194,6 +194,12 @@ function LoginForm() {
               Sign In
             </Button>
           </form>
+
+          <div className="mt-4 text-center">
+            <Link href="/forgot-password" className="text-xs text-white/30 hover:text-gold transition-colors">
+              Forgot your password?
+            </Link>
+          </div>
         </div>
 
         {/* Footer links */}

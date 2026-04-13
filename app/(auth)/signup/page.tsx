@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { PasswordStrength } from '@/components/ui/PasswordStrength';
 import { useToast } from '@/components/ui/Toast';
 
 export default function SignupPage() {
@@ -20,6 +21,7 @@ export default function SignupPage() {
     password: '',
     confirmPassword: '',
   });
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -33,6 +35,18 @@ export default function SignupPage() {
     if (form.password !== form.confirmPassword) {
       setError('Passwords do not match');
       toast.error('Passwords do not match');
+      return;
+    }
+
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters');
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setError('You must accept the Terms of Service and Privacy Policy');
+      toast.error('Please accept the terms to continue');
       return;
     }
 
@@ -129,14 +143,17 @@ export default function SignupPage() {
               required
             />
 
-            <Input
-              label="Password"
-              type="password"
-              value={form.password}
-              onChange={set('password')}
-              placeholder="At least 8 characters"
-              required
-            />
+            <div>
+              <Input
+                label="Password"
+                type="password"
+                value={form.password}
+                onChange={set('password')}
+                placeholder="At least 8 characters"
+                required
+              />
+              <PasswordStrength password={form.password} />
+            </div>
 
             <Input
               label="Confirm Password"
@@ -146,6 +163,26 @@ export default function SignupPage() {
               placeholder="Repeat your password"
               required
             />
+
+            {/* Terms checkbox */}
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-white/20 bg-white/[0.04] text-gold focus:ring-gold/30 focus:ring-2 cursor-pointer"
+              />
+              <span className="text-xs text-white/40 group-hover:text-white/60 transition-colors leading-relaxed">
+                I agree to the{' '}
+                <Link href="/terms" className="text-gold hover:underline" target="_blank">
+                  Terms of Service
+                </Link>
+                {' '}and{' '}
+                <Link href="/privacy" className="text-gold hover:underline" target="_blank">
+                  Privacy Policy
+                </Link>
+              </span>
+            </label>
 
             {error && (
               <div className="p-3 bg-red-500/8 border border-red-500/15 rounded-xl text-red-400 text-sm">

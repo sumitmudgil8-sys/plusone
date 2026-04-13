@@ -149,6 +149,7 @@ function ClientsSection() {
   const [infoModal, setInfoModal] = useState<{ clientId: string; name: string } | null>(null);
   const [infoRequest, setInfoRequest] = useState('');
   const [govtIdModal, setGovtIdModal] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchClients = useCallback(async (status: ClientStatus) => {
     setLoading(true);
@@ -254,22 +255,47 @@ function ClientsSection() {
 
   return (
     <>
-      {/* Status Filter Tabs */}
-      <div className="flex gap-2">
-        {CLIENT_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => setActiveTab(tab.value)}
-            className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-              activeTab === tab.value
-                ? 'bg-gold/15 text-gold border border-gold/30'
-                : 'text-white/40 hover:text-white/70 border border-transparent hover:border-charcoal-border'
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Search + Status Filter Tabs */}
+      <div className="space-y-3">
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by name or email..."
+            className="w-full bg-white/[0.04] border border-white/[0.08] text-white rounded-lg pl-10 pr-4 py-2.5 text-sm placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-gold/30"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
+              aria-label="Clear search"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2">
+          {CLIENT_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setActiveTab(tab.value)}
+              className={cn(
+                'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                activeTab === tab.value
+                  ? 'bg-gold/15 text-gold border border-gold/30'
+                  : 'text-white/40 hover:text-white/70 border border-transparent hover:border-charcoal-border'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <Card>
@@ -288,7 +314,15 @@ function ClientsSection() {
           </div>
         ) : (
           <div className="divide-y divide-charcoal-border">
-            {clients.map((client) => {
+            {clients
+              .filter((c) => {
+                if (!searchQuery.trim()) return true;
+                const q = searchQuery.toLowerCase();
+                const name = (c.clientProfile?.name ?? '').toLowerCase();
+                const email = c.email.toLowerCase();
+                return name.includes(q) || email.includes(q);
+              })
+              .map((client) => {
               const name = client.clientProfile?.name ?? 'Unknown';
               const dob = formatDob(client.clientProfile?.dateOfBirth ?? null);
 

@@ -2,12 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-// This page is reached via middleware redirect when isTemporaryPassword === true
-// and the companion tries to navigate anywhere in /companion/*.
-// After success the layout's needsPasswordChange state is irrelevant here —
-// a fresh navigation to /companion/dashboard re-mounts the layout which
-// re-fetches the user and sees isTemporaryPassword === false.
+import { Input } from '@/components/ui/Input';
+import { PasswordStrength } from '@/components/ui/PasswordStrength';
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -19,8 +15,8 @@ export default function ChangePasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm({ ...form, [field]: e.target.value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,45 +69,36 @@ export default function ChangePasswordPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-white/70 mb-1.5">Current Password</label>
-            <input
-              name="currentPassword"
-              type="password"
-              value={form.currentPassword}
-              onChange={handleChange}
-              placeholder="Enter your temporary password"
-              required
-              autoFocus
-              className="w-full bg-white/[0.04] border border-white/[0.08] text-white rounded-xl px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold/50"
-            />
-          </div>
+          <Input
+            label="Current Password"
+            type="password"
+            value={form.currentPassword}
+            onChange={handleChange('currentPassword')}
+            placeholder="Enter your temporary password"
+            required
+            autoFocus
+          />
 
           <div>
-            <label className="block text-sm font-medium text-white/70 mb-1.5">New Password</label>
-            <input
-              name="newPassword"
+            <Input
+              label="New Password"
               type="password"
               value={form.newPassword}
-              onChange={handleChange}
+              onChange={handleChange('newPassword')}
               placeholder="At least 8 characters"
               required
-              className="w-full bg-white/[0.04] border border-white/[0.08] text-white rounded-xl px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold/50"
             />
+            <PasswordStrength password={form.newPassword} />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-white/70 mb-1.5">Confirm New Password</label>
-            <input
-              name="confirmPassword"
-              type="password"
-              value={form.confirmPassword}
-              onChange={handleChange}
-              placeholder="Repeat new password"
-              required
-              className="w-full bg-white/[0.04] border border-white/[0.08] text-white rounded-xl px-4 py-2.5 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold/50"
-            />
-          </div>
+          <Input
+            label="Confirm New Password"
+            type="password"
+            value={form.confirmPassword}
+            onChange={handleChange('confirmPassword')}
+            placeholder="Repeat new password"
+            required
+          />
 
           {error && (
             <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
@@ -124,7 +111,7 @@ export default function ChangePasswordPage() {
             disabled={loading}
             className="w-full py-2.5 rounded-xl bg-gold hover:bg-gold-hover text-black font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loading ? 'Updating…' : 'Update Password'}
+            {loading ? 'Updating...' : 'Update Password'}
           </button>
         </form>
       </div>
