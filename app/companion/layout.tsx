@@ -577,10 +577,8 @@ function CompanionLayoutInner({ children, userId, needsPasswordChange, setNeedsP
 
   const handlePasswordChangeSuccess = useCallback(() => {
     setNeedsPasswordChange(false);
-    // Hard navigate so middleware re-runs — redirects to onboarding tour
-    // if hasCompletedOnboarding is false, or to dashboard otherwise.
-    window.location.href = '/companion/dashboard';
-  }, [setNeedsPasswordChange]);
+    router.push('/companion/dashboard');
+  }, [setNeedsPasswordChange, router]);
 
   const handleAcceptCall = useCallback(async () => {
     if (!incomingCall) return;

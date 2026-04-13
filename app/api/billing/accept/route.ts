@@ -26,6 +26,18 @@ export async function POST(request: NextRequest) {
 
   const { sessionId } = parsed.data;
 
+  // Onboarding gate — companion must complete tour before accepting sessions
+  const companion = await prisma.user.findUnique({
+    where: { id: auth.user.id },
+    select: { hasCompletedOnboarding: true },
+  });
+  if (!companion?.hasCompletedOnboarding) {
+    return NextResponse.json(
+      { success: false, error: 'Please complete the onboarding tour first' },
+      { status: 403 }
+    );
+  }
+
   const session = await prisma.billingSession.findUnique({ where: { id: sessionId } });
 
   if (!session) {

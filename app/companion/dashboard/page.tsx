@@ -122,7 +122,7 @@ const BADGE_DEFS = [
 
 export default function CompanionDashboard() {
   const toast = useToast();
-  const [user, setUser] = useState<{ isOnline?: boolean; companionProfile?: { name?: string } } | null>(null);
+  const [user, setUser] = useState<{ isOnline?: boolean; hasCompletedOnboarding?: boolean; companionProfile?: { name?: string } } | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [bookings, setBookings] = useState<any[]>([]);
   const [today, setToday] = useState<TodayBreakdown | null>(null);
@@ -466,6 +466,28 @@ export default function CompanionDashboard() {
           </button>
         </div>
       </div>
+
+      {/* ── Onboarding Tour Banner ───────────────────────────────────── */}
+      {user && !user.hasCompletedOnboarding && (
+        <Link
+          href="/companion/onboarding-tour"
+          className="group relative flex items-center gap-4 p-4 rounded-2xl border border-gold/30 bg-gradient-to-r from-gold/[0.12] via-[#1a1710] to-amber-500/[0.06] hover:border-gold/50 transition-all overflow-hidden animate-fade-in"
+        >
+          <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-gold/[0.1] blur-3xl pointer-events-none" />
+          <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-gold/25 to-amber-500/15 border border-gold/30 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div className="relative flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gold">Complete Onboarding Tour</p>
+            <p className="text-xs text-white/40 mt-0.5">Required before you can go online and accept sessions</p>
+          </div>
+          <svg className="w-4 h-4 text-white/25 group-hover:text-gold group-hover:translate-x-0.5 transition-all shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+      )}
 
       {/* ── Client Approvals CTA ────────────────────────────────────── */}
       <Link

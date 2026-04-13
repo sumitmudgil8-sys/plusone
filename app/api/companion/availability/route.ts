@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
   const current = await prisma.user.findUnique({
     where: { id: auth.user.id },
-    select: { isOnline: true },
+    select: { isOnline: true, hasCompletedOnboarding: true },
   });
 
   if (!current) {
@@ -32,6 +32,13 @@ export async function POST(request: NextRequest) {
   }
 
   const goingOnline = !current.isOnline;
+
+  if (goingOnline && !current.hasCompletedOnboarding) {
+    return NextResponse.json(
+      { success: false, error: 'Please complete the onboarding tour before going online' },
+      { status: 403 }
+    );
+  }
 
   const updateData: {
     isOnline: boolean;
