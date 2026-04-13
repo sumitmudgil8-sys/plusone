@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
         select: {
           id: true, date: true, duration: true, status: true, totalAmount: true,
           depositAmount: true, paymentStatus: true, notes: true, createdAt: true,
+          venueName: true, venueAddress: true, venueLat: true, venueLng: true,
           companion: {
             select: { id: true, companionProfile: { select: { name: true, avatarUrl: true, city: true } } },
           },
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
         select: {
           id: true, date: true, duration: true, status: true, totalAmount: true,
           depositAmount: true, paymentStatus: true, notes: true, createdAt: true,
+          venueName: true, venueAddress: true, venueLat: true, venueLng: true,
           client: {
             select: { id: true, clientProfile: { select: { name: true, avatarUrl: true, city: true } } },
           },
@@ -69,7 +71,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { companionId, date, duration, notes } = body;
+    const { companionId, date, duration, notes, venueName, venueAddress, venueLat, venueLng } = body;
 
     // Validate input
     if (!companionId || !date || !duration) {
@@ -314,6 +316,10 @@ export async function POST(request: NextRequest) {
             holdTransactionId: holdTx.id,
             notes: notes || '',
             status: 'PENDING',
+            venueName: typeof venueName === 'string' ? venueName.slice(0, 200) : undefined,
+            venueAddress: typeof venueAddress === 'string' ? venueAddress.slice(0, 500) : undefined,
+            venueLat: typeof venueLat === 'number' ? venueLat : undefined,
+            venueLng: typeof venueLng === 'number' ? venueLng : undefined,
           },
           include: {
             companion: {

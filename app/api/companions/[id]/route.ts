@@ -124,6 +124,7 @@ export async function GET(
         distance,
         isFavorited: companion.favorites.length > 0,
         accessible,
+        introVideoUrl: profile.introVideoUrl,
         formattedPrice: `₹${Math.round(profile.hourlyRate / 100).toLocaleString('en-IN')}/hr`,
       },
     });

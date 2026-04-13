@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { GENDERS, LANGUAGES, INTERESTS } from '@/lib/constants';
 
-const STEPS = ['Profile', 'Interests', 'Photos', 'Documents'] as const;
+const STEPS = ['Profile', 'Interests', 'Photos & Video', 'Documents'] as const;
 type Step = (typeof STEPS)[number];
 
 export default function CompanionOnboardingPage() {
@@ -29,10 +29,14 @@ export default function CompanionOnboardingPage() {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
 
-  // Step 3 — Photos
+  // Step 3 — Photos & Video
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploaded, setVideoUploaded] = useState(false);
 
   // Step 4 — Documents
   const [docType, setDocType] = useState('ID_CARD');
@@ -87,6 +91,26 @@ export default function CompanionOnboardingPage() {
     }
   };
 
+  const uploadVideo = async () => {
+    if (!videoFile) return;
+    setUploadingVideo(true);
+    setError('');
+    try {
+      const form = new FormData();
+      form.append('file', videoFile);
+      form.append('type', 'video');
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Upload failed');
+      setVideoPreview(data.data.url);
+      setVideoUploaded(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Video upload failed');
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
   const uploadDocument = async () => {
     if (!docFile) return;
     setUploadingDoc(true);
@@ -122,8 +146,13 @@ export default function CompanionOnboardingPage() {
     if (currentStep === 0 || currentStep === 1) {
       await saveProfile();
     }
-    if (currentStep === 2 && avatarFile && !avatarPreview) {
-      await uploadAvatar();
+    if (currentStep === 2) {
+      if (avatarFile && !avatarPreview?.startsWith('https')) {
+        await uploadAvatar();
+      }
+      if (videoFile && !videoUploaded) {
+        await uploadVideo();
+      }
     }
     setCurrentStep((s) => s + 1);
   };
@@ -363,6 +392,55 @@ export default function CompanionOnboardingPage() {
                   Photo uploaded successfully
                 </div>
               )}
+
+              {/* Intro Video */}
+              <div className="border-t border-white/10 pt-5 mt-5">
+                <h3 className="text-lg font-semibold text-white mb-1">Intro Video</h3>
+                <p className="text-white/60 text-sm mb-4">
+                  Record a short video introduction. This helps clients get to know you better.
+                </p>
+
+                {videoPreview ? (
+                  <div className="rounded-xl overflow-hidden bg-black mb-3">
+                    <video src={videoPreview} controls playsInline className="w-full max-h-48 object-contain" />
+                  </div>
+                ) : null}
+
+                {!videoUploaded && (
+                  <div className="space-y-3">
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/quicktime"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        setVideoFile(file);
+                        if (file) setVideoPreview(URL.createObjectURL(file));
+                      }}
+                      className="block w-full text-sm text-white/60 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gold/20 file:text-gold hover:file:bg-gold/30 cursor-pointer"
+                    />
+                    <p className="text-xs text-white/40">MP4, WebM or MOV — max 30 MB</p>
+
+                    {videoFile && !videoUploaded && (
+                      <Button
+                        onClick={uploadVideo}
+                        isLoading={uploadingVideo}
+                        className="text-sm py-2"
+                      >
+                        Upload Video
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {videoUploaded && (
+                  <div className="flex items-center gap-2 text-green-400 text-sm">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Video uploaded successfully
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -452,8 +530,8 @@ export default function CompanionOnboardingPage() {
                 Go to Dashboard
               </Button>
             ) : (
-              <Button onClick={handleNext} isLoading={saving || uploadingAvatar}>
-                {currentStep === 2 && avatarFile && !avatarPreview?.startsWith('https')
+              <Button onClick={handleNext} isLoading={saving || uploadingAvatar || uploadingVideo}>
+                {currentStep === 2 && ((avatarFile && !avatarPreview?.startsWith('https')) || (videoFile && !videoUploaded))
                   ? 'Upload & Continue'
                   : 'Continue'}
               </Button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -14,6 +14,7 @@ type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 type SlotKey = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT';
 
 const DAY_KEY_MAP: DayKey[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const WEEKDAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const SLOT_META: Record<SlotKey, { label: string; startHour: number; endHour: number }> = {
   MORNING:   { label: 'Morning (6 AM–12 PM)',   startHour: 6,  endHour: 12 },
@@ -28,7 +29,7 @@ function getAvailableHours(
   weeklyAvailability: Record<string, string[]> | undefined,
 ): number[] {
   if (!dateStr || !weeklyAvailability) return [];
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + 'T00:00');
   const dayKey = DAY_KEY_MAP[d.getDay()];
   const slots = (weeklyAvailability[dayKey] ?? []) as SlotKey[];
   const hours: number[] = [];
@@ -48,28 +49,54 @@ function formatHour(h: number): string {
   return `${display}:00 ${period}`;
 }
 
-function generateAvailableDates(
+/** Check if a date is available based on companion's weekly schedule */
+function isDateAvailable(
+  dateStr: string,
   weeklyAvailability: Record<string, string[]> | undefined,
   legacyAvailability: string[],
-  daysAhead = 14
-): string[] {
-  // If weekly availability has data, use it to generate dates
+): boolean {
   const hasWeekly = weeklyAvailability && Object.values(weeklyAvailability).some((s) => s.length > 0);
   if (hasWeekly) {
-    const dates: string[] = [];
-    const today = new Date();
-    for (let i = 0; i < daysAhead; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      const dayKey = DAY_KEY_MAP[d.getDay()];
-      if (weeklyAvailability[dayKey]?.length > 0) {
-        dates.push(d.toISOString().split('T')[0]);
-      }
-    }
-    return dates;
+    const d = new Date(dateStr + 'T00:00');
+    const dayKey = DAY_KEY_MAP[d.getDay()];
+    return (weeklyAvailability[dayKey]?.length ?? 0) > 0;
   }
-  // Fall back to legacy array
-  return legacyAvailability;
+  // Legacy: available if date is in the array
+  if (legacyAvailability.length > 0) {
+    return legacyAvailability.includes(dateStr);
+  }
+  // No availability data — treat all dates as available
+  return true;
+}
+
+/** Build calendar grid for a given month */
+function getCalendarDays(year: number, month: number): (string | null)[] {
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const grid: (string | null)[] = [];
+  // Padding for days before the 1st
+  for (let i = 0; i < firstDay; i++) grid.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    grid.push(dateStr);
+  }
+  return grid;
+}
+
+interface VenueResult {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  rating?: number;
+}
+
+interface SelectedVenue {
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
 }
 
 interface BookingFormProps {
@@ -89,19 +116,44 @@ export function BookingForm({
 }: BookingFormProps) {
   const router = useRouter();
   const toast = useToast();
-  const availableDates = useMemo(
-    () => generateAvailableDates(weeklyAvailability, availability),
-    [weeklyAvailability, availability]
+
+  // Calendar state
+  const today = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
+  const calendarDays = useMemo(
+    () => getCalendarDays(calendarMonth.year, calendarMonth.month),
+    [calendarMonth],
   );
+  const monthLabel = useMemo(
+    () => new Date(calendarMonth.year, calendarMonth.month).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+    [calendarMonth],
+  );
+
   const [date, setDate] = useState('');
   const [startHour, setStartHour] = useState<number | ''>('');
   const [duration, setDuration] = useState(2);
   const [notes, setNotes] = useState('');
 
+  // Venue search
+  const [venueQuery, setVenueQuery] = useState('');
+  const [venueResults, setVenueResults] = useState<VenueResult[]>([]);
+  const [venueLoading, setVenueLoading] = useState(false);
+  const [selectedVenue, setSelectedVenue] = useState<SelectedVenue | null>(null);
+  const [showVenueResults, setShowVenueResults] = useState(false);
+  const venueDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const venueWrapperRef = useRef<HTMLDivElement>(null);
+
   const availableHours = useMemo(
     () => getAvailableHours(date, weeklyAvailability),
-    [date, weeklyAvailability]
+    [date, weeklyAvailability],
   );
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -111,11 +163,80 @@ export function BookingForm({
   const totalAmount = hourlyRate * duration;
   const depositAmount = Math.ceil((totalAmount * DEPOSIT_PERCENTAGE) / 100);
 
+  // Navigate calendar
+  const prevMonth = () => {
+    setCalendarMonth((prev) => {
+      if (prev.month === 0) return { year: prev.year - 1, month: 11 };
+      return { ...prev, month: prev.month - 1 };
+    });
+  };
+  const nextMonth = () => {
+    setCalendarMonth((prev) => {
+      if (prev.month === 11) return { year: prev.year + 1, month: 0 };
+      return { ...prev, month: prev.month + 1 };
+    });
+  };
+
+  // Venue search with debounce
+  const searchVenues = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setVenueResults([]);
+      return;
+    }
+    setVenueLoading(true);
+    try {
+      const res = await fetch(`/api/venues/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (data.success) {
+        setVenueResults(data.data ?? []);
+        setShowVenueResults(true);
+      }
+    } catch {
+      // non-fatal
+    } finally {
+      setVenueLoading(false);
+    }
+  }, []);
+
+  const handleVenueInput = (value: string) => {
+    setVenueQuery(value);
+    setSelectedVenue(null);
+    if (venueDebounceRef.current) clearTimeout(venueDebounceRef.current);
+    venueDebounceRef.current = setTimeout(() => searchVenues(value), 400);
+  };
+
+  const selectVenue = (venue: VenueResult) => {
+    setSelectedVenue({
+      name: venue.name,
+      address: venue.address,
+      lat: venue.lat,
+      lng: venue.lng,
+    });
+    setVenueQuery(venue.name);
+    setShowVenueResults(false);
+  };
+
+  // Close venue dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (venueWrapperRef.current && !venueWrapperRef.current.contains(e.target as Node)) {
+        setShowVenueResults(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!termsAccepted) {
       setError('Please accept the terms and conditions to proceed.');
       toast.error('Please accept the terms and conditions');
+      return;
+    }
+    if (!date) {
+      setError('Please select a date.');
+      toast.error('Please select a date');
       return;
     }
     if (availableHours.length > 0 && startHour === '') {
@@ -142,6 +263,10 @@ export function BookingForm({
           date: bookingDate,
           duration,
           notes,
+          venueName: selectedVenue?.name || venueQuery || undefined,
+          venueAddress: selectedVenue?.address || undefined,
+          venueLat: selectedVenue?.lat || undefined,
+          venueLng: selectedVenue?.lng || undefined,
         }),
       });
 
@@ -165,62 +290,144 @@ export function BookingForm({
 
       toast.success('Booking request sent');
       setShowSuccessModal(true);
-    } catch (err: any) {
-      setError(err.message);
-      toast.error(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create booking';
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
+  // Determine if we can go to previous month (don't allow going before current month)
+  const canGoPrev = calendarMonth.year > new Date().getFullYear() ||
+    (calendarMonth.year === new Date().getFullYear() && calendarMonth.month > new Date().getMonth());
+
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Calendar Date Picker */}
         <Card>
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">
-                Date
-              </label>
-              <select
-                value={date}
-                onChange={(e) => { setDate(e.target.value); setStartHour(''); }}
-                required
-                className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold"
+            <label className="block text-sm font-medium text-white/80 mb-1">
+              Select Date
+            </label>
+
+            {/* Month navigation */}
+            <div className="flex items-center justify-between mb-2">
+              <button
+                type="button"
+                onClick={prevMonth}
+                disabled={!canGoPrev}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                <option value="">Select a date</option>
-                {availableDates.map((dateStr) => (
-                  <option key={dateStr} value={dateStr}>
-                    {new Date(dateStr).toLocaleDateString('en-IN', {
-                      weekday: 'short',
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </option>
-                ))}
-              </select>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <span className="text-sm font-semibold text-white">{monthLabel}</span>
+              <button
+                type="button"
+                onClick={nextMonth}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
 
-            {date && availableHours.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">
-                  Start Time
-                </label>
-                <select
-                  value={startHour}
-                  onChange={(e) => setStartHour(e.target.value === '' ? '' : parseInt(e.target.value))}
-                  required
-                  className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold"
-                >
-                  <option value="">Select a time</option>
-                  {availableHours.map((h) => (
-                    <option key={h} value={h}>{formatHour(h)}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {/* Weekday headers */}
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {WEEKDAY_HEADERS.map((d) => (
+                <div key={d} className="text-center text-[10px] font-medium text-white/40 py-1">
+                  {d}
+                </div>
+              ))}
+            </div>
 
+            {/* Calendar grid */}
+            <div className="grid grid-cols-7 gap-1">
+              {calendarDays.map((dateStr, i) => {
+                if (!dateStr) {
+                  return <div key={`empty-${i}`} className="aspect-square" />;
+                }
+                const isPast = dateStr < today;
+                const available = !isPast && isDateAvailable(dateStr, weeklyAvailability, availability);
+                const isSelected = dateStr === date;
+                const isToday = dateStr === today;
+                const dayNum = parseInt(dateStr.split('-')[2]);
+
+                return (
+                  <button
+                    key={dateStr}
+                    type="button"
+                    disabled={isPast || !available}
+                    onClick={() => {
+                      setDate(dateStr);
+                      setStartHour('');
+                    }}
+                    className={`aspect-square rounded-lg text-xs font-medium transition-all flex items-center justify-center relative ${
+                      isSelected
+                        ? 'bg-gold text-charcoal ring-2 ring-gold/50'
+                        : available
+                          ? 'bg-green-500/15 text-green-400 border border-green-500/25 hover:bg-green-500/25 cursor-pointer'
+                          : isPast
+                            ? 'text-white/15 cursor-not-allowed'
+                            : 'text-white/25 cursor-not-allowed'
+                    }`}
+                  >
+                    {dayNum}
+                    {isToday && !isSelected && (
+                      <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-gold" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center gap-4 mt-2 pt-2 border-t border-white/[0.06]">
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded bg-green-500/15 border border-green-500/25" />
+                <span className="text-[10px] text-white/40">Available</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded bg-gold" />
+                <span className="text-[10px] text-white/40">Selected</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Time Slot Selection */}
+        {date && availableHours.length > 0 && (
+          <Card>
+            <label className="block text-sm font-medium text-white/80 mb-3">
+              Select Time
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {availableHours.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => setStartHour(h)}
+                  className={`py-2.5 rounded-xl text-xs font-medium border transition-all ${
+                    startHour === h
+                      ? 'bg-gold/15 border-gold/40 text-gold'
+                      : 'bg-white/5 border-white/[0.06] text-white/60 hover:border-white/15'
+                  }`}
+                >
+                  {formatHour(h)}
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Duration + Venue + Notes */}
+        <Card>
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-white/80 mb-2">
                 Duration: {duration} hours
@@ -239,6 +446,91 @@ export function BookingForm({
               </div>
             </div>
 
+            {/* Venue Search */}
+            <div ref={venueWrapperRef} className="relative">
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Meeting Venue
+              </label>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <input
+                  type="text"
+                  value={venueQuery}
+                  onChange={(e) => handleVenueInput(e.target.value)}
+                  onFocus={() => { if (venueResults.length > 0) setShowVenueResults(true); }}
+                  placeholder="Search for a restaurant or cafe..."
+                  className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gold placeholder:text-white/30"
+                />
+                {venueLoading && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="animate-spin h-4 w-4 border-2 border-gold border-t-transparent rounded-full" />
+                  </div>
+                )}
+              </div>
+
+              {/* Venue results dropdown */}
+              {showVenueResults && venueResults.length > 0 && (
+                <div className="absolute z-20 w-full mt-1 bg-charcoal-surface border border-charcoal-border rounded-xl shadow-xl overflow-hidden">
+                  {venueResults.map((venue) => (
+                    <button
+                      key={venue.id}
+                      type="button"
+                      onClick={() => selectVenue(venue)}
+                      className="w-full text-left px-4 py-3 hover:bg-white/[0.06] transition-colors border-b border-white/[0.04] last:border-0"
+                    >
+                      <div className="flex items-start gap-2">
+                        <svg className="w-4 h-4 text-gold mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <div className="min-w-0">
+                          <p className="text-sm text-white font-medium truncate">{venue.name}</p>
+                          <p className="text-xs text-white/40 truncate">{venue.address}</p>
+                          {venue.rating && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <svg className="w-3 h-3 text-gold fill-current" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                              </svg>
+                              <span className="text-[10px] text-white/50">{venue.rating}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Selected venue badge */}
+              {selectedVenue && (
+                <div className="mt-2 flex items-center gap-2 bg-gold/5 border border-gold/15 rounded-lg px-3 py-2">
+                  <svg className="w-4 h-4 text-gold shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-gold font-medium truncate">{selectedVenue.name}</p>
+                    <p className="text-[10px] text-white/40 truncate">{selectedVenue.address}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedVenue(null); setVenueQuery(''); }}
+                    className="text-white/40 hover:text-white/60 shrink-0"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              <p className="text-[10px] text-white/30 mt-1.5">
+                Search for a public restaurant or cafe for your meeting
+              </p>
+            </div>
+
             <div>
               <Input
                 label="Notes (optional)"
@@ -250,6 +542,7 @@ export function BookingForm({
           </div>
         </Card>
 
+        {/* Price breakdown */}
         <Card>
           <div className="space-y-3">
             <div className="flex justify-between text-white/60">
@@ -399,6 +692,13 @@ export function BookingForm({
           <p className="text-white/80">
             Your booking with {companionName} has been sent. They will confirm shortly.
           </p>
+          {selectedVenue && (
+            <div className="bg-white/[0.04] border border-white/[0.06] rounded-lg p-3 text-left">
+              <p className="text-xs text-white/40">Meeting venue</p>
+              <p className="text-sm text-white font-medium">{selectedVenue.name}</p>
+              <p className="text-xs text-white/50">{selectedVenue.address}</p>
+            </div>
+          )}
           <Button onClick={() => router.push('/client/bookings')} className="w-full">
             View My Bookings
           </Button>

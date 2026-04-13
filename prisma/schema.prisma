@@ -185,6 +185,7 @@ model CompanionProfile {
 
   // Premium platform fields — ranking, trust, and quality signals
   audioIntroUrl      String?                          // Cloudinary URL for 15s audio intro
+  introVideoUrl      String?                          // Cloudinary URL for short intro video
   rankingScore       Float             @default(0)    // precomputed 0-100, used for browse sort
   avgResponseTime    Int?                             // seconds, rolling avg of last 50 session acceptances
   totalRatedSessions Int               @default(0)    // sessions that received a rating
@@ -248,6 +249,10 @@ model Booking {
   paymentId     String?
   notes         String?
   location      String?
+  venueName     String?
+  venueAddress  String?
+  venueLat      Float?
+  venueLng      Float?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   review        Review?

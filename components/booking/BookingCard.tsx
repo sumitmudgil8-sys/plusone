@@ -17,6 +17,10 @@ interface BookingCardProps {
     status: string;
     totalAmount: number;
     notes?: string;
+    venueName?: string | null;
+    venueAddress?: string | null;
+    venueLat?: number | null;
+    venueLng?: number | null;
     client?: {
       clientProfile?: {
         name: string;
@@ -85,8 +89,24 @@ export function BookingCard({ booking, role, onStatusChange }: BookingCardProps)
           <span className="text-white/60">Total</span>
           <span className="text-gold font-medium">{formatCurrency(booking.totalAmount)}</span>
         </div>
-        {booking.notes && (
+        {booking.venueName && (
           <div className="pt-2 border-t border-charcoal-border">
+            <div className="flex items-start gap-2">
+              <svg className="w-3.5 h-3.5 text-gold mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <div className="min-w-0">
+                <p className="text-xs text-white font-medium">{booking.venueName}</p>
+                {booking.venueAddress && (
+                  <p className="text-[10px] text-white/40 truncate">{booking.venueAddress}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {booking.notes && (
+          <div className={`${booking.venueName ? 'pt-1' : 'pt-2 border-t border-charcoal-border'}`}>
             <p className="text-white/60 text-xs">{booking.notes}</p>
           </div>
         )}

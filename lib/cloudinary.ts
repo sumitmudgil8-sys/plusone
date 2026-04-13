@@ -16,7 +16,7 @@ function getCloudinary() {
   return cloudinary;
 }
 
-export type UploadFolder = 'avatars' | 'companion-gallery' | 'companion-avatars' | 'verification-docs' | 'audio-intros';
+export type UploadFolder = 'avatars' | 'companion-gallery' | 'companion-avatars' | 'verification-docs' | 'audio-intros' | 'intro-videos';
 
 export interface UploadResult {
   url: string;
@@ -42,6 +42,9 @@ const FOLDER_TRANSFORMS: Record<UploadFolder, object> = {
   },
   'audio-intros': {
     // No transformation — store raw audio as-is
+  },
+  'intro-videos': {
+    // No transformation — store raw video as-is
   },
 };
 

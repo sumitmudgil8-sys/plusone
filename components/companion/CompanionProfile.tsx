@@ -11,25 +11,6 @@ interface CompanionImage {
   isPrimary: boolean;
 }
 
-type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
-type SlotKey = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT';
-
-const PROFILE_DAYS: { key: DayKey; short: string }[] = [
-  { key: 'mon', short: 'Mon' },
-  { key: 'tue', short: 'Tue' },
-  { key: 'wed', short: 'Wed' },
-  { key: 'thu', short: 'Thu' },
-  { key: 'fri', short: 'Fri' },
-  { key: 'sat', short: 'Sat' },
-  { key: 'sun', short: 'Sun' },
-];
-
-const SLOT_LABELS: Record<SlotKey, string> = {
-  MORNING: 'Morn',
-  AFTERNOON: 'Aft',
-  EVENING: 'Eve',
-  NIGHT: 'Night',
-};
 
 interface CompanionData {
   id: string;
@@ -54,10 +35,11 @@ interface CompanionData {
   distance: number;
   isFavorited: boolean;
   accessible: boolean;
-  weeklyAvailability?: Record<string, string[]>;
+
   availableNow?: boolean;
   badges?: string[];
   audioIntroUrl?: string | null;
+  introVideoUrl?: string | null;
 }
 
 const BADGE_CONFIG: Record<string, { label: string; color: string }> = {
@@ -83,14 +65,21 @@ export function CompanionProfile({
   showActions = true,
 }: CompanionProfileProps) {
   const [isFavorited, setIsFavorited] = useState(companion.isFavorited);
-  const [activeImage, setActiveImage] = useState(0);
+  const [activeSlide, setActiveSlide] = useState(0);
 
-  const images =
+  // Build media slides: intro video first, then images
+  const hasVideo = !!companion.introVideoUrl;
+  const imageUrls =
     companion.images && companion.images.length > 0
       ? companion.images.map((img) => img.url)
       : companion.avatarUrl
       ? [companion.avatarUrl]
       : [];
+  // slides: [{type:'video', url}, {type:'image', url}, ...]
+  const slides: { type: 'video' | 'image'; url: string }[] = [
+    ...(hasVideo ? [{ type: 'video' as const, url: companion.introVideoUrl! }] : []),
+    ...imageUrls.map((url) => ({ type: 'image' as const, url })),
+  ];
 
   const status = companion.availabilityStatus ?? 'OFFLINE';
   const isOnline = status === 'ONLINE';
@@ -113,9 +102,9 @@ export function CompanionProfile({
       : null;
 
   const prev = () =>
-    setActiveImage((i) => (i - 1 + images.length) % images.length);
+    setActiveSlide((i) => (i - 1 + slides.length) % slides.length);
   const next = () =>
-    setActiveImage((i) => (i + 1) % images.length);
+    setActiveSlide((i) => (i + 1) % slides.length);
 
   const toggleFavorite = async () => {
     try {
@@ -133,15 +122,24 @@ export function CompanionProfile({
 
   return (
     <div className="space-y-6">
-      {/* Image Carousel */}
+      {/* Media Carousel (Video + Images) */}
       <div className="relative rounded-2xl overflow-hidden bg-white/[0.08]">
         <div className="aspect-[3/4]">
-          {images.length > 0 ? (
-            <img
-              src={images[activeImage]}
-              alt={companion.name}
-              className="w-full h-full object-cover"
-            />
+          {slides.length > 0 ? (
+            slides[activeSlide]?.type === 'video' ? (
+              <video
+                src={slides[activeSlide].url}
+                controls
+                playsInline
+                className="w-full h-full object-cover bg-black"
+              />
+            ) : (
+              <img
+                src={slides[activeSlide]?.url}
+                alt={companion.name}
+                className="w-full h-full object-cover"
+              />
+            )
           ) : (
             <div className="w-full h-full flex items-center justify-center text-6xl font-medium text-white/30 bg-charcoal">
               {companion.name.charAt(0)}
@@ -153,7 +151,7 @@ export function CompanionProfile({
         <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
 
         {/* Prev / Next arrows */}
-        {images.length > 1 && (
+        {slides.length > 1 && (
           <>
             <button
               onClick={prev}
@@ -174,17 +172,18 @@ export function CompanionProfile({
           </>
         )}
 
-        {/* Dot indicators */}
-        {images.length > 1 && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-            {images.map((_, i) => (
+        {/* Slide indicators (video icon for first if video) */}
+        {slides.length > 1 && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 items-center">
+            {slides.map((slide, i) => (
               <button
                 key={i}
-                onClick={() => setActiveImage(i)}
+                onClick={() => setActiveSlide(i)}
                 className={cn(
-                  'rounded-full transition-all',
-                  i === activeImage ? 'w-4 h-2 bg-white' : 'w-2 h-2 bg-white/40'
+                  'rounded-full transition-all flex items-center justify-center',
+                  i === activeSlide ? 'w-4 h-2 bg-white' : 'w-2 h-2 bg-white/40'
                 )}
+                title={slide.type === 'video' ? 'Intro Video' : `Photo ${i + (hasVideo ? 0 : 1)}`}
               />
             ))}
           </div>
@@ -446,38 +445,6 @@ export function CompanionProfile({
           </Card>
         )}
 
-        {/* Weekly Availability */}
-        {companion.weeklyAvailability && Object.values(companion.weeklyAvailability).some((s) => (s as string[]).length > 0) && (
-          <Card>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-medium text-white text-sm">Weekly Availability</h2>
-              {companion.availableNow && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[10px] font-semibold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                  Available Now
-                </span>
-              )}
-            </div>
-            <div className="space-y-1">
-              {PROFILE_DAYS.map((day) => {
-                const slots = (companion.weeklyAvailability?.[day.key] ?? []) as SlotKey[];
-                if (slots.length === 0) return null;
-                return (
-                  <div key={day.key} className="flex items-center gap-2">
-                    <span className="text-xs text-white/50 w-8 font-medium">{day.short}</span>
-                    <div className="flex gap-1">
-                      {slots.map((slot) => (
-                        <span key={slot} className="text-[10px] px-1.5 py-0.5 rounded bg-gold/10 text-gold/70 border border-gold/15">
-                          {SLOT_LABELS[slot] ?? slot}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        )}
 
         {/* Tags */}
         {companion.tags && companion.tags.length > 0 && (

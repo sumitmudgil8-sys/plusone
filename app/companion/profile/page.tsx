@@ -113,6 +113,12 @@ export default function CompanionProfilePage() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Intro video
+  const [introVideoUrl, setIntroVideoUrl] = useState('');
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoError, setVideoError] = useState('');
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
   // Per-section saving
   const [saving, setSaving] = useState<Record<string, boolean>>({});
 
@@ -144,6 +150,7 @@ export default function CompanionProfilePage() {
         setUser(u);
         const p = u.companionProfile ?? {};
         setAvatarUrl(p.avatarUrl ?? '');
+        setIntroVideoUrl((p as Record<string, unknown>).introVideoUrl as string ?? '');
 
         // languages and personalityTags come from Prisma as JSON strings — parse them
         const parsedLangs = typeof p.languages === 'string' ? JSON.parse(p.languages || '[]') : (p.languages ?? []);
@@ -261,6 +268,29 @@ export default function CompanionProfilePage() {
       toast.error('Network error — please try again');
     } finally {
       setSettingPrimary(null);
+    }
+  };
+
+  // Video upload
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ['video/mp4', 'video/webm', 'video/quicktime'];
+    if (!allowed.includes(file.type)) { setVideoError('Only MP4, WebM, MOV allowed'); return; }
+    if (file.size > 30 * 1024 * 1024) { setVideoError('Video must be under 30 MB'); return; }
+    setVideoError(''); setUploadingVideo(true);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('type', 'video');
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok || !data.success) { setVideoError(data.error ?? 'Upload failed'); return; }
+      setIntroVideoUrl(data.data.url);
+      showToast('Intro video uploaded', true);
+    } catch { setVideoError('Upload failed'); } finally {
+      setUploadingVideo(false);
+      if (videoInputRef.current) videoInputRef.current.value = '';
     }
   };
 
@@ -653,6 +683,34 @@ export default function CompanionProfilePage() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Intro Video */}
+          <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-white/80">Intro Video</h3>
+                <p className="text-xs text-white/30 mt-0.5">MP4, WebM, MOV · Max 30 MB</p>
+              </div>
+              <button onClick={() => videoInputRef.current?.click()} disabled={uploadingVideo}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-400 text-black text-xs font-semibold shadow-md shadow-amber-500/20 disabled:opacity-50">
+                {uploadingVideo ? '...' : introVideoUrl ? 'Replace' : '+ Upload'}
+              </button>
+              <input ref={videoInputRef} type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={handleVideoUpload} />
+            </div>
+            {videoError && <p className="text-xs text-red-400 mb-3">{videoError}</p>}
+            {introVideoUrl ? (
+              <div className="rounded-xl overflow-hidden bg-black">
+                <video src={introVideoUrl} controls playsInline className="w-full max-h-64 object-contain" />
+              </div>
+            ) : (
+              <div className="border border-dashed border-white/10 rounded-xl p-6 text-center">
+                <svg className="w-8 h-8 text-white/20 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <p className="text-xs text-white/30">Record a short intro to attract more clients</p>
               </div>
             )}
           </div>

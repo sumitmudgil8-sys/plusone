@@ -15,7 +15,7 @@ export const runtime = 'nodejs';
 // Disable Next.js body parsing — we handle the multipart stream directly.
 export const dynamic = 'force-dynamic';
 
-type UploadType = 'avatar' | 'gallery' | 'document' | 'audio';
+type UploadType = 'avatar' | 'gallery' | 'document' | 'audio' | 'video';
 
 const UPLOAD_TYPE_CONFIG: Record<
   UploadType,
@@ -40,6 +40,11 @@ const UPLOAD_TYPE_CONFIG: Record<
     folder: 'audio-intros',
     maxBytes: 2 * 1024 * 1024, // 2 MB
     allowedTypes: ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav'],
+  },
+  video: {
+    folder: 'intro-videos',
+    maxBytes: 30 * 1024 * 1024, // 30 MB
+    allowedTypes: ['video/mp4', 'video/webm', 'video/quicktime'],
   },
 };
 
@@ -129,6 +134,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (uploadType === 'video' && user.role !== 'COMPANION') {
+    return NextResponse.json(
+      { success: false, error: 'Only companions can upload intro videos' },
+      { status: 403 }
+    );
+  }
+
   // Gallery cap check
   if (uploadType === 'gallery') {
     const profile = await prisma.companionProfile.findUnique({
@@ -153,7 +165,9 @@ export async function POST(request: NextRequest) {
         ? `avatar_${user.id}`
         : uploadType === 'audio'
           ? `audio_intro_${user.id}`
-          : undefined;
+          : uploadType === 'video'
+            ? `intro_video_${user.id}`
+            : undefined;
 
     // If replacing avatar, clean up old one from Cloudinary (best-effort)
     if (uploadType === 'avatar') {
@@ -208,6 +222,12 @@ export async function POST(request: NextRequest) {
       await prisma.companionProfile.update({
         where: { userId: user.id },
         data: { audioIntroUrl: result.url, profileComplete },
+      });
+    }
+    else if (uploadType === 'video') {
+      await prisma.companionProfile.update({
+        where: { userId: user.id },
+        data: { introVideoUrl: result.url },
       });
     }
     // For 'document', the caller submits to POST /api/verification/documents with the returned URL.
