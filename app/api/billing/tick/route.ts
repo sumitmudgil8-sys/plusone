@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { debitWallet, creditWallet } from '@/lib/wallet';
 import { getAblyClient, getUserChannelName } from '@/lib/ably';
-import { BILLING_TICK_SECONDS, BILLING_MIN_BALANCE_MINUTES, PLATFORM_COMMISSION_RATE } from '@/lib/constants';
+import { BILLING_TICK_SECONDS, BILLING_MIN_BALANCE_MINUTES, BILLING_MAX_DURATION_MINUTES, PLATFORM_COMMISSION_RATE } from '@/lib/constants';
 import { billingTickLimiter } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -105,6 +105,26 @@ export async function POST(request: NextRequest) {
 
     const { ratePerMinute, companionId } = session;
 
+    // Hard cap: auto-end session after BILLING_MAX_DURATION_MINUTES
+    if (session.totalMinutes + 1 >= BILLING_MAX_DURATION_MINUTES) {
+      await prisma.billingSession.update({
+        where: { id: sessionId },
+        data: { status: 'ENDED', endedAt: new Date() },
+      });
+      try {
+        const ably = getAblyClient();
+        const payload = { sessionId, totalCharged: session.totalCharged, endedBy: 'SYSTEM' };
+        await Promise.all([
+          ably.channels.get(getUserChannelName(user.id)).publish('chat:ended', payload),
+          ably.channels.get(getUserChannelName(companionId)).publish('chat:ended', payload),
+        ]);
+      } catch { /* non-fatal */ }
+      return NextResponse.json({
+        success: true,
+        data: { ended: true, reason: 'MAX_DURATION', totalCharged: session.totalCharged, totalMinutes: session.totalMinutes },
+      });
+    }
+
     // Debit client wallet (throws INSUFFICIENT_BALANCE if low).
     // Tagged by session type so earnings/transaction history can distinguish
     // chat charges from call charges.
@@ -201,16 +221,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Warn client when balance is low (≤ 2 minutes remaining)
+    // Warn both parties when balance is low (≤ 2 minutes remaining)
     const balanceLow = balance <= ratePerMinute * 2;
     if (balanceLow) {
       try {
         const ably = getAblyClient();
-        await ably.channels.get(getUserChannelName(user.id)).publish('chat:balance_low', {
+        const balancePayload = {
           sessionId,
           balance,
           minutesRemaining: Math.floor(balance / ratePerMinute),
-        });
+        };
+        await Promise.all([
+          ably.channels.get(getUserChannelName(user.id)).publish('chat:balance_low', balancePayload),
+          ably.channels.get(getUserChannelName(companionId)).publish('chat:balance_low', balancePayload),
+        ]);
       } catch { /* non-fatal */ }
     }
 

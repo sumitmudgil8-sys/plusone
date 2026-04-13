@@ -50,6 +50,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // PENDING sessions can be cancelled (e.g. client hangs up before companion answers)
+    if (session.status === 'PENDING') {
+      const cancelled = await prisma.billingSession.update({
+        where: { id: sessionId },
+        data: { status: 'DECLINED', endedAt: new Date() },
+      });
+      // Notify companion that the request was withdrawn
+      try {
+        const ably = getAblyClient();
+        const eventName = session.type === 'VOICE' ? 'call:declined' : 'chat:declined';
+        await ably.channels.get(getUserChannelName(session.companionId)).publish(eventName, {
+          sessionId,
+          cancelledByClient: true,
+        });
+      } catch { /* non-fatal */ }
+      return NextResponse.json({
+        success: true,
+        data: {
+          sessionId: cancelled.id,
+          status: cancelled.status,
+          totalMinutes: 0,
+          totalCharged: 0,
+          endedAt: cancelled.endedAt,
+        },
+      });
+    }
+
     if (session.status !== 'ACTIVE') {
       // Already ended — return current state (idempotent)
       return NextResponse.json({

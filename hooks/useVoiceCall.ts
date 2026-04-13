@@ -34,7 +34,7 @@ interface VoiceCallHook {
  * - Remote user leaves: Fires user-left event; UI shows "disconnected"
  * - Browser close: beforeunload fires endCall to clean up
  * - Mute: Uses setMuted() which silences without unpublishing
- * - Token refresh: Not needed — Agora tokens last 1h, calls won't exceed that
+ * - Token refresh: Handled via token-privilege-will-expire event (30min TTL, auto-renews)
  */
 export function useVoiceCall(
   sessionId: string | null,
@@ -140,6 +140,26 @@ export function useVoiceCall(
           console.log('[useVoiceCall] remote user left');
           setRemoteUserJoined(false);
           setRemoteAudioPlaying(false);
+        });
+
+        // ── Token renewal ──────────────────────────────────────────────
+        // Agora tokens expire after 30 minutes. When the token is about
+        // to expire, Agora fires this event ~30s before expiry. We fetch
+        // a fresh token from the server and renew it to keep the call alive.
+        agoraClient.on('token-privilege-will-expire', async () => {
+          console.log('[useVoiceCall] token expiring, renewing...');
+          try {
+            const renewRes = await fetch(`/api/agora/token?sessionId=${sessionId}`);
+            const renewJson = await renewRes.json();
+            if (renewRes.ok && renewJson.success) {
+              await agoraClient.renewToken(renewJson.data.token);
+              console.log('[useVoiceCall] token renewed successfully');
+            } else {
+              console.error('[useVoiceCall] token renewal failed — session may have ended');
+            }
+          } catch (err) {
+            console.error('[useVoiceCall] token renewal error:', err);
+          }
         });
 
         // ── Connection state tracking ───────────────────────────────────

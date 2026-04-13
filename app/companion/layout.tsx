@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { CompanionNav } from '@/components/layout/CompanionNav';
 import { useSocket } from '@/hooks/useSocket';
@@ -168,6 +168,45 @@ function IncomingCallModal({
   onAccept: () => void;
   onDecline: () => void;
 }) {
+  // Play a ringtone using Web Audio API (no audio file needed)
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    try {
+      const ctx = new AudioContext();
+      audioCtxRef.current = ctx;
+
+      const playTone = () => {
+        if (ctx.state === 'closed') return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 440;
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.6);
+      };
+
+      // Ring pattern: two short tones, 2s pause, repeat
+      playTone();
+      setTimeout(() => playTone(), 300);
+      intervalRef.current = setInterval(() => {
+        playTone();
+        setTimeout(() => playTone(), 300);
+      }, 2500);
+    } catch { /* Web Audio not available — silent fallback */ }
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+        audioCtxRef.current.close().catch(() => {});
+      }
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-sm mx-4 bg-charcoal-elevated border border-white/[0.08] rounded-2xl p-8 shadow-2xl text-center space-y-5">
@@ -281,7 +320,7 @@ function CompanionFloatingCall({
   pathname: string;
   onReturn: () => void;
 }) {
-  const { activeCall, voiceCall, liveSeconds, endCall } = call;
+  const { activeCall, voiceCall, liveSeconds, balanceLow, endCall } = call;
   if (!activeCall) return null;
 
   // If user is on the inbox page with this call's voiceSessionId, the full overlay is shown there
@@ -321,6 +360,11 @@ function CompanionFloatingCall({
           </div>
         </div>
       </div>
+      {balanceLow && (
+        <p className="mt-2 text-[11px] text-warning-fg bg-warning/10 border border-warning/20 rounded-lg px-2.5 py-1.5 text-center">
+          Client&apos;s balance is low — call may end soon
+        </p>
+      )}
       <div className="flex gap-2 mt-2.5">
         <button
           onClick={onReturn}
@@ -446,7 +490,7 @@ function CompanionLayoutInner({ children, userId, needsPasswordChange, setNeedsP
       .catch(() => { restoreWithRefreshToken(); });
   }, []);
 
-  const { onIncomingCall, onIncomingChatRequest } = useSocket(userId, 'COMPANION');
+  const { onIncomingCall, onIncomingChatRequest, onBalanceLow } = useSocket(userId, 'COMPANION');
 
   useEffect(() => {
     const unsubscribe = onIncomingCall((data) => setIncomingCall(data));
@@ -457,6 +501,11 @@ function CompanionLayoutInner({ children, userId, needsPasswordChange, setNeedsP
     const unsubscribe = onIncomingChatRequest((data) => setIncomingChatRequest(data));
     return unsubscribe;
   }, [onIncomingChatRequest]);
+
+  // Forward balance_low events to the call context so the companion sees a warning
+  useEffect(() => {
+    return onBalanceLow(() => companionCall.setBalanceLow(true));
+  }, [onBalanceLow, companionCall]);
 
   // Poll for pending chat requests — catches requests that arrived while offline
   // or when Ably/push missed delivery. Starts immediately on mount (no userId

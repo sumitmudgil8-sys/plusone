@@ -15,8 +15,10 @@ interface CompanionCallContextValue {
   activeCall: CallInfo | null;
   voiceCall: ReturnType<typeof useVoiceCall>;
   liveSeconds: number;
+  balanceLow: boolean;
   startCall: (info: CallInfo) => void;
   endCall: () => Promise<void>;
+  setBalanceLow: (v: boolean) => void;
 }
 
 const CompanionCallContext = createContext<CompanionCallContextValue | null>(null);
@@ -29,6 +31,7 @@ export function useCompanionCall() {
 
 export function CompanionCallProvider({ children, userId }: { children: ReactNode; userId: string | undefined }) {
   const [activeCall, setActiveCall] = useState<CallInfo | null>(null);
+  const [balanceLow, setBalanceLow] = useState(false);
 
   const voiceSessionId = activeCall?.sessionId ?? null;
   const voiceCall = useVoiceCall(voiceSessionId, userId ?? '');
@@ -109,17 +112,21 @@ export function CompanionCallProvider({ children, userId }: { children: ReactNod
   const startCall = useCallback((info: CallInfo) => {
     setActiveCall(info);
     setLiveSeconds(0);
+    setBalanceLow(false);
     startedAtRef.current = null;
   }, []);
 
   const endCallHandler = useCallback(async () => {
+    // Capture sessionId before any async work — activeCall may be cleared
+    // by the auto-clear timeout (2s after state → ended/error).
+    const sid = activeCall?.sessionId;
     ActiveCallBanner.clear();
     await voiceCall.endCall();
-    if (activeCall?.sessionId) {
+    if (sid) {
       fetch('/api/billing/end', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: activeCall.sessionId }),
+        body: JSON.stringify({ sessionId: sid }),
       }).catch(() => {});
     }
     setActiveCall(null);
@@ -128,7 +135,7 @@ export function CompanionCallProvider({ children, userId }: { children: ReactNod
   }, [voiceCall, activeCall?.sessionId]);
 
   return (
-    <CompanionCallContext.Provider value={{ activeCall, voiceCall, liveSeconds, startCall, endCall: endCallHandler }}>
+    <CompanionCallContext.Provider value={{ activeCall, voiceCall, liveSeconds, balanceLow, startCall, endCall: endCallHandler, setBalanceLow }}>
       {children}
     </CompanionCallContext.Provider>
   );

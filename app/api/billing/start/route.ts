@@ -46,8 +46,8 @@ export async function POST(request: NextRequest) {
       data: { status: 'ENDED', endedAt: new Date() },
     }).catch(() => {}); // fire-and-forget, non-blocking
 
-    // Run all three lookups in parallel — they are independent
-    const [companion, block, existing] = await Promise.all([
+    // Run all four lookups in parallel — they are independent
+    const [companion, block, existing, anyActiveSession] = await Promise.all([
       prisma.user.findUnique({
         where: { id: companionId, role: 'COMPANION', isActive: true, isBanned: false },
         include: { companionProfile: true },
@@ -58,6 +58,11 @@ export async function POST(request: NextRequest) {
       prisma.billingSession.findFirst({
         where: { clientId: user.id, companionId, status: { in: ['PENDING', 'ACTIVE'] } },
       }),
+      // Check for ANY active/pending session with ANY companion to prevent concurrent sessions
+      prisma.billingSession.findFirst({
+        where: { clientId: user.id, status: { in: ['PENDING', 'ACTIVE'] }, companionId: { not: companionId } },
+        select: { id: true, companionId: true, type: true, status: true },
+      }),
     ]);
 
     if (!companion?.companionProfile) {
@@ -67,10 +72,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // For VOICE calls, require the companion to be online/available.
+    // CHAT requests are allowed to offline companions (they get a push notification).
+    if (type === 'VOICE' && !companion.companionProfile.availableNow) {
+      return NextResponse.json(
+        { success: false, error: 'COMPANION_UNAVAILABLE', message: 'This companion is not available for calls right now.' },
+        { status: 409 }
+      );
+    }
+
     if (block) {
       return NextResponse.json(
         { success: false, error: 'Unable to start session with this companion' },
         { status: 403 }
+      );
+    }
+
+    // Prevent concurrent sessions with different companions
+    if (anyActiveSession) {
+      return NextResponse.json(
+        { success: false, error: 'EXISTING_SESSION', message: 'You already have an active session. Please end it before starting a new one.' },
+        { status: 409 }
       );
     }
 

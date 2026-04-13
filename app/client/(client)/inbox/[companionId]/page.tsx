@@ -153,10 +153,11 @@ export default function ClientInboxPage() {
     checkSession();
   }, [userId, checkSession]);
 
-  // Poll while PENDING
+  // Poll while PENDING — Ably events (chat:accepted / call:declined) are the
+  // primary signal; this is a safety-net fallback so we use a relaxed 10s interval.
   useEffect(() => {
     if (sessionState !== 'PENDING') return;
-    const interval = setInterval(checkSession, 3000);
+    const interval = setInterval(checkSession, 10_000);
     return () => clearInterval(interval);
   }, [sessionState, checkSession]);
 

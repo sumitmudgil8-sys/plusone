@@ -9,6 +9,7 @@ export const COMPANION_GALLERY_MAX_IMAGES = 8;
 export const BILLING_TICK_SECONDS = 60;        // bill every 60s
 export const BILLING_GRACE_SECONDS = 120;      // session auto-expires if no tick for 2 min
 export const BILLING_MIN_BALANCE_MINUTES = 1;  // must have ≥1 min balance to start
+export const BILLING_MAX_DURATION_MINUTES = 60; // hard cap — auto-end after 60 min
 export const PLATFORM_COMMISSION_RATE = 0.20;  // 20% platform cut; companion gets 80%
 
 // Wallet recharge limits — all in paise
