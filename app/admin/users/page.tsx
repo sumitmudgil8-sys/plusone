@@ -28,6 +28,7 @@ interface Client {
     avatarUrl: string | null;
     dateOfBirth: string | null;
     govtIdUrl: string | null;
+    additionalNotes: string | null;
   } | null;
 }
 
@@ -317,6 +318,9 @@ function ClientsSection() {
                     </div>
                     {client.rejectionReason && (
                       <p className="text-xs text-error/80 mt-1">Reason: {client.rejectionReason}</p>
+                    )}
+                    {client.clientProfile?.additionalNotes && (
+                      <p className="text-xs text-gold/80 mt-1">Client notes: {client.clientProfile.additionalNotes}</p>
                     )}
                   </div>
                   {client.clientStatus === 'PENDING_REVIEW' && (
