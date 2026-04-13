@@ -149,6 +149,8 @@ export default function CompanionDashboard() {
     id: string; duration: number; scheduledAt: string; status: string;
     clientName: string; clientAvatar: string | null; holdAmount: number; estimatedTotal: number;
   }>>([]);
+  const [cancellingSessionId, setCancellingSessionId] = useState<string | null>(null);
+  const [reminderShown, setReminderShown] = useState<Set<string>>(new Set());
 
   // Fetch availability
   const fetchAvailability = useCallback(async () => {
@@ -239,6 +241,44 @@ export default function CompanionDashboard() {
     fetchData();
     fetchAvailability();
   }, [fetchAvailability]);
+
+  // Cancel a scheduled session
+  const handleCancelScheduled = useCallback(async (sessionId: string) => {
+    setCancellingSessionId(sessionId);
+    try {
+      const res = await fetch(`/api/scheduled-sessions/${sessionId}/cancel`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setScheduledSessions((prev) => prev.filter((s) => s.id !== sessionId));
+        toast.success('Session cancelled');
+      } else {
+        toast.error(data.error || 'Failed to cancel');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setCancellingSessionId(null);
+    }
+  }, [toast]);
+
+  // 15-minute reminder for upcoming sessions
+  useEffect(() => {
+    if (scheduledSessions.length === 0) return;
+    const check = () => {
+      const now = Date.now();
+      for (const s of scheduledSessions) {
+        if (reminderShown.has(s.id)) continue;
+        const diff = new Date(s.scheduledAt).getTime() - now;
+        if (diff > 0 && diff <= 15 * 60 * 1000) {
+          toast.info(`Chat with ${s.clientName} starts in ${Math.ceil(diff / 60000)} min`);
+          setReminderShown((prev) => new Set(prev).add(s.id));
+        }
+      }
+    };
+    check();
+    const interval = setInterval(check, 60_000);
+    return () => clearInterval(interval);
+  }, [scheduledSessions, reminderShown, toast]);
 
   const pendingBookings = bookings.filter((b) => b.status === 'PENDING');
   const confirmedBookings = bookings.filter((b) => b.status === 'CONFIRMED');
@@ -749,21 +789,41 @@ export default function CompanionDashboard() {
           <div className="space-y-2">
             {scheduledSessions.map((s) => {
               const dt = new Date(s.scheduledAt);
+              const diffMs = dt.getTime() - Date.now();
+              const isSoon = diffMs > 0 && diffMs <= 15 * 60 * 1000;
+              const timeLabel = diffMs <= 0
+                ? 'Now'
+                : diffMs < 60 * 60 * 1000
+                  ? `in ${Math.ceil(diffMs / 60000)} min`
+                  : diffMs < 24 * 60 * 60 * 1000
+                    ? `in ${Math.floor(diffMs / 3600000)}h`
+                    : dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
               return (
-                <div key={s.id} className="rounded-xl bg-charcoal-surface border border-white/[0.06] px-4 py-3 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0">
+                <div key={s.id} className={`rounded-xl bg-charcoal-surface border px-4 py-3 flex items-center gap-3 ${isSoon ? 'border-gold/30' : 'border-white/[0.06]'}`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isSoon ? 'bg-gold/20 border border-gold/40' : 'bg-gold/10 border border-gold/20'}`}>
                     <svg className="w-5 h-5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white font-medium truncate">{s.duration}min chat with {s.clientName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-white font-medium truncate">{s.duration}min chat with {s.clientName}</p>
+                      {isSoon && <span className="shrink-0 text-[9px] font-bold text-gold bg-gold/10 px-1.5 py-0.5 rounded-full">SOON</span>}
+                    </div>
                     <p className="text-xs text-white/40">
-                      {dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}{' '}
-                      at {dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      {timeLabel}
+                      {' · '}
+                      {dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                       {' · '}Earn ≈ {fmt(Math.round(s.estimatedTotal * 0.8))}
                     </p>
                   </div>
+                  <button
+                    onClick={() => handleCancelScheduled(s.id)}
+                    disabled={cancellingSessionId === s.id}
+                    className="shrink-0 text-[10px] font-medium text-red-400 hover:text-red-300 bg-red-500/[0.06] border border-red-500/20 hover:bg-red-500/10 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {cancellingSessionId === s.id ? '...' : 'Cancel'}
+                  </button>
                 </div>
               );
             })}

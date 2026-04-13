@@ -11,8 +11,42 @@ import { DEPOSIT_PERCENTAGE } from '@/lib/constants';
 import { formatCurrency } from '@/lib/utils';
 
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+type SlotKey = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT';
 
 const DAY_KEY_MAP: DayKey[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+const SLOT_META: Record<SlotKey, { label: string; startHour: number; endHour: number }> = {
+  MORNING:   { label: 'Morning (6 AM–12 PM)',   startHour: 6,  endHour: 12 },
+  AFTERNOON: { label: 'Afternoon (12–5 PM)', startHour: 12, endHour: 17 },
+  EVENING:   { label: 'Evening (5–9 PM)',   startHour: 17, endHour: 21 },
+  NIGHT:     { label: 'Night (9 PM–12 AM)',     startHour: 21, endHour: 24 },
+};
+
+/** Generate hour options within available slots for a given date */
+function getAvailableHours(
+  dateStr: string,
+  weeklyAvailability: Record<string, string[]> | undefined,
+): number[] {
+  if (!dateStr || !weeklyAvailability) return [];
+  const d = new Date(dateStr);
+  const dayKey = DAY_KEY_MAP[d.getDay()];
+  const slots = (weeklyAvailability[dayKey] ?? []) as SlotKey[];
+  const hours: number[] = [];
+  for (const slot of slots) {
+    const meta = SLOT_META[slot];
+    if (!meta) continue;
+    for (let h = meta.startHour; h < meta.endHour; h++) {
+      hours.push(h);
+    }
+  }
+  return hours;
+}
+
+function formatHour(h: number): string {
+  const period = h >= 12 ? 'PM' : 'AM';
+  const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${display}:00 ${period}`;
+}
 
 function generateAvailableDates(
   weeklyAvailability: Record<string, string[]> | undefined,
@@ -60,8 +94,14 @@ export function BookingForm({
     [weeklyAvailability, availability]
   );
   const [date, setDate] = useState('');
+  const [startHour, setStartHour] = useState<number | ''>('');
   const [duration, setDuration] = useState(2);
   const [notes, setNotes] = useState('');
+
+  const availableHours = useMemo(
+    () => getAvailableHours(date, weeklyAvailability),
+    [date, weeklyAvailability]
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -78,8 +118,20 @@ export function BookingForm({
       toast.error('Please accept the terms and conditions');
       return;
     }
+    if (availableHours.length > 0 && startHour === '') {
+      setError('Please select a start time for the meeting.');
+      toast.error('Please select a start time');
+      return;
+    }
     setError('');
     setLoading(true);
+
+    // Build full datetime: date string + selected hour (or midnight if no slots)
+    let bookingDate = date;
+    if (startHour !== '') {
+      const h = String(startHour).padStart(2, '0');
+      bookingDate = `${date}T${h}:00:00`;
+    }
 
     try {
       const res = await fetch('/api/bookings', {
@@ -87,7 +139,7 @@ export function BookingForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           companionId,
-          date,
+          date: bookingDate,
           duration,
           notes,
         }),
@@ -132,7 +184,7 @@ export function BookingForm({
               </label>
               <select
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(e) => { setDate(e.target.value); setStartHour(''); }}
                 required
                 className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold"
               >
@@ -149,6 +201,25 @@ export function BookingForm({
                 ))}
               </select>
             </div>
+
+            {date && availableHours.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Start Time
+                </label>
+                <select
+                  value={startHour}
+                  onChange={(e) => setStartHour(e.target.value === '' ? '' : parseInt(e.target.value))}
+                  required
+                  className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gold"
+                >
+                  <option value="">Select a time</option>
+                  {availableHours.map((h) => (
+                    <option key={h} value={h}>{formatHour(h)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-white/80 mb-2">

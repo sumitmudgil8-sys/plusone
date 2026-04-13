@@ -61,8 +61,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const sessionEnd = new Date(scheduledAt.getTime() + duration * 60 * 1000);
+
     // Parallel lookups
-    const [companion, block, existingScheduled] = await Promise.all([
+    const [companion, block, clientOverlap, companionOverlap, companionBookings] = await Promise.all([
       prisma.user.findUnique({
         where: { id: companionId, role: 'COMPANION', isActive: true, isBanned: false },
         include: { companionProfile: { select: { chatRatePerMinute: true, hourlyRate: true, name: true } } },
@@ -70,16 +72,40 @@ export async function POST(request: NextRequest) {
       prisma.blockedUser.findUnique({
         where: { companionId_clientId: { companionId, clientId: user.id } },
       }),
-      // Check for overlapping scheduled sessions (within 30 min of requested time)
+      // Client-side overlap: does this CLIENT already have a session overlapping this window?
       prisma.scheduledSession.findFirst({
         where: {
           clientId: user.id,
-          status: 'BOOKED',
+          status: { in: ['BOOKED', 'ACTIVE'] },
           scheduledAt: {
             gte: new Date(scheduledAt.getTime() - 30 * 60 * 1000),
             lte: new Date(scheduledAt.getTime() + 30 * 60 * 1000),
           },
         },
+      }),
+      // Companion-side overlap: does this COMPANION already have a session overlapping?
+      prisma.scheduledSession.findFirst({
+        where: {
+          companionId,
+          status: { in: ['BOOKED', 'ACTIVE'] },
+          scheduledAt: {
+            gte: new Date(scheduledAt.getTime() - 30 * 60 * 1000),
+            lte: new Date(scheduledAt.getTime() + 30 * 60 * 1000),
+          },
+        },
+      }),
+      // Companion's offline bookings on the same day (PENDING/CONFIRMED take priority)
+      prisma.booking.findMany({
+        where: {
+          companionId,
+          status: { in: ['PENDING', 'CONFIRMED'] },
+          date: {
+            // Bookings on the same day — fetch a 2-day window to cover timezone edge cases
+            gte: new Date(scheduledAt.getTime() - 24 * 60 * 60 * 1000),
+            lte: new Date(scheduledAt.getTime() + 24 * 60 * 60 * 1000),
+          },
+        },
+        select: { date: true, duration: true },
       }),
     ]);
 
@@ -97,11 +123,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (existingScheduled) {
+    if (clientOverlap) {
       return NextResponse.json(
         { success: false, error: 'You already have a session scheduled around this time' },
         { status: 409 }
       );
+    }
+
+    if (companionOverlap) {
+      return NextResponse.json(
+        { success: false, error: 'This companion already has a session at this time. Please pick a different slot.' },
+        { status: 409 }
+      );
+    }
+
+    // Check if any offline booking overlaps the chat session window.
+    // Offline bookings are more important — if a companion has an in-person
+    // meeting that overlaps, reject the chat booking.
+    for (const booking of companionBookings) {
+      const bookingStart = booking.date.getTime();
+      const bookingEnd = bookingStart + booking.duration * 60 * 60 * 1000;
+      // Overlap: session starts before booking ends AND session ends after booking starts
+      if (scheduledAt.getTime() < bookingEnd && sessionEnd.getTime() > bookingStart) {
+        return NextResponse.json(
+          { success: false, error: 'This companion has an in-person booking during this time. Please pick a different slot.' },
+          { status: 409 }
+        );
+      }
     }
 
     // Calculate costs

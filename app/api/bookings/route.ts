@@ -217,6 +217,67 @@ export async function POST(request: NextRequest) {
     const depositAmount = Math.ceil((totalAmount * DEPOSIT_PERCENTAGE) / 100);
     const companionDisplayName = companion.companionProfile.name;
 
+    // --- Overlap prevention ---
+    // Check if companion has existing offline bookings at the same time
+    const bookingStart = bookingDate.getTime();
+    const bookingDurationHours = parseInt(duration);
+    const bookingEnd = bookingStart + bookingDurationHours * 60 * 60 * 1000;
+
+    const [existingBookings, scheduledSessions] = await Promise.all([
+      // Other offline bookings for this companion that could overlap
+      prisma.booking.findFirst({
+        where: {
+          companionId,
+          status: { in: ['PENDING', 'CONFIRMED'] },
+          date: {
+            gte: new Date(bookingStart - 8 * 60 * 60 * 1000), // max 8h prior booking could overlap
+            lte: new Date(bookingEnd),
+          },
+        },
+        select: { date: true, duration: true },
+      }),
+      // Scheduled chat sessions for this companion in the booking window
+      prisma.scheduledSession.findMany({
+        where: {
+          companionId,
+          status: 'BOOKED',
+          scheduledAt: {
+            gte: new Date(bookingStart),
+            lt: new Date(bookingEnd),
+          },
+        },
+        select: { id: true, scheduledAt: true, duration: true },
+      }),
+    ]);
+
+    // Check offline booking overlap
+    if (existingBookings) {
+      const existStart = existingBookings.date.getTime();
+      const existEnd = existStart + existingBookings.duration * 60 * 60 * 1000;
+      if (bookingStart < existEnd && bookingEnd > existStart) {
+        return NextResponse.json(
+          { error: 'This companion already has a booking during this time slot' },
+          { status: 409 }
+        );
+      }
+    }
+
+    // If scheduled chat sessions overlap, reject — client should reschedule
+    // Offline bookings take priority, but we don't auto-cancel chat sessions;
+    // we prevent the conflict from being created in the first place.
+    if (scheduledSessions.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'This companion has scheduled chat sessions during this time. Please pick a different time.',
+          conflicts: scheduledSessions.map((s) => ({
+            scheduledAt: s.scheduledAt.toISOString(),
+            duration: s.duration,
+          })),
+        },
+        { status: 409 }
+      );
+    }
+
     // Atomic: debit the hold AND create the booking in one transaction.
     // If either fails the wallet is untouched.
     try {
