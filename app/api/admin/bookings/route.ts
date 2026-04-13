@@ -22,10 +22,10 @@ export async function GET(request: NextRequest) {
       prisma.booking.findMany({
         include: {
           client: {
-            include: { clientProfile: true },
+            select: { id: true, email: true, clientProfile: { select: { name: true, avatarUrl: true } } },
           },
           companion: {
-            include: { companionProfile: true },
+            select: { id: true, email: true, companionProfile: { select: { name: true, avatarUrl: true } } },
           },
         },
         orderBy: { createdAt: 'desc' },

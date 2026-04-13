@@ -89,18 +89,30 @@ export async function GET(request: NextRequest) {
     }
 
     // Privacy gate: hide companions who have explicitly REJECTED this client.
-    // Companions with no visibility row (not yet reviewed) or APPROVED are shown.
+    // Push rejection filter into the DB query (avoids extra round-trip + client-side filter).
     const rejectedByCompanionIds = await prisma.clientVisibility.findMany({
       where: { clientId: user.id, status: 'REJECTED' },
       select: { companionId: true },
     });
-    const rejectedSet = new Set(rejectedByCompanionIds.map((r) => r.companionId));
+    const rejectedIds = rejectedByCompanionIds.map((r) => r.companionId);
+    if (rejectedIds.length > 0) {
+      whereClause.id = { notIn: rejectedIds };
+    }
 
     const companions = await prisma.user.findMany({
       where: whereClause,
-      include: {
+      select: {
+        id: true,
         companionProfile: {
-          include: {
+          select: {
+            name: true, bio: true, tagline: true, avatarUrl: true,
+            hourlyRate: true, chatRatePerMinute: true, callRatePerMinute: true,
+            isApproved: true, isVerified: true, averageRating: true, reviewCount: true,
+            lat: true, lng: true, availability: true, availabilityStatus: true,
+            gender: true, age: true, city: true,
+            languages: true, interests: true, tags: true, personalityTags: true,
+            weeklyAvailability: true, availableNow: true, rankingScore: true,
+            audioIntroUrl: true, images: true,
             badges: {
               where: { isActive: true },
               select: { type: true },
@@ -110,15 +122,15 @@ export async function GET(request: NextRequest) {
         companionImages: {
           where: { isPrimary: true },
           take: 1,
+          select: { imageUrl: true },
         },
-        favorites: {
-          where: { clientId: user.id },
+        _count: {
+          select: { favorites: { where: { clientId: user.id } } },
         },
       },
     });
 
-    // Remove companions who rejected this client
-    const visibleCompanions = companions.filter((c) => !rejectedSet.has(c.id));
+    const visibleCompanions = companions;
 
     let companionsWithDistance = visibleCompanions
       .filter((c) => c.companionProfile)
@@ -162,7 +174,7 @@ export async function GET(request: NextRequest) {
           audioIntroUrl: profile.audioIntroUrl,
           badges: profile.badges.map((b: { type: string }) => b.type),
           distance,
-          isFavorited: companion.favorites.length > 0,
+          isFavorited: companion._count.favorites > 0,
         };
       });
 

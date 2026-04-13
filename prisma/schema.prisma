@@ -112,6 +112,8 @@ model User {
   companionScheduledSessions  ScheduledSession[]    @relation("CompanionScheduledSessions")
 
   @@index([role, isActive, isBanned])
+  @@index([isOnline])                     // auto-offline checks, presence queries
+  @@index([createdAt])                    // "new companions" section sorting
 }
 
 model ClientProfile {
@@ -384,6 +386,7 @@ model WalletTransaction {
   createdAt    DateTime @default(now())
 
   @@index([walletId, createdAt])
+  @@index([walletId, type, createdAt])    // earnings breakdown by type
 }
 
 model CompanionImage {
@@ -439,6 +442,7 @@ model CompanionProfileView {
 
   @@index([clientId, companionId])
   @@index([clientId, viewedAt])
+  @@index([companionId, viewedAt])        // companion analytics queries
 }
 
 model SetuPayment {

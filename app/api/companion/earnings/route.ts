@@ -109,20 +109,18 @@ export async function GET(request: NextRequest) {
       where: { companionId, status: 'ENDED' },
       orderBy: { endedAt: 'desc' },
       take: 20,
-      include: {
-        client: {
-          include: { clientProfile: true },
-        },
+      select: {
+        type: true, companionShare: true, endedAt: true, createdAt: true, totalMinutes: true,
+        client: { select: { clientProfile: { select: { name: true } } } },
       },
     }),
     prisma.booking.findMany({
       where: { companionId, status: 'COMPLETED' },
       orderBy: { updatedAt: 'desc' },
       take: 20,
-      include: {
-        client: {
-          include: { clientProfile: true },
-        },
+      select: {
+        totalAmount: true, updatedAt: true,
+        client: { select: { clientProfile: { select: { name: true } } } },
       },
     }),
     prisma.billingSession.findMany({

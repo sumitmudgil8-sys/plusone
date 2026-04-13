@@ -156,7 +156,18 @@ export async function recomputeAllRankings(): Promise<{ updated: number }> {
   });
   const sessionCountMap = new Map(sessionCounts.map((s) => [s.companionId, s._count.id]));
 
-  let updated = 0;
+  // Pre-fetch all existing badges in one query (avoids N+1 per companion × 4 badge types)
+  const allBadges = await prisma.companionBadge.findMany({
+    where: { companionId: { in: companions.map((c) => c.userId) } },
+  });
+  const badgeMap = new Map<string, typeof allBadges[number]>();
+  for (const b of allBadges) {
+    badgeMap.set(`${b.companionId}:${b.type}`, b);
+  }
+
+  // Collect all mutations, then execute in a single transaction
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ops: any[] = [];
 
   for (const cp of companions) {
     const totalSessions = sessionCountMap.get(cp.userId) ?? 0;
@@ -182,40 +193,46 @@ export async function recomputeAllRankings(): Promise<{ updated: number }> {
       createdAt: cp.user.createdAt,
     });
 
-    // Update ranking score
-    await prisma.companionProfile.update({
-      where: { userId: cp.userId },
-      data: { rankingScore: Math.round(score * 100) / 100 },
-    });
+    // Queue ranking score update
+    ops.push(
+      prisma.companionProfile.update({
+        where: { userId: cp.userId },
+        data: { rankingScore: Math.round(score * 100) / 100 },
+      })
+    );
 
-    // Upsert badges
+    // Queue badge mutations (no extra findUnique — we already have them)
     for (const badge of badgeResults) {
-      const existing = await prisma.companionBadge.findUnique({
-        where: { companionId_type: { companionId: cp.userId, type: badge.type } },
-      });
+      const existing = badgeMap.get(`${cp.userId}:${badge.type}`);
 
       if (badge.eligible && !existing) {
-        // Earned new badge
-        await prisma.companionBadge.create({
-          data: { companionId: cp.userId, type: badge.type, isActive: true },
-        });
+        ops.push(
+          prisma.companionBadge.create({
+            data: { companionId: cp.userId, type: badge.type, isActive: true },
+          })
+        );
       } else if (badge.eligible && existing && !existing.isActive) {
-        // Re-earned lost badge
-        await prisma.companionBadge.update({
-          where: { id: existing.id },
-          data: { isActive: true, lostAt: null, earnedAt: new Date() },
-        });
+        ops.push(
+          prisma.companionBadge.update({
+            where: { id: existing.id },
+            data: { isActive: true, lostAt: null, earnedAt: new Date() },
+          })
+        );
       } else if (!badge.eligible && existing?.isActive) {
-        // Lost badge
-        await prisma.companionBadge.update({
-          where: { id: existing.id },
-          data: { isActive: false, lostAt: new Date() },
-        });
+        ops.push(
+          prisma.companionBadge.update({
+            where: { id: existing.id },
+            data: { isActive: false, lostAt: new Date() },
+          })
+        );
       }
     }
-
-    updated++;
   }
 
-  return { updated };
+  // Execute all score updates and badge mutations in one transaction
+  if (ops.length > 0) {
+    await prisma.$transaction(ops);
+  }
+
+  return { updated: companions.length };
 }

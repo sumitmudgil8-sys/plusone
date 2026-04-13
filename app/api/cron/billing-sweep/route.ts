@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
     let ended = 0;
     let charged = 0;
 
-    for (const session of staleSessions) {
+    // Process sessions in parallel (each involves different users)
+    const results = await Promise.allSettled(staleSessions.map(async (session) => {
       // Calculate uncharged minutes since lastTickAt
       const elapsedSinceLastTick = Math.floor(
         (staleThreshold.getTime() - session.lastTickAt.getTime()) / 60_000
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       const unchargedMinutes = Math.max(0, elapsedSinceLastTick);
 
       // Charge for uncharged complete minutes (best-effort — skip if insufficient balance)
+      let minutesCharged = 0;
       if (unchargedMinutes > 0) {
         const companionEarning = getCompanionRatePerMinute(session.ratePerMinute);
         for (let i = 0; i < unchargedMinutes; i++) {
@@ -58,7 +60,7 @@ export async function POST(request: NextRequest) {
               { sessionId: session.id },
               'EARNING'
             );
-            charged++;
+            minutesCharged++;
           } catch {
             // Insufficient balance or wallet not found — stop charging
             break;
@@ -66,25 +68,25 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // End the session
-      const endedSession = await prisma.billingSession.update({
-        where: { id: session.id },
-        data: {
-          status: 'ENDED',
-          endedAt: new Date(),
-          totalMinutes: session.totalMinutes + unchargedMinutes,
-          durationSeconds: session.durationSeconds + unchargedMinutes * 60,
-          totalCharged: session.totalCharged + unchargedMinutes * session.ratePerMinute,
-          companionShare:
-            session.companionShare + unchargedMinutes * getCompanionRatePerMinute(session.ratePerMinute),
-        },
-      });
-
-      // Update companion's lastSessionAt for ranking
-      await prisma.companionProfile.update({
-        where: { userId: session.companionId },
-        data: { lastSessionAt: new Date() },
-      }).catch(() => {}); // non-fatal
+      // End session + update companion profile in parallel
+      const [endedSession] = await Promise.all([
+        prisma.billingSession.update({
+          where: { id: session.id },
+          data: {
+            status: 'ENDED',
+            endedAt: new Date(),
+            totalMinutes: session.totalMinutes + minutesCharged,
+            durationSeconds: session.durationSeconds + minutesCharged * 60,
+            totalCharged: session.totalCharged + minutesCharged * session.ratePerMinute,
+            companionShare:
+              session.companionShare + minutesCharged * getCompanionRatePerMinute(session.ratePerMinute),
+          },
+        }),
+        prisma.companionProfile.update({
+          where: { userId: session.companionId },
+          data: { lastSessionAt: new Date() },
+        }).catch(() => {}), // non-fatal
+      ]);
 
       // Notify both parties via Ably
       try {
@@ -102,7 +104,14 @@ export async function POST(request: NextRequest) {
         // non-fatal
       }
 
-      ended++;
+      return minutesCharged;
+    }));
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        ended++;
+        charged += result.value;
+      }
     }
 
     return NextResponse.json({
