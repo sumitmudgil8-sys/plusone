@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
       role: user.role,
       isTemporaryPassword: user.isTemporaryPassword,
       ...(user.role === 'CLIENT' && { clientStatus: user.clientStatus }),
+      ...(user.role === 'COMPANION' && { hasCompletedOnboarding: user.hasCompletedOnboarding }),
     };
 
     const token = signJWT(jwtPayload);

@@ -67,8 +67,9 @@ model User {
   setuOkycRefId    String?               // Setu OKYC verification reference ID
 
   // Companion fields
-  isTemporaryPassword Boolean            @default(false)
-  isOnline            Boolean            @default(false)
+  isTemporaryPassword    Boolean         @default(false)
+  hasCompletedOnboarding Boolean         @default(false)
+  isOnline               Boolean         @default(false)
 
   // Location fields
   latitude            Float?

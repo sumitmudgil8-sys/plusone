@@ -99,6 +99,20 @@ export function middleware(request: NextRequest) {
     );
   }
 
+  // ── Companion: force onboarding tour before dashboard access ────────────
+
+  if (
+    user.role === 'COMPANION' &&
+    user.hasCompletedOnboarding === false &&
+    pathname.startsWith('/companion') &&
+    pathname !== '/companion/onboarding-tour' &&
+    pathname !== '/companion/change-password'
+  ) {
+    return NextResponse.redirect(
+      new URL('/companion/onboarding-tour', request.url)
+    );
+  }
+
   return NextResponse.next();
 }
 

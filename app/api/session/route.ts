@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   // Re-fetch from DB so JWT always reflects the latest clientStatus
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { clientStatus: true, isTemporaryPassword: true, isActive: true, isBanned: true },
+    select: { clientStatus: true, isTemporaryPassword: true, hasCompletedOnboarding: true, isActive: true, isBanned: true },
   });
 
   if (!dbUser || !dbUser.isActive || dbUser.isBanned) {
@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     role: user.role,
     isTemporaryPassword: dbUser.isTemporaryPassword,
     ...(user.role === 'CLIENT' && { clientStatus: dbUser.clientStatus }),
+    ...(user.role === 'COMPANION' && { hasCompletedOnboarding: dbUser.hasCompletedOnboarding }),
   };
 
   const newToken = signJWT(jwtPayload);
@@ -79,6 +80,7 @@ export async function POST(request: NextRequest) {
     role: user.role,
     isTemporaryPassword: user.isTemporaryPassword,
     ...(user.role === 'CLIENT' && { clientStatus: user.clientStatus }),
+    ...(user.role === 'COMPANION' && { hasCompletedOnboarding: user.hasCompletedOnboarding }),
   };
 
   const newToken = signJWT(jwtPayload);

@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
     email: user.email,
     role: user.role,
     isTemporaryPassword: false,
+    ...(user.role === 'COMPANION' && { hasCompletedOnboarding: dbUser.hasCompletedOnboarding }),
   });
 
   const response = NextResponse.json({ success: true });

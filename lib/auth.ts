@@ -12,6 +12,7 @@ export interface JWTPayload {
   email: string;
   role: string;
   isTemporaryPassword?: boolean;
+  hasCompletedOnboarding?: boolean;
   clientStatus?: string; // 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' — only set for CLIENTs
   iat?: number;
   exp?: number;

@@ -138,7 +138,14 @@ export default function SignupPage() {
               label="LinkedIn Profile URL"
               type="url"
               value={form.linkedInUrl}
-              onChange={set('linkedInUrl')}
+              onChange={(e) => {
+                let val = e.target.value.trim();
+                // Auto-prepend https:// when user pastes a linkedin URL without protocol
+                if (val && !val.startsWith('http://') && !val.startsWith('https://') && val.includes('linkedin.com')) {
+                  val = 'https://' + val;
+                }
+                setForm((prev) => ({ ...prev, linkedInUrl: val }));
+              }}
               placeholder="https://linkedin.com/in/yourprofile"
               required
             />
