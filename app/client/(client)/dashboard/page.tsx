@@ -18,6 +18,7 @@ interface SectionsData {
   recentlyActive: SectionCompanion[];
   topRated: SectionCompanion[];
   newCompanions: SectionCompanion[];
+  allCompanions: SectionCompanion[];
 }
 
 type QuickFilter = 'all' | 'online' | 'new' | 'top';
@@ -84,6 +85,7 @@ export default function ClientHome() {
       ...sections.recentlyActive,
       ...sections.topRated,
       ...sections.newCompanions,
+      ...sections.allCompanions,
     ];
     // Deduplicate
     const seen = new Set<string>();
@@ -315,8 +317,20 @@ export default function ClientHome() {
             </section>
           )}
 
+          {/* All Companions — fallback section for offline companions */}
+          {(sections?.allCompanions.length ?? 0) > 0 && (
+            <section>
+              <SectionHeader title="All Companions" href="/client/browse" />
+              <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
+                {sections!.allCompanions.map((c) => (
+                  <CompanionCard key={c.id} companion={c} />
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Empty state — no one online */}
-          {!hasAvailableNow && (sections?.recentlyActive.length ?? 0) === 0 && (
+          {!hasAvailableNow && (sections?.recentlyActive.length ?? 0) === 0 && (sections?.allCompanions.length ?? 0) === 0 && (
             <section className="text-center py-10">
               <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-white/[0.04] flex items-center justify-center">
                 <svg className="w-7 h-7 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">

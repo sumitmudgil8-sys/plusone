@@ -141,11 +141,11 @@ export async function GET(request: NextRequest) {
       id: rejectedSet.size > 0 ? { notIn: Array.from(rejectedSet) } : undefined,
     };
 
-    // Fetch all four sections in parallel
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60_000);
+    // Fetch all five sections in parallel
+    const seventyTwoHoursAgo = new Date(Date.now() - 72 * 60 * 60_000);
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60_000);
 
-    const [availableNowRaw, recentlyActiveRaw, topRatedRaw, newCompanionsRaw] = await Promise.all([
+    const [availableNowRaw, recentlyActiveRaw, topRatedRaw, newCompanionsRaw, allCompanionsRaw] = await Promise.all([
       // Available Now — online, sorted by ranking
       prisma.user.findMany({
         where: {
@@ -156,19 +156,19 @@ export async function GET(request: NextRequest) {
         orderBy: { companionProfile: { rankingScore: 'desc' } },
         take: 20,
       }),
-      // Recently Active — had session in last 2h, not currently online
+      // Recently Active — had session in last 72h, not currently online
       prisma.user.findMany({
         where: {
           ...baseWhere,
           companionProfile: {
             ...baseWhere.companionProfile,
             availableNow: false,
-            lastSessionAt: { gte: twoHoursAgo },
+            lastSessionAt: { gte: seventyTwoHoursAgo },
           },
         },
         select: companionCardSelect,
         orderBy: { companionProfile: { lastSessionAt: 'desc' } },
-        take: 10,
+        take: 20,
       }),
       // Top Rated — highest quality, regardless of availability
       prisma.user.findMany({
@@ -190,6 +190,16 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         take: 10,
       }),
+      // All Companions — sorted by ranking, fallback section
+      prisma.user.findMany({
+        where: {
+          ...baseWhere,
+          companionProfile: { ...baseWhere.companionProfile, availableNow: false },
+        },
+        select: companionCardSelect,
+        orderBy: { companionProfile: { rankingScore: 'desc' } },
+        take: 20,
+      }),
     ]);
 
     // Track global index for subscription gating across all sections
@@ -203,13 +213,30 @@ export async function GET(request: NextRequest) {
           return card;
         });
 
+    const availableNow = mapSection(availableNowRaw);
+    const recentlyActive = mapSection(recentlyActiveRaw);
+    const topRated = isSubscribed ? mapSection(topRatedRaw) : [];
+    const newCompanions = isSubscribed ? mapSection(newCompanionsRaw) : [];
+
+    // Deduplicate allCompanions — exclude IDs already shown in other sections
+    const shownIds = new Set([
+      ...availableNow.map((c) => c.id),
+      ...recentlyActive.map((c) => c.id),
+      ...topRated.map((c) => c.id),
+      ...newCompanions.map((c) => c.id),
+    ]);
+    const allCompanions = mapSection(
+      allCompanionsRaw.filter((c) => !shownIds.has(c.id))
+    );
+
     const response = NextResponse.json({
       success: true,
       data: {
-        availableNow: mapSection(availableNowRaw),
-        recentlyActive: mapSection(recentlyActiveRaw),
-        topRated: isSubscribed ? mapSection(topRatedRaw) : [],
-        newCompanions: isSubscribed ? mapSection(newCompanionsRaw) : [],
+        availableNow,
+        recentlyActive,
+        topRated,
+        newCompanions,
+        allCompanions,
       },
       isSubscribed,
     });
