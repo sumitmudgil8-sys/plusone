@@ -14,44 +14,43 @@ interface PlaceResult {
 }
 
 /**
- * GET /api/venues/search?q=cafe+near+connaught+place&lat=28.63&lng=77.21
+ * GET /api/venues/search?location=Connaught+Place+Delhi
  *
- * Proxies to Google Places Text Search so the API key stays server-side.
- * Returns up to 5 restaurant/cafe results.
+ * Client enters a location (area/landmark/address). We search for
+ * restaurants and cafes near that location via Google Places Text Search.
+ * The API key stays server-side.
+ *
+ * Returns up to 8 restaurant/cafe results near the given location.
  */
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request, ['CLIENT']);
   if (auth.user === null) return auth.response;
 
   const { searchParams } = new URL(request.url);
-  const query = searchParams.get('q')?.trim();
-  const lat = parseFloat(searchParams.get('lat') || '28.6139');
-  const lng = parseFloat(searchParams.get('lng') || '77.2090');
+  const location = searchParams.get('location')?.trim();
 
-  if (!query || query.length < 2) {
+  if (!location || location.length < 2) {
     return NextResponse.json({ success: true, data: [] });
   }
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) {
-    // Fallback: return empty results if Google Places is not configured
     return NextResponse.json({
       success: true,
       data: [],
-      message: 'Venue search is not configured. You can type the venue name manually.',
+      message: 'Venue search is not configured. Add GOOGLE_PLACES_API_KEY to enable.',
     });
   }
 
   try {
+    // Text Search automatically geocodes the location and finds nearby places
     const url = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
-    url.searchParams.set('query', `${query} restaurant OR cafe`);
-    url.searchParams.set('location', `${lat},${lng}`);
-    url.searchParams.set('radius', '10000'); // 10 km
-    url.searchParams.set('type', 'restaurant|cafe');
+    url.searchParams.set('query', `restaurants and cafes near ${location}`);
+    url.searchParams.set('type', 'restaurant');
     url.searchParams.set('key', apiKey);
     url.searchParams.set('region', 'in');
 
-    const res = await fetch(url.toString(), { next: { revalidate: 300 } }); // cache 5 min
+    const res = await fetch(url.toString(), { next: { revalidate: 300 } });
     const data = await res.json();
 
     if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
@@ -59,7 +58,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    const places: PlaceResult[] = (data.results ?? []).slice(0, 5).map((p: Record<string, unknown>) => ({
+    const places: PlaceResult[] = (data.results ?? []).slice(0, 8).map((p: Record<string, unknown>) => ({
       id: p.place_id as string,
       name: p.name as string,
       address: p.formatted_address as string,

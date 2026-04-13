@@ -140,13 +140,12 @@ export function BookingForm({
   const [duration, setDuration] = useState(2);
   const [notes, setNotes] = useState('');
 
-  // Venue search
-  const [venueQuery, setVenueQuery] = useState('');
+  // Venue search — location-first flow
+  const [locationQuery, setLocationQuery] = useState('');
   const [venueResults, setVenueResults] = useState<VenueResult[]>([]);
   const [venueLoading, setVenueLoading] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState<SelectedVenue | null>(null);
-  const [showVenueResults, setShowVenueResults] = useState(false);
-  const venueDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const [venueSearched, setVenueSearched] = useState(false);
   const venueWrapperRef = useRef<HTMLDivElement>(null);
 
   const availableHours = useMemo(
@@ -177,33 +176,25 @@ export function BookingForm({
     });
   };
 
-  // Venue search with debounce
-  const searchVenues = useCallback(async (query: string) => {
-    if (query.length < 2) {
-      setVenueResults([]);
-      return;
-    }
+  // Search restaurants near the entered location
+  const searchNearbyVenues = useCallback(async () => {
+    if (locationQuery.length < 2) return;
     setVenueLoading(true);
+    setVenueSearched(false);
+    setSelectedVenue(null);
     try {
-      const res = await fetch(`/api/venues/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/venues/search?location=${encodeURIComponent(locationQuery)}`);
       const data = await res.json();
       if (data.success) {
         setVenueResults(data.data ?? []);
-        setShowVenueResults(true);
       }
     } catch {
       // non-fatal
     } finally {
       setVenueLoading(false);
+      setVenueSearched(true);
     }
-  }, []);
-
-  const handleVenueInput = (value: string) => {
-    setVenueQuery(value);
-    setSelectedVenue(null);
-    if (venueDebounceRef.current) clearTimeout(venueDebounceRef.current);
-    venueDebounceRef.current = setTimeout(() => searchVenues(value), 400);
-  };
+  }, [locationQuery]);
 
   const selectVenue = (venue: VenueResult) => {
     setSelectedVenue({
@@ -212,20 +203,7 @@ export function BookingForm({
       lat: venue.lat,
       lng: venue.lng,
     });
-    setVenueQuery(venue.name);
-    setShowVenueResults(false);
   };
-
-  // Close venue dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (venueWrapperRef.current && !venueWrapperRef.current.contains(e.target as Node)) {
-        setShowVenueResults(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -263,7 +241,7 @@ export function BookingForm({
           date: bookingDate,
           duration,
           notes,
-          venueName: selectedVenue?.name || venueQuery || undefined,
+          venueName: selectedVenue?.name || undefined,
           venueAddress: selectedVenue?.address || undefined,
           venueLat: selectedVenue?.lat || undefined,
           venueLng: selectedVenue?.lng || undefined,
@@ -446,34 +424,53 @@ export function BookingForm({
               </div>
             </div>
 
-            {/* Venue Search */}
-            <div ref={venueWrapperRef} className="relative">
+            {/* Venue Search — enter location, see nearby restaurants */}
+            <div ref={venueWrapperRef}>
               <label className="block text-sm font-medium text-white/80 mb-2">
                 Meeting Venue
               </label>
-              <div className="relative">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <input
-                  type="text"
-                  value={venueQuery}
-                  onChange={(e) => handleVenueInput(e.target.value)}
-                  onFocus={() => { if (venueResults.length > 0) setShowVenueResults(true); }}
-                  placeholder="Search for a restaurant or cafe..."
-                  className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gold placeholder:text-white/30"
-                />
-                {venueLoading && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <p className="text-[10px] text-white/30 mb-2">
+                Enter a location or area to find nearby restaurants and cafes
+              </p>
+
+              {/* Location input + search button */}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={locationQuery}
+                    onChange={(e) => { setLocationQuery(e.target.value); setVenueSearched(false); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); searchNearbyVenues(); } }}
+                    placeholder="e.g. Connaught Place, Delhi"
+                    className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gold placeholder:text-white/30"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={searchNearbyVenues}
+                  disabled={locationQuery.length < 2 || venueLoading}
+                  className="px-4 py-3 rounded-lg bg-gold/10 border border-gold/30 text-gold text-sm font-medium hover:bg-gold/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                >
+                  {venueLoading ? (
                     <div className="animate-spin h-4 w-4 border-2 border-gold border-t-transparent rounded-full" />
-                  </div>
-                )}
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  )}
+                </button>
               </div>
 
-              {/* Venue results dropdown */}
-              {showVenueResults && venueResults.length > 0 && (
-                <div className="absolute z-20 w-full mt-1 bg-charcoal-surface border border-charcoal-border rounded-xl shadow-xl overflow-hidden">
+              {/* Nearby restaurant results */}
+              {venueSearched && venueResults.length > 0 && !selectedVenue && (
+                <div className="mt-3 border border-white/[0.06] rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                  <p className="text-[10px] text-white/40 px-3 py-2 bg-white/[0.02] border-b border-white/[0.04]">
+                    {venueResults.length} restaurants found near {locationQuery}
+                  </p>
                   {venueResults.map((venue) => (
                     <button
                       key={venue.id}
@@ -486,7 +483,7 @@ export function BookingForm({
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="text-sm text-white font-medium truncate">{venue.name}</p>
                           <p className="text-xs text-white/40 truncate">{venue.address}</p>
                           {venue.rating && (
@@ -504,9 +501,17 @@ export function BookingForm({
                 </div>
               )}
 
+              {/* No results */}
+              {venueSearched && venueResults.length === 0 && !selectedVenue && (
+                <div className="mt-3 bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
+                  <p className="text-xs text-white/40">No restaurants found near this location</p>
+                  <p className="text-[10px] text-white/25 mt-1">Try a different area or landmark</p>
+                </div>
+              )}
+
               {/* Selected venue badge */}
               {selectedVenue && (
-                <div className="mt-2 flex items-center gap-2 bg-gold/5 border border-gold/15 rounded-lg px-3 py-2">
+                <div className="mt-3 flex items-center gap-2 bg-gold/5 border border-gold/15 rounded-lg px-3 py-2">
                   <svg className="w-4 h-4 text-gold shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
@@ -516,7 +521,7 @@ export function BookingForm({
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setSelectedVenue(null); setVenueQuery(''); }}
+                    onClick={() => { setSelectedVenue(null); setVenueResults([]); setVenueSearched(false); }}
                     className="text-white/40 hover:text-white/60 shrink-0"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -525,10 +530,6 @@ export function BookingForm({
                   </button>
                 </div>
               )}
-
-              <p className="text-[10px] text-white/30 mt-1.5">
-                Search for a public restaurant or cafe for your meeting
-              </p>
             </div>
 
             <div>
