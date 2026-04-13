@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
           rejectionReason: true,
           createdAt: true,
           isBanned: true,
-          clientProfile: { select: { name: true, avatarUrl: true } },
+          clientProfile: { select: { name: true, avatarUrl: true, dateOfBirth: true, govtIdUrl: true } },
         },
       }),
       prisma.user.count({ where }),

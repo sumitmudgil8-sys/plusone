@@ -115,9 +115,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (uploadType === 'document' && user.role !== 'COMPANION') {
+  if (uploadType === 'document' && user.role !== 'COMPANION' && user.role !== 'CLIENT') {
     return NextResponse.json(
-      { success: false, error: 'Only companions can upload verification documents' },
+      { success: false, error: 'Only companions and clients can upload verification documents' },
       { status: 403 }
     );
   }

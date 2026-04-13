@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { hashPassword } from '@/lib/auth';
+import { hashPassword, signJWT, setAuthCookie } from '@/lib/auth';
 import { signupLimiter, getClientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -19,14 +19,20 @@ const signupSchema = z.object({
     .refine((url) => url.includes('linkedin.com'), {
       message: 'Must be a LinkedIn profile URL (linkedin.com)',
     }),
+  dateOfBirth: z.string().refine((val) => {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return false;
+    // Must be at least 18 years old
+    const age = (Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000);
+    return age >= 18;
+  }, { message: 'You must be at least 18 years old' }),
 });
 
 // POST /api/auth/signup
 // Creates a client account with PENDING_REVIEW status.
-// Does NOT issue a JWT — the client must log in manually after signup.
+// Issues a JWT so the user can immediately proceed to ID upload.
 export async function POST(request: NextRequest) {
   try {
-    // Rate limit by IP to prevent mass account creation. See lib/rate-limit.ts.
     const ip = getClientIp(request);
     const rl = signupLimiter.check(`signup:${ip}`);
     if (!rl.ok) {
@@ -46,9 +52,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, email, phone, password, linkedInUrl } = parsed.data;
+    const { name, email, phone, password, linkedInUrl, dateOfBirth } = parsed.data;
 
-    // Check for existing account
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return NextResponse.json(
@@ -60,8 +65,8 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hashPassword(password);
 
     // Create User (PENDING_REVIEW) + ClientProfile + empty Wallet atomically
-    await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
+    const user = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({
         data: {
           email,
           passwordHash,
@@ -72,6 +77,7 @@ export async function POST(request: NextRequest) {
           clientProfile: {
             create: {
               name,
+              dateOfBirth: new Date(dateOfBirth),
               bio: '',
               lat: 28.6139,
               lng: 77.209,
@@ -80,16 +86,28 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Pre-create wallet so it's ready when the client is approved
       await tx.wallet.create({
-        data: { userId: user.id, balance: 0 },
+        data: { userId: u.id, balance: 0 },
       });
+
+      return u;
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Application submitted. We will review and email you within 24–48 hours.',
+    // Issue JWT so user can proceed to ID upload without logging in
+    const token = signJWT({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      isTemporaryPassword: false,
+      clientStatus: 'PENDING_REVIEW',
     });
+
+    const response = NextResponse.json({
+      success: true,
+      message: 'Account created. Please upload your government ID.',
+    });
+
+    return setAuthCookie(response, token);
   } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(

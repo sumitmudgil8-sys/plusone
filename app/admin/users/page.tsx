@@ -23,7 +23,12 @@ interface Client {
   setuOkycRefId: string | null;
   rejectionReason: string | null;
   createdAt: string;
-  clientProfile: { name: string | null; avatarUrl: string | null } | null;
+  clientProfile: {
+    name: string | null;
+    avatarUrl: string | null;
+    dateOfBirth: string | null;
+    govtIdUrl: string | null;
+  } | null;
 }
 
 // ─── Sub-tab definitions ─────────────────────────────────────────
@@ -126,6 +131,9 @@ function ClientsSection() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [rejectModal, setRejectModal] = useState<{ clientId: string; name: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [infoModal, setInfoModal] = useState<{ clientId: string; name: string } | null>(null);
+  const [infoRequest, setInfoRequest] = useState('');
+  const [govtIdModal, setGovtIdModal] = useState<string | null>(null);
 
   const fetchClients = useCallback(async (status: ClientStatus) => {
     setLoading(true);
@@ -195,10 +203,38 @@ function ClientsSection() {
     }
   };
 
-  const okycLabel = (refId: string | null) => {
-    if (!refId) return { text: 'Not started', cls: 'text-white/30' };
-    if (refId.endsWith(':verified')) return { text: 'Verified', cls: 'text-green-400' };
-    return { text: 'Initiated', cls: 'text-gold' };
+  const handleRequestInfoConfirm = async () => {
+    if (!infoModal || infoRequest.trim().length < 10) return;
+    setActionLoading(infoModal.clientId);
+    try {
+      const res = await fetch(`/api/admin/clients/${infoModal.clientId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'request_info', reason: infoRequest }),
+      });
+      if (res.ok) {
+        toast.success('Info request sent');
+        setInfoModal(null);
+        setInfoRequest('');
+        fetchClients(activeTab);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error ?? 'Failed to request info');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Network error — please try again');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const formatDob = (dob: string | null) => {
+    if (!dob) return null;
+    const d = new Date(dob);
+    if (isNaN(d.getTime())) return null;
+    const age = Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000));
+    return `${d.toLocaleDateString('en-IN')} (${age}y)`;
   };
 
   return (
@@ -239,7 +275,7 @@ function ClientsSection() {
           <div className="divide-y divide-charcoal-border">
             {clients.map((client) => {
               const name = client.clientProfile?.name ?? 'Unknown';
-              const okyc = okycLabel(client.setuOkycRefId);
+              const dob = formatDob(client.clientProfile?.dateOfBirth ?? null);
 
               return (
                 <div key={client.id} className="py-4 flex items-start gap-4">
@@ -256,6 +292,7 @@ function ClientsSection() {
                     <p className="text-sm text-white/50">{client.email}</p>
                     {client.phone && <p className="text-xs text-white/40">{client.phone}</p>}
                     <div className="flex items-center gap-4 text-xs mt-1 flex-wrap">
+                      {dob && <span className="text-white/50">DOB: {dob}</span>}
                       {client.linkedInUrl && (
                         <a
                           href={client.linkedInUrl}
@@ -266,7 +303,14 @@ function ClientsSection() {
                           LinkedIn ↗
                         </a>
                       )}
-                      <span className={okyc.cls}>OKYC: {okyc.text}</span>
+                      {client.clientProfile?.govtIdUrl && (
+                        <button
+                          onClick={() => setGovtIdModal(client.clientProfile!.govtIdUrl!)}
+                          className="text-gold hover:underline"
+                        >
+                          View Govt ID
+                        </button>
+                      )}
                       <span className="text-white/30">
                         Applied {new Date(client.createdAt).toLocaleDateString('en-IN')}
                       </span>
@@ -283,6 +327,14 @@ function ClientsSection() {
                         className="text-xs py-1.5 px-3"
                       >
                         Approve
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setInfoModal({ clientId: client.id, name })}
+                        disabled={actionLoading === client.id}
+                        className="text-xs py-1.5 px-3"
+                      >
+                        Ask Info
                       </Button>
                       <Button
                         variant="outline"
@@ -336,6 +388,85 @@ function ClientsSection() {
                 Confirm Rejection
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ask Info modal */}
+      {infoModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-charcoal-surface border border-charcoal-border rounded-xl p-6 w-full max-w-md space-y-4">
+            <h3 className="font-semibold text-white">Request Info from {infoModal.name}</h3>
+            <p className="text-sm text-white/60">
+              Specify what additional details are needed from this applicant.
+            </p>
+            <textarea
+              value={infoRequest}
+              onChange={(e) => setInfoRequest(e.target.value)}
+              rows={4}
+              placeholder="e.g. Please upload a clearer photo of your government ID — the text is not readable."
+              className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3 text-sm placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold"
+            />
+            {infoRequest.length > 0 && infoRequest.length < 10 && (
+              <p className="text-xs text-error">Request must be at least 10 characters</p>
+            )}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => { setInfoModal(null); setInfoRequest(''); }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRequestInfoConfirm}
+                isLoading={actionLoading === infoModal.clientId}
+                disabled={infoRequest.trim().length < 10}
+                className="flex-1"
+              >
+                Send Request
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Govt ID viewer modal */}
+      {govtIdModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={() => setGovtIdModal(null)}
+        >
+          <div
+            className="bg-charcoal-surface border border-charcoal-border rounded-xl p-4 max-w-lg w-full space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-white">Government ID</h3>
+              <button onClick={() => setGovtIdModal(null)} className="text-white/40 hover:text-white">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {govtIdModal.endsWith('.pdf') ? (
+              <div className="text-center py-8">
+                <a
+                  href={govtIdModal}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gold hover:underline"
+                >
+                  Open PDF in new tab ↗
+                </a>
+              </div>
+            ) : (
+              <img
+                src={govtIdModal}
+                alt="Government ID"
+                className="w-full rounded-lg border border-white/10"
+              />
+            )}
           </div>
         </div>
       )}

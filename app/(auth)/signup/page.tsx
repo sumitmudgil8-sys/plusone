@@ -16,6 +16,7 @@ export default function SignupPage() {
     email: '',
     phone: '',
     linkedInUrl: '',
+    dateOfBirth: '',
     password: '',
     confirmPassword: '',
   });
@@ -45,6 +46,7 @@ export default function SignupPage() {
           email: form.email,
           phone: form.phone,
           linkedInUrl: form.linkedInUrl,
+          dateOfBirth: form.dateOfBirth,
           password: form.password,
         }),
       });
@@ -58,8 +60,8 @@ export default function SignupPage() {
         return;
       }
 
-      toast.success('Application submitted');
-      router.push('/apply/submitted');
+      toast.success('Account created! Please upload your ID.');
+      router.push('/client/verify');
     } catch {
       setError('Something went wrong. Please try again.');
       toast.error('Something went wrong. Please try again.');
@@ -77,7 +79,7 @@ export default function SignupPage() {
         {/* Logo area */}
         <div className="text-center mb-10">
           <h1 className="text-4xl font-serif font-bold text-gold-gradient tracking-tight">Plus One</h1>
-          <p className="text-white/40 text-sm mt-2 tracking-wide">Apply for membership</p>
+          <p className="text-white/40 text-sm mt-2 tracking-wide">Create your account</p>
         </div>
 
         {/* Form card */}
@@ -89,6 +91,14 @@ export default function SignupPage() {
               value={form.name}
               onChange={set('name')}
               placeholder="Your full name"
+              required
+            />
+
+            <Input
+              label="Date of Birth"
+              type="date"
+              value={form.dateOfBirth}
+              onChange={set('dateOfBirth')}
               required
             />
 
@@ -144,23 +154,17 @@ export default function SignupPage() {
             )}
 
             <Button type="submit" className="w-full" size="lg" isLoading={loading}>
-              Submit Application
+              Create Account
             </Button>
           </form>
         </div>
 
         {/* Footer links */}
-        <div className="mt-8 text-center space-y-3">
+        <div className="mt-8 text-center">
           <p className="text-white/35 text-sm">
             Already have an account?{' '}
             <Link href="/login" className="text-gold hover:text-gold-hover transition-colors">
               Sign in
-            </Link>
-          </p>
-          <p className="text-white/25 text-xs">
-            Want to work as a companion?{' '}
-            <Link href="/companion-signup" className="text-gold/70 hover:text-gold transition-colors">
-              Apply here
             </Link>
           </p>
         </div>

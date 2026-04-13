@@ -129,6 +129,7 @@ model ClientProfile {
   occupation       String?
   city             String?
   dateOfBirth      DateTime?
+  govtIdUrl        String?              // Cloudinary URL of uploaded government ID
   shareItinerary   Boolean  @default(false)
   trustedContact   String?
   trustedContactPhone String?

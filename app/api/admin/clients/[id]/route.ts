@@ -13,6 +13,10 @@ const actionSchema = z.discriminatedUnion('action', [
     action: z.literal('reject'),
     reason: z.string().min(10, 'Please provide a reason (at least 10 characters)'),
   }),
+  z.object({
+    action: z.literal('request_info'),
+    reason: z.string().min(10, 'Please specify what additional info is needed (at least 10 characters)'),
+  }),
 ]);
 
 // PATCH /api/admin/clients/[id] — approve or reject a client application
@@ -70,6 +74,34 @@ export async function PATCH(
         action: AdminAction.CLIENT_APPROVE,
         targetType: 'User',
         targetId: id,
+      });
+
+      return NextResponse.json({ success: true, data: { client: updated } });
+    }
+
+    if (parsed.data.action === 'request_info') {
+      const { reason } = parsed.data;
+
+      // Keep status as PENDING_REVIEW but store the info request as rejectionReason
+      // so the client/admin can see what's needed
+      const updated = await prisma.user.update({
+        where: { id },
+        data: { rejectionReason: `[INFO REQUESTED] ${reason}` },
+        select: {
+          id: true,
+          email: true,
+          clientStatus: true,
+          rejectionReason: true,
+          clientProfile: { select: { name: true } },
+        },
+      });
+
+      await recordAdminAction({
+        adminId: auth.user.id,
+        action: AdminAction.CLIENT_REJECT, // closest available action
+        targetType: 'User',
+        targetId: id,
+        reason: `Info requested: ${reason}`,
       });
 
       return NextResponse.json({ success: true, data: { client: updated } });
