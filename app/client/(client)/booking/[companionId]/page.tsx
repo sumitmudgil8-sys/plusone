@@ -323,6 +323,7 @@ export default function BookingPage() {
             companion={companion}
             onChatClick={handleChatRequest}
             onBookClick={() => document.getElementById('booking-form')?.scrollIntoView({ behavior: 'smooth' })}
+            onScheduleClick={() => document.getElementById('schedule-form')?.scrollIntoView({ behavior: 'smooth' })}
             showActions={companion.accessible}
           />
         )}
@@ -339,31 +340,9 @@ export default function BookingPage() {
       </div>
 
       <div id="booking-form" className="space-y-6">
-        <Card className="sticky top-24">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-white">Book This Companion</h2>
-            {companion.isVerified && (
-              <Badge variant="success">
-                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-                Verified
-              </Badge>
-            )}
-          </div>
-
-          <BookingForm
-            companionId={companion.id}
-            companionName={companion.name}
-            hourlyRate={companion.hourlyRate}
-            availability={companion.availability || []}
-            weeklyAvailability={companion.weeklyAvailability}
-          />
-        </Card>
-
-        {/* Schedule a Chat */}
+        {/* Schedule a Chat — shown FIRST when companion is offline */}
         {companion.accessible && (
-          <Card>
+          <Card id="schedule-form">
             <h2 className="text-lg font-bold text-white mb-1">Schedule a Chat</h2>
             <p className="text-white/50 text-xs mb-4">Book a guaranteed chat slot. 30% hold from your wallet secures the booking.</p>
 
@@ -524,6 +503,29 @@ export default function BookingPage() {
             )}
           </Card>
         )}
+
+        {/* Offline booking (in-person meeting) */}
+        <Card>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-white">Book a Meeting</h2>
+            {companion.isVerified && (
+              <Badge variant="success">
+                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Verified
+              </Badge>
+            )}
+          </div>
+
+          <BookingForm
+            companionId={companion.id}
+            companionName={companion.name}
+            hourlyRate={companion.hourlyRate}
+            availability={companion.availability || []}
+            weeklyAvailability={companion.weeklyAvailability}
+          />
+        </Card>
       </div>
 
       {/* Chat request overlay */}

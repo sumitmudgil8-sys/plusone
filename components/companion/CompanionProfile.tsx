@@ -71,6 +71,7 @@ interface CompanionProfileProps {
   companion: CompanionData;
   onChatClick?: () => void;
   onBookClick?: () => void;
+  onScheduleClick?: () => void;
   showActions?: boolean;
 }
 
@@ -78,6 +79,7 @@ export function CompanionProfile({
   companion,
   onChatClick,
   onBookClick,
+  onScheduleClick,
   showActions = true,
 }: CompanionProfileProps) {
   const [isFavorited, setIsFavorited] = useState(companion.isFavorited);
@@ -339,64 +341,96 @@ export function CompanionProfile({
           </div>
         )}
 
-        {/* Action buttons */}
+        {/* Action buttons — context-sensitive based on availability */}
         {showActions && companion.accessible && (
           <div className="space-y-2">
-            <div className="flex gap-2">
-              {/* Chat */}
-              <button
-                onClick={onChatClick}
-                disabled={chatDisabled}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all border',
-                  chatDisabled
-                    ? 'border-charcoal-border text-white/25 cursor-not-allowed'
-                    : 'border-charcoal-border text-white hover:border-gold/50 hover:text-gold'
+            {(isOnline || companion.availableNow) ? (
+              /* ── ONLINE: show live Chat Now / Call Now ── */
+              <>
+                <div className="flex gap-2">
+                  <button
+                    onClick={onChatClick}
+                    disabled={chatDisabled}
+                    className={cn(
+                      'flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all border',
+                      chatDisabled
+                        ? 'border-charcoal-border text-white/25 cursor-not-allowed'
+                        : 'bg-gold/10 border-gold/30 text-gold hover:bg-gold/20'
+                    )}
+                  >
+                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <span>Chat Now{chatRateLabel ? ` · ${chatRateLabel}` : ''}</span>
+                  </button>
+
+                  <a
+                    href={`/client/inbox/${companion.id}?mode=voice`}
+                    onClick={(e) => { if (callDisabled) e.preventDefault(); }}
+                    className={cn(
+                      'flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all border',
+                      callDisabled
+                        ? 'border-charcoal-border text-white/25 cursor-not-allowed pointer-events-none'
+                        : 'bg-gold/10 border-gold/30 text-gold hover:bg-gold/20'
+                    )}
+                  >
+                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                    <span>Call Now{callRateLabel ? ` · ${callRateLabel}` : ''}</span>
+                  </a>
+                </div>
+
+                {callDisabled && !callRateLabel && (
+                  <p className="text-xs text-center text-white/40">Call rate not configured</p>
                 )}
-              >
-                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                <span>Chat{chatRateLabel ? ` · ${chatRateLabel}` : ''}</span>
-              </button>
 
-              {/* Call */}
-              <a
-                href={`/client/inbox/${companion.id}?mode=voice`}
-                onClick={(e) => {
-                  if (callDisabled) e.preventDefault();
-                }}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all border',
-                  callDisabled
-                    ? 'border-charcoal-border text-white/25 cursor-not-allowed pointer-events-none'
-                    : 'border-charcoal-border text-white hover:border-gold/50 hover:text-gold'
+                {/* Book meeting (secondary) */}
+                {bookingRate && (
+                  <button
+                    onClick={onBookClick}
+                    className="w-full py-3 rounded-xl text-sm font-semibold border border-gold/30 text-gold bg-gold/5 hover:bg-gold/10 transition-colors"
+                  >
+                    Book Meeting · {bookingRate}
+                  </button>
                 )}
-              >
-                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                </svg>
-                <span>Call{callRateLabel ? ` · ${callRateLabel}` : ''}</span>
-              </a>
-            </div>
+              </>
+            ) : (
+              /* ── OFFLINE / BUSY: show Schedule options ── */
+              <>
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 text-center mb-1">
+                  <p className="text-xs text-white/50">
+                    {isBusy ? `${companion.name} is currently busy` : `${companion.name} is offline`}
+                  </p>
+                  <p className="text-[10px] text-white/30 mt-0.5">Schedule a session for when they&apos;re available</p>
+                </div>
 
-            {callDisabled && !callRateLabel && (
-              <p className="text-xs text-center text-white/40">Call rate not configured</p>
-            )}
-            {callDisabled && callRateLabel && !isOnline && (
-              <p className="text-xs text-center text-white/40">
-                {isBusy ? 'Busy — calls unavailable' : 'Offline — send a chat request to connect'}
-              </p>
-            )}
+                <button
+                  onClick={onScheduleClick}
+                  disabled={!chatRateLabel}
+                  className={cn(
+                    'w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all border',
+                    !chatRateLabel
+                      ? 'border-charcoal-border text-white/25 cursor-not-allowed'
+                      : 'bg-gold/10 border-gold/30 text-gold hover:bg-gold/20'
+                  )}
+                >
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span>Schedule Chat{chatRateLabel ? ` · ${chatRateLabel}` : ''}</span>
+                </button>
 
-            {/* Book */}
-            {bookingRate && (
-              <button
-                onClick={onBookClick}
-                className="w-full py-3 rounded-xl text-sm font-semibold border border-gold/30 text-gold bg-gold/5 hover:bg-gold/10 transition-colors"
-              >
-                Book · {bookingRate}
-              </button>
+                {/* Book meeting */}
+                {bookingRate && (
+                  <button
+                    onClick={onBookClick}
+                    className="w-full py-3 rounded-xl text-sm font-semibold border border-charcoal-border text-white/70 hover:border-gold/30 hover:text-gold transition-colors"
+                  >
+                    Book Meeting · {bookingRate}
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
