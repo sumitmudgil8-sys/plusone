@@ -8,13 +8,14 @@ import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { DEPOSIT_PERCENTAGE } from '@/lib/constants';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, buildCalendarUrl } from '@/lib/utils';
 
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 type SlotKey = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT';
 
 const DAY_KEY_MAP: DayKey[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const WEEKDAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 
 const SLOT_META: Record<SlotKey, { label: string; startHour: number; endHour: number }> = {
   MORNING:   { label: 'Morning (6 AM–12 PM)',   startHour: 6,  endHour: 12 },
@@ -700,6 +701,41 @@ export function BookingForm({
               <p className="text-xs text-white/50">{selectedVenue.address}</p>
             </div>
           )}
+
+          {/* Reminder prompt */}
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-left space-y-2">
+            <div className="flex items-start gap-2.5">
+              <svg className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-amber-400">Set a reminder</p>
+                <p className="text-xs text-white/50 mt-0.5">
+                  Real-time notifications may not always work on web. Add this to your phone&apos;s calendar so you don&apos;t miss it.
+                </p>
+              </div>
+            </div>
+            {date && startHour !== '' && (
+              <a
+                href={buildCalendarUrl({
+                  title: `Plus One — Meeting with ${companionName}`,
+                  startDate: new Date(`${date}T${String(startHour).padStart(2, '0')}:00`),
+                  durationMinutes: duration * 60,
+                  location: selectedVenue ? `${selectedVenue.name}, ${selectedVenue.address}` : undefined,
+                  description: `Booking with ${companionName} for ${duration}h. ${selectedVenue ? `Venue: ${selectedVenue.name}` : ''}`,
+                })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-sm text-white font-medium transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Add to Calendar
+              </a>
+            )}
+          </div>
+
           <Button onClick={() => router.push('/client/bookings')} className="w-full">
             View My Bookings
           </Button>

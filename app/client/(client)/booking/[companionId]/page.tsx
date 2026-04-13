@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useSocket } from '@/hooks/useSocket';
+import { buildCalendarUrl } from '@/lib/utils';
 
 const CHAT_REQUEST_TIMEOUT_S = 180; // 3 minutes
 const SCHEDULE_DURATIONS = [15, 30] as const;
@@ -359,6 +360,36 @@ export default function BookingPage() {
                   <p>Scheduled: {new Date(scheduleResult.scheduledAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
                 <p className="text-[10px] text-white/30">You&apos;ll be able to start the chat near the scheduled time.</p>
+
+                {/* Reminder prompt */}
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-left space-y-2">
+                  <div className="flex items-start gap-2">
+                    <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    <div>
+                      <p className="text-xs font-medium text-amber-400">Set a reminder</p>
+                      <p className="text-[10px] text-white/40 mt-0.5">Web notifications aren&apos;t always reliable. Add this to your calendar.</p>
+                    </div>
+                  </div>
+                  <a
+                    href={buildCalendarUrl({
+                      title: `Plus One — Chat with ${companion?.name ?? 'Companion'}`,
+                      startDate: new Date(scheduleResult.scheduledAt),
+                      durationMinutes: scheduleDuration,
+                      description: `Scheduled ${scheduleDuration}-min chat session on Plus One`,
+                    })}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-xs text-white font-medium transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Add to Calendar
+                  </a>
+                </div>
+
                 <Button variant="outline" onClick={() => { setScheduleStatus('idle'); setScheduleResult(null); }} className="w-full">Done</Button>
               </div>
             ) : (

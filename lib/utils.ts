@@ -66,6 +66,26 @@ export function formatDateTime(date: Date | string): string {
   });
 }
 
+/** Build a Google Calendar "Add Event" URL */
+export function buildCalendarUrl(params: {
+  title: string;
+  startDate: Date;
+  durationMinutes: number;
+  location?: string;
+  description?: string;
+}): string {
+  const pad = (d: Date) =>
+    d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const endDate = new Date(params.startDate.getTime() + params.durationMinutes * 60000);
+  const url = new URL('https://calendar.google.com/calendar/render');
+  url.searchParams.set('action', 'TEMPLATE');
+  url.searchParams.set('text', params.title);
+  url.searchParams.set('dates', `${pad(params.startDate)}/${pad(endDate)}`);
+  if (params.location) url.searchParams.set('location', params.location);
+  if (params.description) url.searchParams.set('details', params.description);
+  return url.toString();
+}
+
 export function formatDistance(distance: number): string {
   if (distance < 1) {
     return `${Math.round(distance * 1000)} m`;
