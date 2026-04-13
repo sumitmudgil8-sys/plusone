@@ -229,7 +229,35 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await prisma.user.delete({ where: { id } });
+    // Delete in a transaction — clean up non-cascading relations first
+    await prisma.$transaction(async (tx) => {
+      // Delete messages in threads where this user is a participant
+      await tx.message.deleteMany({
+        where: { OR: [{ senderId: id }, { receiverId: id }] },
+      });
+      // Delete reviews (reviewer or reviewed)
+      await tx.review.deleteMany({
+        where: { OR: [{ reviewerId: id }, { reviewedId: id }] },
+      });
+      // Delete scheduled sessions
+      await tx.scheduledSession.deleteMany({
+        where: { OR: [{ clientId: id }, { companionId: id }] },
+      });
+      // Delete billing sessions
+      await tx.billingSession.deleteMany({
+        where: { OR: [{ clientId: id }, { companionId: id }] },
+      });
+      // Delete bookings
+      await tx.booking.deleteMany({
+        where: { OR: [{ clientId: id }, { companionId: id }] },
+      });
+      // Delete message threads
+      await tx.messageThread.deleteMany({
+        where: { OR: [{ clientId: id }, { companionId: id }] },
+      });
+      // Now delete the user (cascades handle the rest)
+      await tx.user.delete({ where: { id } });
+    });
 
     await recordAdminAction({
       adminId: auth.user.id,
