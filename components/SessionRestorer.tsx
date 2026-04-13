@@ -26,7 +26,15 @@ export function SessionRestorer() {
           if (d.refreshToken) localStorage.setItem('_pone_rt', d.refreshToken);
 
           switch (d.user.role) {
-            case 'CLIENT':    router.replace('/client/dashboard');    break;
+            case 'CLIENT':
+              if (d.user.clientStatus === 'PENDING_REVIEW') {
+                router.replace('/client/pending');
+              } else if (d.user.clientStatus === 'REJECTED') {
+                router.replace('/client/rejected');
+              } else {
+                router.replace('/client/dashboard');
+              }
+              break;
             case 'COMPANION': router.replace('/companion/dashboard'); break;
             case 'ADMIN':     router.replace('/admin/dashboard');     break;
           }

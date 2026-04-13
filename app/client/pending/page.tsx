@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 
 export default function PendingPage() {
@@ -99,12 +100,18 @@ export default function PendingPage() {
           </div>
 
           {/* Footer */}
-          <p className="text-xs text-white/30 text-center">
-            Questions? Email us at{' '}
-            <a href="mailto:support@plusone.app" className="text-gold hover:underline">
-              support@plusone.app
-            </a>
-          </p>
+          <div className="text-center space-y-2">
+            <p className="text-xs text-white/30">
+              Questions? Check our{' '}
+              <Link href="/faq" className="text-gold hover:underline">
+                FAQ
+              </Link>
+              {' '}or email{' '}
+              <a href="mailto:support@plusone.app" className="text-gold hover:underline">
+                support@plusone.app
+              </a>
+            </p>
+          </div>
         </Card>
       </div>
     </div>

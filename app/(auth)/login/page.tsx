@@ -50,7 +50,15 @@ function LoginForm() {
         if (d.success && d.user?.role) {
           if (d.refreshToken) localStorage.setItem('_pone_rt', d.refreshToken);
           switch (d.user.role) {
-            case 'CLIENT':    router.replace('/client/dashboard');    break;
+            case 'CLIENT':
+              if (d.user.clientStatus === 'PENDING_REVIEW') {
+                router.replace('/client/pending');
+              } else if (d.user.clientStatus === 'REJECTED') {
+                router.replace('/client/rejected');
+              } else {
+                router.replace('/client/dashboard');
+              }
+              break;
             case 'COMPANION': router.replace('/companion/dashboard'); break;
             case 'ADMIN':     router.replace('/admin/dashboard');     break;
           }
@@ -106,10 +114,16 @@ function LoginForm() {
       // Best-effort location update after login — never blocks redirect
       updateLocation();
 
-      // Redirect based on role
+      // Redirect based on role (and approval status for clients)
       switch (data.user.role) {
         case 'CLIENT':
-          router.push('/client/dashboard');
+          if (data.user.clientStatus === 'PENDING_REVIEW') {
+            router.push('/client/pending');
+          } else if (data.user.clientStatus === 'REJECTED') {
+            router.push('/client/rejected');
+          } else {
+            router.push('/client/dashboard');
+          }
           break;
         case 'COMPANION':
           router.push('/companion/dashboard');

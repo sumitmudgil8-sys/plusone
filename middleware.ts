@@ -15,6 +15,7 @@ const publicRoutes = [
   '/privacy',
   '/refund-policy',
   '/apply',      // /apply/submitted is public
+  '/faq',
 ];
 
 // CLIENT routes that are accessible regardless of clientStatus.
