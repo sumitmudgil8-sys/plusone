@@ -6,21 +6,32 @@ import { prisma } from '@/lib/prisma';
 export const runtime = 'nodejs';
 
 // GET /api/session
-// Requires a valid auth cookie. Re-issues the cookie with a fresh 30-day
-// maxAge (sliding window) and returns a new 90-day refresh token for
+// Requires a valid auth cookie. Re-issues the cookie with a fresh
+// maxAge (sliding window) and returns a new refresh token for
 // localStorage storage. Called once per app open from layouts.
+// Reads from DB to ensure clientStatus is always current.
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request);
   if (auth.user === null) return auth.response;
 
   const { user } = auth;
 
+  // Re-fetch from DB so JWT always reflects the latest clientStatus
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { clientStatus: true, isTemporaryPassword: true, isActive: true, isBanned: true },
+  });
+
+  if (!dbUser || !dbUser.isActive || dbUser.isBanned) {
+    return NextResponse.json({ error: 'Account unavailable' }, { status: 401 });
+  }
+
   const jwtPayload: Parameters<typeof signJWT>[0] = {
     id: user.id,
     email: user.email,
     role: user.role,
-    isTemporaryPassword: user.isTemporaryPassword,
-    ...(user.role === 'CLIENT' && { clientStatus: user.clientStatus }),
+    isTemporaryPassword: dbUser.isTemporaryPassword,
+    ...(user.role === 'CLIENT' && { clientStatus: dbUser.clientStatus }),
   };
 
   const newToken = signJWT(jwtPayload);

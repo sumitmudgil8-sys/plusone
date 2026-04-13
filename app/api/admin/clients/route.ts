@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
           phone: true,
           linkedInUrl: true,
           clientStatus: true,
+          adminApprovedAt: true,
           setuOkycRefId: true,
           rejectionReason: true,
           createdAt: true,

@@ -60,6 +60,7 @@ model User {
   // Client onboarding fields
   clientStatus     ClientStatus          @default(APPROVED)
   // APPROVED default ensures all existing users are not locked out on deploy
+  adminApprovedAt  DateTime?             // set when admin approves; client gets access 8h later
   linkedInUrl      String?
   phone            String?
   rejectionReason  String?

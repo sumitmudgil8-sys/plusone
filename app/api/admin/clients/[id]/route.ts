@@ -59,17 +59,23 @@ export async function PATCH(
     if (parsed.data.action === 'approve') {
       const updated = await prisma.user.update({
         where: { id },
-        data: { clientStatus: 'APPROVED', rejectionReason: null },
+        data: {
+          clientStatus: 'APPROVED',
+          adminApprovedAt: new Date(),
+          rejectionReason: null,
+        },
         select: {
           id: true,
           email: true,
           clientStatus: true,
+          adminApprovedAt: true,
           clientProfile: { select: { name: true } },
         },
       });
 
-      // Fire-and-forget — email failure must not break the approval
-      sendClientApprovedEmail(client.email, name);
+      // Email is deferred — sent after the 8-hour companion review window.
+      // The client shouldn't know about companion-side approvals, so the
+      // approval email is only sent once full access is granted.
 
       await recordAdminAction({
         adminId: auth.user.id,

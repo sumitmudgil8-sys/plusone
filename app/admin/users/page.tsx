@@ -21,6 +21,7 @@ interface Client {
   phone: string | null;
   linkedInUrl: string | null;
   clientStatus: ClientStatus;
+  adminApprovedAt: string | null;
   setuOkycRefId: string | null;
   rejectionReason: string | null;
   createdAt: string;
@@ -302,6 +303,15 @@ function ClientsSection() {
                       <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[client.clientStatus]}`}>
                         {STATUS_LABELS[client.clientStatus]}
                       </span>
+                      {client.clientStatus === 'APPROVED' && client.adminApprovedAt && (() => {
+                        const elapsed = Date.now() - new Date(client.adminApprovedAt).getTime();
+                        const inReview = elapsed < 8 * 60 * 60 * 1000;
+                        return inReview ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full text-blue-400 bg-blue-400/10">
+                            Companion review
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                     <p className="text-sm text-white/50">{client.email}</p>
                     {client.phone && <p className="text-xs text-white/40">{client.phone}</p>}
