@@ -197,8 +197,8 @@ export const CompanionCard = React.memo(function CompanionCard({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </div>
-                <p className="text-sm font-semibold text-white leading-tight">Unlock all companions</p>
-                <p className="text-xs text-gold mt-0.5">₹4,999/month — unlimited access</p>
+                <p className="text-sm font-semibold text-white leading-tight">Unlock all social companions</p>
+                <p className="text-xs text-gold mt-0.5">₹4,999/month — events, dining & more</p>
                 <p className="text-xs text-white/40 mt-1">[Subscribe Now]</p>
               </div>
             </div>

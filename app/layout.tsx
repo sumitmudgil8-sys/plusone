@@ -10,8 +10,8 @@ export const metadata: Metadata = {
     default: 'Plus One - Premium Social Companionship',
     template: '%s | Plus One',
   },
-  description: 'Connect with sophisticated companions for events, dinners, and social occasions. Discreet, safe, and premium companion booking platform.',
-  keywords: ['companion', 'booking', 'events', 'social', 'premium', 'escort', 'dinner date', 'plus one'],
+  description: 'Connect with verified social companions for events, dinners, travel, and every occasion that needs a plus one. Safe, professional, and trusted.',
+  keywords: ['social companion', 'event companion', 'plus one', 'dining companion', 'travel companion', 'social events', 'verified companions', 'professional companionship'],
   authors: [{ name: 'Plus One' }],
   creator: 'Plus One',
   publisher: 'Plus One',
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     url: baseUrl,
     siteName: 'Plus One',
     title: 'Plus One - Premium Social Companionship',
-    description: 'Connect with sophisticated companions for events, dinners, and social occasions.',
+    description: 'Connect with verified social companions for events, dinners, travel, and every occasion that needs a plus one.',
     images: [
       {
         url: `${baseUrl}/icons/icon-512.png`,
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Plus One - Premium Social Companionship',
-    description: 'Connect with sophisticated companions for events, dinners, and social occasions.',
+    description: 'Connect with verified social companions for events, dinners, travel, and every occasion that needs a plus one.',
     images: [`${baseUrl}/icons/icon-512.png`],
   },
   verification: {

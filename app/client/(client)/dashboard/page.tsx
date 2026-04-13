@@ -384,8 +384,8 @@ export default function ClientHome() {
             <div className="absolute inset-0 bg-gold-subtle" />
             <div className="relative flex items-center justify-between gap-4 p-5">
               <div>
-                <p className="text-sm font-bold text-white">Unlock all companions</p>
-                <p className="text-[11px] text-white/30 mt-0.5">GOLD — unlimited profiles, scheduling & priority</p>
+                <p className="text-sm font-bold text-white">Unlock all social companions</p>
+                <p className="text-[11px] text-white/30 mt-0.5">GOLD — full access for events, dining & travel</p>
               </div>
               <Link
                 href="/client/subscription"

@@ -3,7 +3,7 @@ import Link from 'next/link';
 const faqs = [
   {
     q: 'What is Plus One?',
-    a: 'Plus One is a social companionship platform that connects clients with professional companions for conversation, social events, and companionship. All interactions are strictly social and non-intimate.',
+    a: 'Plus One is a social companionship platform that connects users with verified companions for dining, events, travel, and conversation. Think of it as finding the perfect plus one for any social occasion. All interactions are strictly social and non-intimate — no exceptions.',
   },
   {
     q: 'How do I sign up?',
@@ -31,7 +31,11 @@ const faqs = [
   },
   {
     q: 'Can I book companions for in-person meetings?',
-    a: 'Yes. You can book offline meetings through the platform at the companion\'s hourly rate. Meeting details including date, time, and location are coordinated through the booking system.',
+    a: 'Yes. You can book in-person social activities like dinners, coffee meetups, events, or travel companionship through the platform at the companion\'s hourly rate. Meeting details including date, time, and venue are coordinated through the booking system.',
+  },
+  {
+    q: 'What kind of companionship does Plus One offer?',
+    a: 'Plus One is strictly for social companionship — dining, events, travel, parties, coffee meetups, and conversation (via chat or voice call). We do not facilitate dating, romantic, intimate, or any non-social services. Users who violate this policy are permanently banned.',
   },
   {
     q: 'How do I become a companion?',

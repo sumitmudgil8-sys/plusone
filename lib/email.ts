@@ -79,7 +79,7 @@ export const emailTemplates = {
         <h2 style="color: #D4AF37;">Payment Successful</h2>
         <p>Hi ${name},</p>
         <p>We have received your payment of <strong>${amount}</strong> for ${description}.</p>
-        <p>Thank you for choosing Plus One!</p>
+        <p>Thank you for using Plus One — your social companionship platform!</p>
       </div>
     `,
   }),
@@ -101,7 +101,7 @@ export async function sendClientApprovedEmail(
         <h1 style="color: #D4AF37; font-size: 28px; margin-bottom: 8px;">Welcome to Plus One</h1>
         <p style="color: #A0A0A0; margin-bottom: 24px;">Your application has been approved</p>
         <p>Hi ${name},</p>
-        <p>Great news — your application has been reviewed and approved. You can now access the platform and start browsing companions.</p>
+        <p>Great news — your application has been reviewed and approved. You can now access the platform and connect with verified social companions for events, dining, and travel.</p>
         <div style="margin: 32px 0;">
           <a href="${appUrl}/client/dashboard"
              style="background: #D4AF37; color: #1C1C1C; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">

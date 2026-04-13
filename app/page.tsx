@@ -83,8 +83,9 @@ export default function HomePage() {
               <span style={{ color: '#C9A84C' }}>perfect plus one.</span>
             </h1>
             <p className="text-white/45 leading-relaxed" style={{ fontSize: '0.875rem' }}>
-              Sophisticated companionship for dinners,
-              events, and every occasion that matters.
+              Verified social companions for dinners,
+              events, travel, and every occasion that
+              needs great company.
             </p>
           </div>
 
@@ -117,7 +118,7 @@ export default function HomePage() {
             </Link>
 
             <p className="text-center text-white/20 tracking-widest mt-1" style={{ fontSize: '0.65rem' }}>
-              VERIFIED · DISCREET · PREMIUM
+              VERIFIED · TRUSTED · PROFESSIONAL
             </p>
           </div>
         </div>

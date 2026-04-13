@@ -18,9 +18,9 @@ interface PendingPayment {
 }
 
 const BENEFITS = [
-  'Browse all companion profiles',
-  'View full bios, photos, and rates',
-  'Send booking requests to any companion',
+  'Browse all verified social companion profiles',
+  'View full bios, photos, and activity rates',
+  'Connect for events, dining, travel & more',
   'Priority support',
 ];
 
@@ -483,7 +483,7 @@ export default function SubscriptionPage() {
           <h1 className="text-[26px] font-bold text-white leading-[1.2]">
             Plus One <span className="text-gold-gradient">Premium</span>
           </h1>
-          <p className="text-white/35 text-sm mt-2">Unlock all companion profiles</p>
+          <p className="text-white/35 text-sm mt-2">Unlock all social companion profiles</p>
         </div>
       </div>
 

@@ -233,12 +233,12 @@ export default function BrowsePage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Browse Companions</h1>
+          <h1 className="text-2xl font-bold text-white">Social Companions</h1>
           <p className="text-white/60 text-sm mt-0.5">
             {nearbyMode
               ? `${companions.length} companion${companions.length !== 1 ? 's' : ''} nearby`
               : isSubscribed
-              ? 'All companions — unlimited access'
+              ? 'Verified companions for events, dining & travel'
               : `Showing ${Math.min(companions.length, MAX_FREE_COMPANIONS)} of ${total} companions`}
           </p>
         </div>
@@ -387,9 +387,9 @@ export default function BrowsePage() {
       {/* Bottom CTA */}
       {hasLocked && !nearbyMode && (
         <div className="rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/5 to-transparent p-6 text-center space-y-3">
-          <h3 className="text-lg font-semibold text-white">Unlock all companions</h3>
+          <h3 className="text-lg font-semibold text-white">Unlock all social companions</h3>
           <p className="text-white/55 text-sm">
-            ₹4,999/month — unlimited access to all profiles, bios, photos &amp; rates
+            ₹4,999/month — full access to all profiles and connect for events, dining &amp; travel
           </p>
           <Button onClick={() => router.push('/client/subscription')} className="mx-auto">
             Subscribe Now

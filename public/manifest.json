@@ -1,7 +1,7 @@
 {
   "name": "Plus One",
   "short_name": "Plus One",
-  "description": "Premium companion platform",
+  "description": "Find verified social companions for events, dinners, and travel",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0A0A10",
@@ -35,7 +35,7 @@
     {
       "name": "Browse",
       "short_name": "Browse",
-      "description": "Browse companions",
+      "description": "Browse social companions for events and dining",
       "url": "/client/browse",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },

@@ -281,7 +281,7 @@ export function CompanionProfile({
           </div>
           {bookingRate && (
             <div className="text-right shrink-0">
-              <p className="text-xs text-white/40">Booking</p>
+              <p className="text-xs text-white/40">Meeting rate</p>
               <p className="text-lg font-bold text-gold">{bookingRate}</p>
             </div>
           )}
@@ -433,6 +433,15 @@ export function CompanionProfile({
             )}
           </div>
         )}
+
+        {/* Available for */}
+        <div className="flex flex-wrap gap-2">
+          {['Events', 'Dining', 'Travel', 'Conversation'].map((activity) => (
+            <span key={activity} className="text-xs px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-white/50">
+              {activity}
+            </span>
+          ))}
+        </div>
 
         {/* Bio */}
         {companion.bio && (
