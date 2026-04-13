@@ -171,6 +171,7 @@ export async function POST(request: NextRequest) {
           callerAvatar: callerProfile?.avatarUrl ?? null,
           channelName: getCallChannelName(session.id),
           ratePerMinute,
+          expiresAt: expiresAt.toISOString(),
         });
       } catch (ablyErr) {
         console.error('Ably call signal error (non-fatal):', ablyErr);

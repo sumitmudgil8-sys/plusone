@@ -85,10 +85,11 @@ export function CompanionCallProvider({ children, userId }: { children: ReactNod
     }
   }, [activeCall, voiceCall.state, voiceCall.remoteUserJoined]);
 
-  // Auto-clear activeCall when call ends
+  // Auto-clear activeCall when call ends (30s fallback — companion normally
+  // dismisses the post-call summary manually via "Done" button)
   useEffect(() => {
     if (voiceCall.state === 'ended' || voiceCall.state === 'error') {
-      const t = setTimeout(() => setActiveCall(null), 2000);
+      const t = setTimeout(() => setActiveCall(null), 30_000);
       return () => clearTimeout(t);
     }
   }, [voiceCall.state]);

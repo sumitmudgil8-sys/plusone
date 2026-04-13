@@ -18,6 +18,7 @@ interface IncomingCall {
   callerAvatar: string | null;
   channelName: string;
   ratePerMinute: number;
+  expiresAt?: string;
 }
 
 interface IncomingChatRequest {
@@ -168,9 +169,25 @@ function IncomingCallModal({
   onAccept: () => void;
   onDecline: () => void;
 }) {
+  // Countdown timer — auto-decline when session expires
+  const [timeLeft, setTimeLeft] = useState<number>(() => {
+    if (!call.expiresAt) return 180; // default 3 min
+    return Math.max(0, Math.floor((new Date(call.expiresAt).getTime() - Date.now()) / 1000));
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) { clearInterval(interval); onDecline(); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [onDecline]);
+
   // Play a ringtone using Web Audio API (no audio file needed)
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const ringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     try {
@@ -193,14 +210,14 @@ function IncomingCallModal({
       // Ring pattern: two short tones, 2s pause, repeat
       playTone();
       setTimeout(() => playTone(), 300);
-      intervalRef.current = setInterval(() => {
+      ringIntervalRef.current = setInterval(() => {
         playTone();
         setTimeout(() => playTone(), 300);
       }, 2500);
     } catch { /* Web Audio not available — silent fallback */ }
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
       if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
         audioCtxRef.current.close().catch(() => {});
       }
@@ -223,6 +240,16 @@ function IncomingCallModal({
           <p className="text-sm text-white/50 mt-1">
             Voice call{call.ratePerMinute ? ` · ₹${Math.round(call.ratePerMinute * 0.4 / 100)}/min` : ''}
           </p>
+          <p className="text-xs text-white/40 mt-1">
+            Expires in {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+          </p>
+        </div>
+        {/* Countdown progress bar */}
+        <div className="w-full bg-white/[0.08] rounded-full h-1">
+          <div
+            className="bg-gold h-1 rounded-full transition-all duration-1000"
+            style={{ width: `${Math.min(100, (timeLeft / 180) * 100)}%` }}
+          />
         </div>
         <div className="flex gap-3">
           <button onClick={onDecline}

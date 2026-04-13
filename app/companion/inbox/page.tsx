@@ -8,6 +8,7 @@ import { useSocket } from '@/hooks/useSocket';
 import type { RoomMessage } from '@/hooks/useSocket';
 import type { VoiceCallState } from '@/hooks/useVoiceCall';
 import { useCompanionCall } from '@/contexts/CompanionCallContext';
+import { PLATFORM_COMMISSION_RATE } from '@/lib/constants';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -112,8 +113,8 @@ function CompanionInboxContent() {
 
   const handleEndVoiceCall = useCallback(async () => {
     await companionCall.endCall();
-    router.replace(`/companion/inbox${activeClientId ? `?active=${activeClientId}` : ''}`);
-  }, [companionCall, router, activeClientId]);
+    // Don't navigate here — the post-call summary overlay handles dismissal
+  }, [companionCall]);
 
   // Chat room ID — drives room subscription in useSocket.
   // Must match the format used by the client side and the server publisher.
@@ -455,17 +456,19 @@ function CompanionInboxContent() {
       </div>
 
       {/* ── Voice call overlay ──────────────────────────────────────────── */}
-      {(voiceSessionId || companionCall.activeCall) && voiceCall.state !== 'idle' && voiceCall.state !== 'ended' && (
+      {(voiceSessionId || companionCall.activeCall) && voiceCall.state !== 'idle' && (
         <CompanionVoiceOverlay
           callState={voiceCall.state}
           isMuted={voiceCall.isMuted}
           remoteUserJoined={voiceCall.remoteUserJoined}
           error={voiceCall.error}
           liveSeconds={voiceLiveSeconds}
+          balanceLow={companionCall.balanceLow}
           clientName={companionCall.activeCall?.clientName ?? activeClientInfo?.name ?? 'Client'}
           clientAvatar={companionCall.activeCall?.clientAvatar ?? activeClientInfo?.avatar ?? null}
           onToggleMute={voiceCall.toggleMute}
           onEndCall={handleEndVoiceCall}
+          onDismiss={() => router.replace(`/companion/inbox${activeClientId ? `?active=${activeClientId}` : ''}`)}
         />
       )}
 
@@ -839,26 +842,83 @@ interface CompanionVoiceOverlayProps {
   remoteUserJoined: boolean;
   error: string | null;
   liveSeconds: number;
+  balanceLow: boolean;
   clientName: string;
   clientAvatar: string | null;
   onToggleMute: () => Promise<void>;
   onEndCall: () => Promise<void>;
+  onDismiss: () => void;
 }
 
 function CompanionVoiceOverlay({
   callState, isMuted, remoteUserJoined, error,
-  liveSeconds, clientName, clientAvatar,
-  onToggleMute, onEndCall,
+  liveSeconds, balanceLow, clientName, clientAvatar,
+  onToggleMute, onEndCall, onDismiss,
 }: CompanionVoiceOverlayProps) {
+  // Track whether the remote user was previously connected so we can
+  // distinguish "initial wait" from "client disconnected mid-call".
+  const hadRemoteRef = useRef(false);
+  useEffect(() => {
+    if (remoteUserJoined) hadRemoteRef.current = true;
+  }, [remoteUserJoined]);
+
+  // Capture final duration when call ends (liveSeconds resets to 0 after context clears)
+  const finalSecondsRef = useRef(0);
+  useEffect(() => {
+    if (liveSeconds > 0) finalSecondsRef.current = liveSeconds;
+  }, [liveSeconds]);
+
+  // Show post-call summary when call ends
+  if (callState === 'ended' || (callState === 'error' && hadRemoteRef.current)) {
+    const duration = finalSecondsRef.current;
+    const mins = Math.ceil(duration / 60);
+    return (
+      <div className="fixed inset-0 z-[80] flex flex-col items-center justify-center bg-[#0A0A12] px-8">
+        <div className="flex flex-col items-center gap-4 max-w-xs text-center">
+          {/* Checkmark */}
+          <div className="w-16 h-16 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center">
+            <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <p className="text-lg font-semibold text-white">Call Ended</p>
+          <p className="text-sm text-white/50">with {clientName}</p>
+
+          {/* Stats */}
+          {duration > 0 && (
+            <div className="w-full mt-2 bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-white/50">Duration</span>
+                <span className="text-white font-mono">{formatDuration(duration)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-white/50">Billed</span>
+                <span className="text-white">{mins} min</span>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={onDismiss}
+            className="mt-4 w-full py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold transition-colors active:scale-[0.98]"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const statusText =
     callState === 'connecting' ? 'Connecting…' :
     callState === 'error' ? (error ?? 'Call error') :
-    callState === 'ended' ? 'Call ended' :
+    !remoteUserJoined && hadRemoteRef.current ? 'Client disconnected…' :
     !remoteUserJoined ? 'Waiting for client…' :
     'In call';
 
   const showTimer = callState === 'connected' && remoteUserJoined;
   const showConnecting = callState === 'connecting' || (callState === 'connected' && !remoteUserJoined);
+  const isDisconnected = callState === 'connected' && !remoteUserJoined && hadRemoteRef.current;
 
   return (
     <div className="fixed inset-0 z-[80] flex flex-col items-center justify-between bg-[#0A0A12] px-8"
@@ -872,12 +932,21 @@ function CompanionVoiceOverlay({
               <span className="text-3xl font-semibold text-amber-300">{clientName[0]}</span>
             </div>}
         <p className="text-xl font-semibold text-white mt-3">{clientName}</p>
-        <p className="text-sm text-white/50">{statusText}</p>
+        <p className={`text-sm ${isDisconnected ? 'text-red-400' : 'text-white/50'}`}>{statusText}</p>
         {showTimer && (
           <p className="text-2xl font-mono text-white/70 mt-1">{formatDuration(liveSeconds)}</p>
         )}
         {showConnecting && (
-          <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse mt-2" />
+          <div className={`w-2 h-2 rounded-full ${isDisconnected ? 'bg-red-400' : 'bg-amber-400'} animate-pulse mt-2`} />
+        )}
+
+        {/* Balance-low warning */}
+        {balanceLow && callState === 'connected' && (
+          <div className="mt-4 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+            <p className="text-xs text-amber-300 text-center font-medium">
+              Client&apos;s balance is low — call may end soon
+            </p>
+          </div>
         )}
       </div>
 
