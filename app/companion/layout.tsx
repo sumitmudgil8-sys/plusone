@@ -465,6 +465,10 @@ function CompanionLayoutInner({ children, userId, needsPasswordChange, setNeedsP
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // Track session IDs that the companion has already accepted/declined so the
+  // polling loop and Ably listener don't re-show the modal for them.
+  const dismissedSessionsRef = useRef<Set<string>>(new Set());
+
   const doLogout = async () => {
     setLoggingOut(true);
     localStorage.removeItem('_pone_rt');
@@ -525,7 +529,10 @@ function CompanionLayoutInner({ children, userId, needsPasswordChange, setNeedsP
   }, [onIncomingCall]);
 
   useEffect(() => {
-    const unsubscribe = onIncomingChatRequest((data) => setIncomingChatRequest(data));
+    const unsubscribe = onIncomingChatRequest((data) => {
+      if (data.sessionId && dismissedSessionsRef.current.has(data.sessionId)) return;
+      setIncomingChatRequest(data);
+    });
     return unsubscribe;
   }, [onIncomingChatRequest]);
 
@@ -559,6 +566,7 @@ function CompanionLayoutInner({ children, userId, needsPasswordChange, setNeedsP
             );
           } else {
             // CHAT pending sessions go to the chat request modal
+            if (d.sessionId && dismissedSessionsRef.current.has(d.sessionId)) return;
             setIncomingChatRequest((prev) =>
               prev ? prev : d
             );
@@ -616,20 +624,30 @@ function CompanionLayoutInner({ children, userId, needsPasswordChange, setNeedsP
 
   const handleAcceptChatRequest = useCallback(async () => {
     if (!incomingChatRequest) return;
-    const { clientId } = incomingChatRequest;
+    const { clientId, sessionId } = incomingChatRequest;
+    if (sessionId) dismissedSessionsRef.current.add(sessionId);
     setIncomingChatRequest(null);
-    // NOTE: we deliberately do NOT call /api/billing/accept here. The
-    // session stays PENDING until the companion actually lands on the chat
-    // thread — the inbox page's polling effect activates it at that moment.
-    // This guarantees the billing timer only starts once the companion has
-    // entered the chat (per UX requirement), not the instant they tap
-    // "Accept" on the modal.
+    // Accept the billing session now — this activates billing and notifies
+    // the client via Ably (chat:accepted). Previously this was deferred to
+    // the inbox page's polling, but that caused an infinite loop: the layout
+    // polling would find the still-PENDING session and re-show the modal
+    // before the inbox page had a chance to accept it.
+    if (sessionId) {
+      try {
+        await fetch('/api/billing/accept', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
+      } catch { /* non-fatal — inbox polling will retry if needed */ }
+    }
     router.push(`/companion/inbox?active=${clientId}`);
   }, [incomingChatRequest, router]);
 
   const handleDeclineChatRequest = useCallback(async () => {
     if (!incomingChatRequest) return;
     const { sessionId } = incomingChatRequest;
+    if (sessionId) dismissedSessionsRef.current.add(sessionId);
     setIncomingChatRequest(null);
     try {
       if (sessionId) {
