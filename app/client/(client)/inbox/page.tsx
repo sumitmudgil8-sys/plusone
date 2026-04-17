@@ -310,6 +310,7 @@ export default function InboxPage() {
         const sid = data.sessionId;
         if (!sid) return;
         setChatSessionId(sid);
+        if (data.ratePerMinute) setChatRatePerMinute(data.ratePerMinute);
         setSessionActive(true);
         setSessionWaiting(false);
         startTickInterval(sid);

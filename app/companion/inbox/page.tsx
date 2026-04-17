@@ -167,6 +167,10 @@ function CompanionInboxContent() {
     init();
   }, []);
 
+  // Session ID passed from the companion layout's accept handler — lets us
+  // hydrate the active session immediately without waiting for userId+polling.
+  const urlSessionId = searchParams.get('sid');
+
   // ── Auto-select from ?active= param ──────────────────────────────────────
   useEffect(() => {
     const active = searchParams.get('active');
@@ -194,31 +198,69 @@ function CompanionInboxContent() {
   }, [activeClientId, threads]);
 
   // ── Reset session state when thread changes ───────────────────────────────
+  // If we have a URL session ID (companion just accepted from modal),
+  // pre-hydrate immediately so the timer starts without waiting for the poll.
   useEffect(() => {
-    setChatSessionActive(false);
-    setChatSessionId(null);
-    setChatRatePerMinute(0);
+    if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
     setSessionEnded(false);
     setSessionSeconds(0);
     sessionStartedAtMsRef.current = null;
-    if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
-  }, [activeClientId]);
+
+    if (urlSessionId && activeClientId) {
+      // The layout already accepted — session is ACTIVE. Set state immediately
+      // so the timer starts now. The polling will fill in ratePerMinute.
+      setChatSessionActive(true);
+      setChatSessionId(urlSessionId);
+      setChatRatePerMinute(0); // will be filled by polling or Ably
+      sessionStartedAtMsRef.current = Date.now();
+    } else {
+      setChatSessionActive(false);
+      setChatSessionId(null);
+      setChatRatePerMinute(0);
+    }
+  }, [activeClientId, urlSessionId]);
 
   // ── Poll for active / pending billing session ────────────────────────────
   //
-  // This effect does two things now:
+  // Three scenarios:
   //
-  //   1. If a CHAT session is PENDING for this thread, activate it by calling
-  //      /api/billing/accept. This is the ONLY place a chat session gets
-  //      activated — the companion modal no longer activates it. The moment
-  //      the companion opens the thread IS the moment billing and the timer
-  //      start, which is what the product requires.
+  //   1. Session already ACTIVE (layout accepted before this page loaded, or
+  //      page refresh). Hydrate timer from server data. If the session was
+  //      pre-hydrated via URL sid, this fills in the ratePerMinute.
   //
-  //   2. If a session is already ACTIVE (e.g. page refresh, thread reopened,
-  //      voice call in progress) pick it up and hydrate the timer state.
+  //   2. Session still PENDING (layout accept was slow/failed, or companion
+  //      navigated directly). Call accept, then hydrate immediately.
+  //
+  //   3. No session — do nothing.
+  //
+  // When the session was pre-hydrated from URL sid, chatSessionActive is
+  // already true. We still run ONE poll to fill in ratePerMinute and then
+  // stop. The `needsRateHydration` flag handles this.
+  const needsRateHydration = chatSessionActive && chatRatePerMinute === 0;
+
   useEffect(() => {
-    if (!activeClientId || !currentUserId || chatSessionActive) return;
+    if (!activeClientId || !currentUserId) return;
+    // Stop polling once session is active AND rate is hydrated
+    if (chatSessionActive && !needsRateHydration) return;
     let cancelled = false;
+
+    const hydrate = (sessionId: string, ratePerMinute: number, durationSeconds: number, startedAt: string | null) => {
+      if (cancelled) return;
+      if (!sessionStartedAtMsRef.current) {
+        sessionStartedAtMsRef.current = startedAt
+          ? new Date(startedAt).getTime()
+          : Date.now() - durationSeconds * 1000;
+      }
+      setChatSessionActive(true);
+      setChatSessionId(sessionId);
+      setChatRatePerMinute(ratePerMinute);
+      setSessionSeconds(prev => {
+        // Keep higher value — don't reset timer backwards if wall-clock is ahead
+        const serverSec = durationSeconds;
+        return prev > serverSec ? prev : serverSec;
+      });
+    };
+
     const check = async () => {
       try {
         const res = await fetch(`/api/billing/session-status?clientId=${activeClientId}`);
@@ -227,45 +269,47 @@ function CompanionInboxContent() {
 
         if (d.data?.status === 'PENDING' && d.data?.type === 'CHAT' && d.data?.sessionId) {
           // Companion is now in the thread — activate the pending chat.
-          // /api/billing/accept is idempotent and fires chat:accepted, which
-          // the onChatRequestResponse listener below picks up to start the
-          // UI timer from Date.now().
           try {
-            await fetch('/api/billing/accept', {
+            const acceptRes = await fetch('/api/billing/accept', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ sessionId: d.data.sessionId }),
             });
+            const acceptData = await acceptRes.json();
+            if (acceptData.success) {
+              // Hydrate immediately — don't wait for next poll
+              hydrate(d.data.sessionId, d.data.ratePerMinute ?? 0, 0, null);
+            }
           } catch { /* non-fatal — next poll will retry */ }
           return;
         }
 
         if (d.data?.status === 'ACTIVE') {
-          const durationSeconds: number = d.data.durationSeconds ?? 0;
-          const startedAt: string | null = d.data.startedAt ?? null;
-          sessionStartedAtMsRef.current = startedAt
-            ? new Date(startedAt).getTime()
-            : Date.now() - durationSeconds * 1000;
-          setChatSessionActive(true);
-          setChatSessionId(d.data.sessionId);
-          setChatRatePerMinute(d.data.ratePerMinute ?? 0);
-          setSessionSeconds(durationSeconds);
+          hydrate(
+            d.data.sessionId,
+            d.data.ratePerMinute ?? 0,
+            d.data.durationSeconds ?? 0,
+            d.data.startedAt ?? null,
+          );
         }
       } catch { /* non-fatal */ }
     };
     check();
     const interval = setInterval(check, 3000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [activeClientId, currentUserId, chatSessionActive]);
+  }, [activeClientId, currentUserId, chatSessionActive, needsRateHydration]);
 
   // ── Ably: chat:accepted ───────────────────────────────────────────────────
   useEffect(() => {
     return onChatRequestResponse((data) => {
       if (data.status !== 'ACCEPTED' || !data.clientId) return;
       if (data.clientId === activeClientId) {
-        sessionStartedAtMsRef.current = Date.now();
+        if (!sessionStartedAtMsRef.current) {
+          sessionStartedAtMsRef.current = Date.now();
+        }
         setChatSessionActive(true);
         if (data.sessionId) setChatSessionId(data.sessionId);
+        if (data.ratePerMinute) setChatRatePerMinute(data.ratePerMinute);
       }
     });
   }, [onChatRequestResponse, activeClientId]);

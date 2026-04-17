@@ -41,6 +41,7 @@ type ChatRequestResponseCallback = (data: {
   companionId?: string;
   clientId?: string;
   status: 'ACCEPTED' | 'DECLINED';
+  ratePerMinute?: number;
 }) => void;
 
 type ChatEndedCallback = (data: {
@@ -179,6 +180,7 @@ export function useSocket(userId?: string, _role?: string, chatRoomId?: string) 
         companionId: d.companionId as string | undefined,
         clientId: d.clientId as string | undefined,
         status: 'ACCEPTED',
+        ratePerMinute: typeof d.ratePerMinute === 'number' ? d.ratePerMinute : undefined,
       }));
     });
     ch.subscribe('chat:declined', (msg) => {

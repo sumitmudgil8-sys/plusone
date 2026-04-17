@@ -96,16 +96,20 @@ export async function POST(request: NextRequest) {
 
   // Notify client: session is active, redirect to inbox
   // Notify companion (self): confirmed, redirect to chat
+  // Include ratePerMinute so both sides can hydrate their timer immediately
+  // without waiting for a polling round-trip.
   try {
     const ably = getAblyClient();
     await Promise.all([
       ably.channels.get(getUserChannelName(session.clientId)).publish('chat:accepted', {
         sessionId,
         companionId: auth.user.id,
+        ratePerMinute: session.ratePerMinute,
       }),
       ably.channels.get(getUserChannelName(auth.user.id)).publish('chat:accepted', {
         sessionId,
         clientId: session.clientId,
+        ratePerMinute: session.ratePerMinute,
       }),
     ]);
   } catch (err) {

@@ -214,9 +214,10 @@ export default function ClientInboxPage() {
       const sessionId = data.sessionId ?? sessionIdRef.current;
       if (!sessionId) return;
       sessionStartedAtMsRef.current = Date.now();
+      const rate = data.ratePerMinute ?? 0;
       setSession(prev => prev
-        ? { ...prev, sessionId, startedAt: new Date().toISOString() }
-        : { sessionId, ratePerMinute: 0, totalCharged: 0, durationSeconds: 0, startedAt: new Date().toISOString() });
+        ? { ...prev, sessionId, startedAt: new Date().toISOString(), ratePerMinute: rate || prev.ratePerMinute }
+        : { sessionId, ratePerMinute: rate, totalCharged: 0, durationSeconds: 0, startedAt: new Date().toISOString() });
       setSessionState('ACTIVE');
     });
   }, [userId, onChatRequestResponse]);

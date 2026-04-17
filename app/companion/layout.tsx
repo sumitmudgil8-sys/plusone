@@ -622,8 +622,12 @@ function CompanionLayoutInner({ children, userId, needsPasswordChange, setNeedsP
     } catch { /* non-fatal */ }
   }, [incomingCall]);
 
+  // Guard against double-clicks while the async accept call is in-flight
+  const acceptingChatRef = useRef(false);
+
   const handleAcceptChatRequest = useCallback(async () => {
-    if (!incomingChatRequest) return;
+    if (!incomingChatRequest || acceptingChatRef.current) return;
+    acceptingChatRef.current = true;
     const { clientId, sessionId } = incomingChatRequest;
     if (sessionId) dismissedSessionsRef.current.add(sessionId);
     setIncomingChatRequest(null);
@@ -641,7 +645,13 @@ function CompanionLayoutInner({ children, userId, needsPasswordChange, setNeedsP
         });
       } catch { /* non-fatal — inbox polling will retry if needed */ }
     }
-    router.push(`/companion/inbox?active=${clientId}`);
+    acceptingChatRef.current = false;
+    // Pass sid so the inbox page can immediately identify the active session
+    // without waiting for userId to load + polling round-trip.
+    const url = sessionId
+      ? `/companion/inbox?active=${clientId}&sid=${sessionId}`
+      : `/companion/inbox?active=${clientId}`;
+    router.push(url);
   }, [incomingChatRequest, router]);
 
   const handleDeclineChatRequest = useCallback(async () => {
