@@ -26,19 +26,13 @@ export async function POST(request: NextRequest) {
 
   const { sessionId } = parsed.data;
 
-  // Onboarding gate — companion must complete tour before accepting sessions
-  const companion = await prisma.user.findUnique({
-    where: { id: auth.user.id },
-    select: { hasCompletedOnboarding: true },
-  });
-  if (!companion?.hasCompletedOnboarding) {
-    return NextResponse.json(
-      { success: false, error: 'Please complete the onboarding tour first' },
-      { status: 403 }
-    );
-  }
-
-  const session = await prisma.billingSession.findUnique({ where: { id: sessionId } });
+  const [session, companion] = await Promise.all([
+    prisma.billingSession.findUnique({ where: { id: sessionId } }),
+    prisma.user.findUnique({
+      where: { id: auth.user.id },
+      select: { hasCompletedOnboarding: true },
+    }),
+  ]);
 
   if (!session) {
     return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
@@ -49,8 +43,24 @@ export async function POST(request: NextRequest) {
   }
 
   if (session.status !== 'PENDING') {
-    // Idempotent — if already ACTIVE, return success
+    // Idempotent — if already ACTIVE, return success (re-publish so client gets notified)
     if (session.status === 'ACTIVE') {
+      // Re-publish chat:accepted in case the client missed the first event
+      try {
+        const ably = getAblyClient();
+        await Promise.all([
+          ably.channels.get(getUserChannelName(session.clientId)).publish('chat:accepted', {
+            sessionId,
+            companionId: auth.user.id,
+            ratePerMinute: session.ratePerMinute,
+          }),
+          ably.channels.get(getUserChannelName(auth.user.id)).publish('chat:accepted', {
+            sessionId,
+            clientId: session.clientId,
+            ratePerMinute: session.ratePerMinute,
+          }),
+        ]);
+      } catch { /* non-fatal */ }
       return NextResponse.json({
         success: true,
         data: { sessionId, clientId: session.clientId },
@@ -66,6 +76,15 @@ export async function POST(request: NextRequest) {
   if (session.expiresAt && session.expiresAt < new Date()) {
     await prisma.billingSession.update({ where: { id: sessionId }, data: { status: 'EXPIRED' } });
     return NextResponse.json({ success: false, error: 'Request has expired' }, { status: 410 });
+  }
+
+  // Onboarding gate: companions who haven't completed onboarding get a clear error.
+  // Unlike a silent 403, this error is surfaced to the companion so they know what to do.
+  if (!companion?.hasCompletedOnboarding) {
+    return NextResponse.json(
+      { success: false, error: 'ONBOARDING_REQUIRED', message: 'Please complete the onboarding tour before accepting sessions' },
+      { status: 403 }
+    );
   }
 
   const now = new Date();

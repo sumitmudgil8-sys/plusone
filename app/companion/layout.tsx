@@ -629,22 +629,33 @@ function CompanionLayoutInner({ children, userId, needsPasswordChange, setNeedsP
     if (!incomingChatRequest || acceptingChatRef.current) return;
     acceptingChatRef.current = true;
     const { clientId, sessionId } = incomingChatRequest;
+
+    // Dismiss immediately to prevent double-clicks while accept is in-flight
     if (sessionId) dismissedSessionsRef.current.add(sessionId);
     setIncomingChatRequest(null);
-    // Accept the billing session now — this activates billing and notifies
-    // the client via Ably (chat:accepted). Previously this was deferred to
-    // the inbox page's polling, but that caused an infinite loop: the layout
-    // polling would find the still-PENDING session and re-show the modal
-    // before the inbox page had a chance to accept it.
+
     if (sessionId) {
       try {
-        await fetch('/api/billing/accept', {
+        const res = await fetch('/api/billing/accept', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId }),
         });
-      } catch { /* non-fatal — inbox polling will retry if needed */ }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          // Onboarding not complete — redirect companion to dashboard to finish tour
+          if (data.error === 'ONBOARDING_REQUIRED') {
+            acceptingChatRef.current = false;
+            router.push('/companion/dashboard');
+            return;
+          }
+          // Session expired or gone — don't navigate to an empty inbox
+          acceptingChatRef.current = false;
+          return;
+        }
+      } catch { /* network error — navigate anyway, inbox polling will hydrate */ }
     }
+
     acceptingChatRef.current = false;
     // Pass sid so the inbox page can immediately identify the active session
     // without waiting for userId to load + polling round-trip.

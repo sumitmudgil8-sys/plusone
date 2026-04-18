@@ -268,7 +268,8 @@ function CompanionInboxContent() {
         if (cancelled) return;
 
         if (d.data?.status === 'PENDING' && d.data?.type === 'CHAT' && d.data?.sessionId) {
-          // Companion is now in the thread — activate the pending chat.
+          // Companion is on the inbox page with a still-PENDING session — activate it.
+          // This is the fallback path for when the layout's accept call failed (e.g. network error).
           try {
             const acceptRes = await fetch('/api/billing/accept', {
               method: 'POST',
@@ -276,10 +277,15 @@ function CompanionInboxContent() {
               body: JSON.stringify({ sessionId: d.data.sessionId }),
             });
             const acceptData = await acceptRes.json();
-            if (acceptData.success) {
+            if (acceptRes.ok && acceptData.success) {
               // Hydrate immediately — don't wait for next poll
               hydrate(d.data.sessionId, d.data.ratePerMinute ?? 0, 0, null);
+            } else if (!acceptRes.ok && acceptData.error === 'ONBOARDING_REQUIRED') {
+              // Can't accept without completing the onboarding tour — redirect to dashboard
+              router.push('/companion/dashboard');
+              return;
             }
+            // Other failures (expired, not found): fall through to next poll
           } catch { /* non-fatal — next poll will retry */ }
           return;
         }
