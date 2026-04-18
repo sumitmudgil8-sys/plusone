@@ -137,24 +137,27 @@ export default function BookingPage() {
     });
   }, [userId, onChatRequestResponse, companionId, router]);
 
-  // Poll session-status while waiting — catches missed Ably chat:accepted events
+  // Poll session-status while waiting — catches missed Ably chat:accepted events.
+  // Fires immediately on first run, then every 2s for fast transition.
   useEffect(() => {
     if (chatRequestStatus !== 'waiting' || !chatSessionId) return;
-    const interval = setInterval(async () => {
+    let cancelled = false;
+    const check = async () => {
       try {
         const res = await fetch(`/api/billing/session-status?companionId=${companionId}`);
         const d = await res.json();
+        if (cancelled) return;
         if (d.data?.status === 'ACTIVE') {
-          clearInterval(interval);
           setChatRequestStatus('accepted');
-          setTimeout(() => router.push(`/client/inbox/${companionId}`), 800);
-        } else if (d.data?.status === 'EXPIRED' || d.data?.status === 'NONE') {
-          clearInterval(interval);
+          setTimeout(() => router.push(`/client/inbox/${companionId}`), 600);
+        } else if (d.data?.status === 'EXPIRED' || d.data?.status === 'ENDED' || d.data?.status === 'NONE') {
           setChatRequestStatus('expired');
         }
       } catch { /* non-fatal */ }
-    }, 3000);
-    return () => clearInterval(interval);
+    };
+    check(); // fire immediately
+    const interval = setInterval(check, 2000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [chatRequestStatus, chatSessionId, companionId, router]);
 
   // Countdown timer while waiting

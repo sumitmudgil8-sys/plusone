@@ -339,10 +339,12 @@ export default function InboxPage() {
   /* ─── Polling fallback while waiting for companion to accept ─── */
   useEffect(() => {
     if (!sessionWaiting || !chatSessionId || !activeThread) return;
-    const interval = setInterval(async () => {
+    let cancelled = false;
+    const check = async () => {
       try {
         const res = await fetch(`/api/billing/session-status?companionId=${activeThread.companionId}`);
         const d = await res.json();
+        if (cancelled) return;
         if (d.data?.status === 'ACTIVE') {
           setChatSessionId(d.data.sessionId);
           if (d.data.ratePerMinute) setChatRatePerMinute(d.data.ratePerMinute);
@@ -354,8 +356,10 @@ export default function InboxPage() {
           showToast('Request expired. Please try again.');
         }
       } catch { /* non-fatal */ }
-    }, 3000);
-    return () => clearInterval(interval);
+    };
+    check(); // fire immediately
+    const interval = setInterval(check, 2000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [sessionWaiting, chatSessionId, activeThread, showToast]);
 
   /* ─── chat:ended ─── */

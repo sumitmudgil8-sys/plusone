@@ -160,11 +160,10 @@ export default function ClientInboxPage() {
     checkSession();
   }, [userId, checkSession]);
 
-  // Poll while PENDING — Ably events (chat:accepted / call:declined) are the
-  // primary signal; this is a safety-net fallback so we use a relaxed 10s interval.
+  // Poll while PENDING — fires immediately then every 2s for fast transition.
   useEffect(() => {
     if (sessionState !== 'PENDING') return;
-    const interval = setInterval(checkSession, 10_000);
+    const interval = setInterval(checkSession, 2000);
     return () => clearInterval(interval);
   }, [sessionState, checkSession]);
 
@@ -209,6 +208,7 @@ export default function ClientInboxPage() {
   }, [sessionState, userId, companionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ably: companion accepted or declined
+  // Ably: companion accepted or declined
   useEffect(() => {
     if (!userId) return;
     return onChatRequestResponse((data) => {
@@ -220,11 +220,11 @@ export default function ClientInboxPage() {
       if (data.status !== 'ACCEPTED') return;
       const sessionId = data.sessionId ?? sessionIdRef.current;
       if (!sessionId) return;
-      sessionStartedAtMsRef.current = Date.now();
+      // Don't set sessionStartedAtMsRef — timer starts on first message
       const rate = data.ratePerMinute ?? 0;
       setSession(prev => prev
-        ? { ...prev, sessionId, startedAt: new Date().toISOString(), ratePerMinute: rate || prev.ratePerMinute }
-        : { sessionId, ratePerMinute: rate, totalCharged: 0, durationSeconds: 0, startedAt: new Date().toISOString() });
+        ? { ...prev, sessionId, startedAt: null, ratePerMinute: rate || prev.ratePerMinute }
+        : { sessionId, ratePerMinute: rate, totalCharged: 0, durationSeconds: 0, startedAt: null });
       setSessionState('ACTIVE');
     });
   }, [userId, onChatRequestResponse]);
