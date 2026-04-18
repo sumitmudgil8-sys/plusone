@@ -63,15 +63,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data: { status: 'EXPIRED', sessionId: session.id } });
   }
 
-  // Auto-end orphaned ACTIVE sessions (no tick for > grace period)
-  if (session.status === 'ACTIVE' && session.lastTickAt) {
-    const graceThreshold = new Date(Date.now() - BILLING_GRACE_SECONDS * 1000);
-    if (session.lastTickAt < graceThreshold) {
-      await prisma.billingSession.update({
-        where: { id: session.id },
-        data: { status: 'ENDED', endedAt: new Date() },
-      });
-      return NextResponse.json({ success: true, data: { status: 'ENDED', sessionId: session.id } });
+  // Auto-end orphaned ACTIVE sessions
+  if (session.status === 'ACTIVE') {
+    if (session.startedAt) {
+      // Billing has started — auto-end if no tick for > grace period
+      const graceThreshold = new Date(Date.now() - BILLING_GRACE_SECONDS * 1000);
+      if (session.lastTickAt < graceThreshold) {
+        await prisma.billingSession.update({
+          where: { id: session.id },
+          data: { status: 'ENDED', endedAt: new Date() },
+        });
+        return NextResponse.json({ success: true, data: { status: 'ENDED', sessionId: session.id } });
+      }
+    } else {
+      // Billing hasn't started (no first message) — auto-end after 10 min
+      const noMessageTimeout = new Date(Date.now() - 10 * 60 * 1000);
+      if (session.lastTickAt < noMessageTimeout) {
+        await prisma.billingSession.update({
+          where: { id: session.id },
+          data: { status: 'ENDED', endedAt: new Date() },
+        });
+        return NextResponse.json({ success: true, data: { status: 'ENDED', sessionId: session.id } });
+      }
     }
   }
 

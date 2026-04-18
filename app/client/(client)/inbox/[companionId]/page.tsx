@@ -74,8 +74,13 @@ export default function ClientInboxPage() {
   const sessionStateRef = useRef<SessionState>('LOADING');
   const sessionIdRef = useRef<string | null>(null);
 
+  const [billingStarted, setBillingStarted] = useState(false);
+
   useEffect(() => { sessionStateRef.current = sessionState; }, [sessionState]);
   useEffect(() => { sessionIdRef.current = session?.sessionId ?? null; }, [session?.sessionId]);
+
+  // Reset billingStarted when session changes
+  useEffect(() => { setBillingStarted(false); }, [session?.sessionId]);
 
   // Room ID is computed early — useSocket subscribes to the channel immediately,
   // before the session is even active. This means the subscription is ready and
@@ -132,10 +137,12 @@ export default function ClientInboxPage() {
           startedAt,
         });
         setSessionType(d.data.type ?? 'CHAT');
-        if (!sessionStartedAtMsRef.current) {
-          sessionStartedAtMsRef.current = startedAt
-            ? new Date(startedAt).getTime()
-            : Date.now() - durationSeconds * 1000;
+        // Only set timer start if billing has actually started (startedAt set by first tick)
+        if (startedAt) {
+          setBillingStarted(true);
+          if (!sessionStartedAtMsRef.current) {
+            sessionStartedAtMsRef.current = new Date(startedAt).getTime();
+          }
         }
         setSessionState('ACTIVE');
       } else if (status === 'PENDING') {
@@ -237,6 +244,17 @@ export default function ClientInboxPage() {
     return onBalanceLow(() => setBalanceLow(true));
   }, [onBalanceLow]);
 
+  // Detect first message to start billing timer (for CHAT sessions)
+  useEffect(() => {
+    if (billingStarted || sessionState !== 'ACTIVE' || sessionType !== 'CHAT') return;
+    if (roomMessages.length > 0) {
+      setBillingStarted(true);
+      if (!sessionStartedAtMsRef.current) {
+        sessionStartedAtMsRef.current = Date.now();
+      }
+    }
+  }, [roomMessages.length, billingStarted, sessionState, sessionType]);
+
   // Voice call — only pass sessionId once session is ACTIVE (companion has accepted).
   // Passing it while PENDING causes a 409 from /api/agora/token since billing hasn't started yet.
   const voiceSessionId = sessionType === 'VOICE' && sessionState === 'ACTIVE' && session?.sessionId ? session.sessionId : null;
@@ -244,9 +262,10 @@ export default function ClientInboxPage() {
 
   // ── Wall-clock timer ──────────────────────────────────────────────────────
   // For VOICE calls, timer starts when companion joins Agora (matches billing start).
-  // For CHAT calls, timer starts immediately when session goes ACTIVE.
+  // For CHAT calls, timer starts after first message is sent/received.
   const canStartTimer = sessionState === 'ACTIVE' && session &&
-    (sessionType !== 'VOICE' || voiceCall.remoteUserJoined);
+    (sessionType !== 'VOICE' || voiceCall.remoteUserJoined) &&
+    (sessionType !== 'CHAT' || billingStarted);
 
   useEffect(() => {
     if (!canStartTimer || !session) return;
@@ -316,11 +335,11 @@ export default function ClientInboxPage() {
     } catch { /* non-fatal */ }
   }, []);
 
-  // Billing tick — for VOICE calls, delay until companion actually joins Agora RTC
-  // so the client isn't billed for the Agora connection setup time.
-  // For CHAT sessions, start ticks immediately when session goes ACTIVE.
+  // Billing tick — for VOICE calls, delay until companion actually joins Agora RTC.
+  // For CHAT sessions, delay until first message is sent/received.
   const canStartTicks = sessionState === 'ACTIVE' && session?.sessionId &&
-    (sessionType !== 'VOICE' || voiceCall.remoteUserJoined);
+    (sessionType !== 'VOICE' || voiceCall.remoteUserJoined) &&
+    (sessionType !== 'CHAT' || billingStarted);
 
   useEffect(() => {
     if (!canStartTicks || !session?.sessionId) return;
@@ -565,6 +584,7 @@ export default function ClientInboxPage() {
       liveSeconds={liveSeconds}
       balanceLow={balanceLow}
       onEndSession={handleEndSession}
+      onFirstMessage={() => { if (!billingStarted) setBillingStarted(true); }}
       publishToRoom={publishToRoom}
       publishRoomTyping={publishRoomTyping}
       roomMessages={roomMessages}
@@ -583,6 +603,7 @@ interface ClientChatViewProps {
   liveSeconds: number;
   balanceLow: boolean;
   onEndSession: () => Promise<void>;
+  onFirstMessage: () => void;
   publishToRoom: (text: string, id?: string) => Promise<string | null>;
   publishRoomTyping: (isTyping: boolean) => void;
   roomMessages: RoomMessage[];   // direct state from parent hook
@@ -597,6 +618,7 @@ function ClientChatView({
   liveSeconds,
   balanceLow,
   onEndSession,
+  onFirstMessage,
   publishToRoom,
   publishRoomTyping,
   roomMessages,
@@ -735,6 +757,7 @@ function ClientChatView({
     setInputText('');
     if (inputRef.current) inputRef.current.style.height = 'auto';
     setSending(true);
+    onFirstMessage();
 
     // Optimistic: show immediately before echo
     setPendingMessages(prev => [...prev, { id: msgId, text: content, senderId: userId, createdAt: now }]);
@@ -753,7 +776,7 @@ function ClientChatView({
     } finally {
       setSending(false);
     }
-  }, [inputText, sending, userId, companionId, publishToRoom, publishRoomTyping]);
+  }, [inputText, sending, userId, companionId, publishToRoom, publishRoomTyping, onFirstMessage]);
 
   const handleTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);

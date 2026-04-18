@@ -199,7 +199,7 @@ function CompanionInboxContent() {
 
   // ── Reset session state when thread changes ───────────────────────────────
   // If we have a URL session ID (companion just accepted from modal),
-  // pre-hydrate immediately so the timer starts without waiting for the poll.
+  // pre-hydrate immediately so the chat screen opens. Timer starts on first message.
   useEffect(() => {
     if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
     setSessionEnded(false);
@@ -208,11 +208,11 @@ function CompanionInboxContent() {
 
     if (urlSessionId && activeClientId) {
       // The layout already accepted — session is ACTIVE. Set state immediately
-      // so the timer starts now. The polling will fill in ratePerMinute.
+      // so the chat screen opens. Timer will start on first message.
       setChatSessionActive(true);
       setChatSessionId(urlSessionId);
       setChatRatePerMinute(0); // will be filled by polling or Ably
-      sessionStartedAtMsRef.current = Date.now();
+      // Don't set sessionStartedAtMsRef — timer starts on first message
     } else {
       setChatSessionActive(false);
       setChatSessionId(null);
@@ -246,19 +246,19 @@ function CompanionInboxContent() {
 
     const hydrate = (sessionId: string, ratePerMinute: number, durationSeconds: number, startedAt: string | null) => {
       if (cancelled) return;
-      if (!sessionStartedAtMsRef.current) {
-        sessionStartedAtMsRef.current = startedAt
-          ? new Date(startedAt).getTime()
-          : Date.now() - durationSeconds * 1000;
+      // Only set timer start if billing has actually started (startedAt set by first tick)
+      if (startedAt && !sessionStartedAtMsRef.current) {
+        sessionStartedAtMsRef.current = new Date(startedAt).getTime();
       }
       setChatSessionActive(true);
       setChatSessionId(sessionId);
       setChatRatePerMinute(ratePerMinute);
-      setSessionSeconds(prev => {
-        // Keep higher value — don't reset timer backwards if wall-clock is ahead
-        const serverSec = durationSeconds;
-        return prev > serverSec ? prev : serverSec;
-      });
+      if (startedAt) {
+        setSessionSeconds(prev => {
+          const serverSec = durationSeconds;
+          return prev > serverSec ? prev : serverSec;
+        });
+      }
     };
 
     const check = async () => {
@@ -304,9 +304,7 @@ function CompanionInboxContent() {
     return onChatRequestResponse((data) => {
       if (data.status !== 'ACCEPTED' || !data.clientId) return;
       if (data.clientId === activeClientId) {
-        if (!sessionStartedAtMsRef.current) {
-          sessionStartedAtMsRef.current = Date.now();
-        }
+        // Don't set sessionStartedAtMsRef — timer starts on first message
         setChatSessionActive(true);
         if (data.sessionId) setChatSessionId(data.sessionId);
         if (data.ratePerMinute) setChatRatePerMinute(data.ratePerMinute);
@@ -324,15 +322,22 @@ function CompanionInboxContent() {
     });
   }, [onChatEnded, chatSessionId]);
 
+  // ── Detect first message to start timer ──────────────────────────────────
+  useEffect(() => {
+    if (!chatSessionActive || sessionStartedAtMsRef.current) return;
+    if (roomMessages.length > 0) {
+      sessionStartedAtMsRef.current = Date.now();
+    }
+  }, [roomMessages.length, chatSessionActive]);
+
   // ── Session timer (wall-clock based) ──────────────────────────────────────
+  // Timer only ticks when sessionStartedAtMsRef is set (i.e., first message sent/received).
   useEffect(() => {
     if (!chatSessionActive) {
       if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
       return;
     }
-    if (!sessionStartedAtMsRef.current) {
-      sessionStartedAtMsRef.current = Date.now();
-    }
+    // Don't auto-set sessionStartedAtMsRef — it's set when first message arrives
     const tick = () => {
       if (!sessionStartedAtMsRef.current) return;
       setSessionSeconds(Math.floor((Date.now() - sessionStartedAtMsRef.current) / 1000));
@@ -481,6 +486,11 @@ function CompanionInboxContent() {
             onEndSession={handleEndSession}
             onBack={() => setShowMobileChat(false)}
             onOwnMessage={handleOwnMessage}
+            onFirstMessage={() => {
+              if (!sessionStartedAtMsRef.current) {
+                sessionStartedAtMsRef.current = Date.now();
+              }
+            }}
             publishToRoom={publishToRoom}
             publishRoomTyping={publishRoomTyping}
             roomMessages={roomMessages}
@@ -546,6 +556,7 @@ interface CompanionChatPanelProps {
   onEndSession: () => Promise<void>;
   onBack: () => void;
   onOwnMessage: (content: string, createdAt: string) => void;
+  onFirstMessage: () => void;
   publishToRoom: (text: string, id?: string) => Promise<string | null>;
   publishRoomTyping: (isTyping: boolean) => void;
   roomMessages: RoomMessage[];   // direct state from parent hook
@@ -555,7 +566,7 @@ interface CompanionChatPanelProps {
 function CompanionChatPanel({
   currentUserId, clientId, clientName, clientAvatar,
   chatSessionActive, sessionEnded, sessionSeconds, ratePerMinute,
-  onEndSession, onBack, onOwnMessage,
+  onEndSession, onBack, onOwnMessage, onFirstMessage,
   publishToRoom, publishRoomTyping,
   roomMessages, isOtherTyping,
 }: CompanionChatPanelProps) {
@@ -688,6 +699,7 @@ function CompanionChatPanel({
     if (inputRef.current) inputRef.current.style.height = 'auto';
     setSending(true);
     publishRoomTyping(false);
+    onFirstMessage();
 
     // Optimistic: show immediately before echo
     setPendingMessages(prev => [...prev, { id: msgId, text: content, senderId: currentUserId, createdAt: now }]);
@@ -706,7 +718,7 @@ function CompanionChatPanel({
     } finally {
       setSending(false);
     }
-  }, [inputText, sending, sessionEnded, currentUserId, clientId, publishToRoom, publishRoomTyping, onOwnMessage]);
+  }, [inputText, sending, sessionEnded, currentUserId, clientId, publishToRoom, publishRoomTyping, onOwnMessage, onFirstMessage]);
 
   const handleTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);

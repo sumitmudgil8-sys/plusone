@@ -121,6 +121,13 @@ export default function InboxPage() {
   const chatRateRef = useRef(0);
   useEffect(() => { chatRateRef.current = chatRatePerMinute; }, [chatRatePerMinute]);
 
+  // Billing starts on first message, not on accept
+  const billingStartedRef = useRef(false);
+  const sessionActiveRef = useRef(false);
+  const chatSessionIdRef = useRef<string | null>(null);
+  useEffect(() => { sessionActiveRef.current = sessionActive; }, [sessionActive]);
+  useEffect(() => { chatSessionIdRef.current = chatSessionId; }, [chatSessionId]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesBoxRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -257,6 +264,7 @@ export default function InboxPage() {
     setSessionWaiting(false);
     setTotalCharged(0);
     setSessionSummary(null);
+    billingStartedRef.current = false;
   }, [activeThreadId]);
 
   /* ─── Check active session when thread is selected ─── */
@@ -273,7 +281,11 @@ export default function InboxPage() {
           setChatRatePerMinute(d.data.ratePerMinute);
           setTotalCharged(d.data.totalCharged ?? 0);
           setSessionActive(true);
-          startTickInterval(d.data.sessionId);
+          // Only start ticks if billing already started (startedAt set by first tick)
+          if (d.data.startedAt) {
+            billingStartedRef.current = true;
+            startTickInterval(d.data.sessionId);
+          }
         }
       } catch {
         // non-fatal
@@ -313,7 +325,7 @@ export default function InboxPage() {
         if (data.ratePerMinute) setChatRatePerMinute(data.ratePerMinute);
         setSessionActive(true);
         setSessionWaiting(false);
-        startTickInterval(sid);
+        // Don't start ticks here — billing starts on first message
       } else {
         // DECLINED
         setChatSessionId(null);
@@ -322,7 +334,29 @@ export default function InboxPage() {
       }
     });
     return unsubscribe;
-  }, [onChatRequestResponse, startTickInterval, showToast]);
+  }, [onChatRequestResponse, showToast]);
+
+  /* ─── Polling fallback while waiting for companion to accept ─── */
+  useEffect(() => {
+    if (!sessionWaiting || !chatSessionId || !activeThread) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/billing/session-status?companionId=${activeThread.companionId}`);
+        const d = await res.json();
+        if (d.data?.status === 'ACTIVE') {
+          setChatSessionId(d.data.sessionId);
+          if (d.data.ratePerMinute) setChatRatePerMinute(d.data.ratePerMinute);
+          setSessionActive(true);
+          setSessionWaiting(false);
+        } else if (d.data?.status === 'EXPIRED' || d.data?.status === 'ENDED' || d.data?.status === 'NONE') {
+          setSessionWaiting(false);
+          setChatSessionId(null);
+          showToast('Request expired. Please try again.');
+        }
+      } catch { /* non-fatal */ }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [sessionWaiting, chatSessionId, activeThread, showToast]);
 
   /* ─── chat:ended ─── */
   useEffect(() => {
@@ -376,9 +410,8 @@ export default function InboxPage() {
       if (d.data.pending) {
         setSessionWaiting(true);
       } else {
-        // Resumed an already ACTIVE session
+        // Resumed an already ACTIVE session — ticks start on first message
         setSessionActive(true);
-        startTickInterval(sessionId);
       }
     } catch {
       showToast('Failed to start session. Please try again.');
@@ -397,6 +430,9 @@ export default function InboxPage() {
       const belongsToActive =
         activeThread &&
         (data.threadId === activeThread.threadId || data.senderId === activeThread.companionId);
+
+      // Start billing on first incoming message
+      triggerBillingStart();
 
       if (belongsToActive) {
         setMessages((prev) => {
@@ -451,6 +487,14 @@ export default function InboxPage() {
     }
   };
 
+  /* ─── Trigger billing on first message (send or receive) ─── */
+  const triggerBillingStart = useCallback(() => {
+    if (!billingStartedRef.current && sessionActiveRef.current && chatSessionIdRef.current) {
+      billingStartedRef.current = true;
+      startTickInterval(chatSessionIdRef.current);
+    }
+  }, [startTickInterval]);
+
   /* ─── Send message ─── */
   const handleSend = async () => {
     if (!input.trim() || !activeThread || sending || !currentUser) return;
@@ -460,6 +504,7 @@ export default function InboxPage() {
       textareaRef.current.style.height = 'auto';
     }
     setSending(true);
+    triggerBillingStart();
 
     const tempId = `temp-${Date.now()}`;
     const optimistic: Message = {

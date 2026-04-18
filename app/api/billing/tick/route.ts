@@ -72,13 +72,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Atomically claim the tick slot. This replaces the previous read-then-
-    // check pattern, which had a TOCTOU window where two concurrent ticks
-    // could both pass the lastTickAt check and both debit the wallet.
+    // Atomically claim the tick slot.
     //
-    // The updateMany only advances lastTickAt if BOTH conditions hold:
-    //   1. the session is still ACTIVE (not ended by another request)
-    //   2. at least minTickMs has elapsed since the last recorded tick
+    // First tick (lastTickAt is null): billing starts now — set both startedAt
+    // and lastTickAt. The accept API deliberately leaves these null so billing
+    // only begins when the first message triggers a tick.
+    //
+    // Subsequent ticks: advance lastTickAt only if enough time has elapsed.
     //
     // If count === 0, another tick beat us — bail out before touching wallets.
     const minTickMs = (BILLING_TICK_SECONDS - 5) * 1000; // 55s minimum
@@ -86,17 +86,37 @@ export async function POST(request: NextRequest) {
     const tickCutoff = new Date(nowMs - minTickMs);
     const nowDate = new Date(nowMs);
 
-    const claim = await prisma.billingSession.updateMany({
-      where: {
-        id: sessionId,
-        clientId: user.id,
-        status: 'ACTIVE',
-        lastTickAt: { lte: tickCutoff },
-      },
-      data: { lastTickAt: nowDate },
-    });
+    // First tick (startedAt is null): billing starts now — set startedAt + lastTickAt.
+    // Accept API sets lastTickAt but leaves startedAt null, so we use startedAt as the flag.
+    // Subsequent ticks: advance lastTickAt only if enough time elapsed.
+    const isFirstTick = !session.startedAt;
+    let claimCount: number;
 
-    if (claim.count === 0) {
+    if (isFirstTick) {
+      const claim = await prisma.billingSession.updateMany({
+        where: {
+          id: sessionId,
+          clientId: user.id,
+          status: 'ACTIVE',
+          startedAt: null, // atomic: only one concurrent first-tick can succeed
+        },
+        data: { lastTickAt: nowDate, startedAt: nowDate },
+      });
+      claimCount = claim.count;
+    } else {
+      const claim = await prisma.billingSession.updateMany({
+        where: {
+          id: sessionId,
+          clientId: user.id,
+          status: 'ACTIVE',
+          lastTickAt: { lte: tickCutoff },
+        },
+        data: { lastTickAt: nowDate },
+      });
+      claimCount = claim.count;
+    }
+
+    if (claimCount === 0) {
       return NextResponse.json(
         { success: false, error: 'TICK_TOO_SOON' },
         { status: 429 }

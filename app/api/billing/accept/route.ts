@@ -69,9 +69,11 @@ export async function POST(request: NextRequest) {
   }
 
   const now = new Date();
+  // Set ACTIVE and reset lastTickAt (for orphan-check freshness), but don't set startedAt.
+  // startedAt remains null — billing timer starts on first message when the first tick sets it.
   await prisma.billingSession.update({
     where: { id: sessionId },
-    data: { status: 'ACTIVE', startedAt: now, lastTickAt: now },
+    data: { status: 'ACTIVE', lastTickAt: now },
   });
 
   // Track response time for ranking system
