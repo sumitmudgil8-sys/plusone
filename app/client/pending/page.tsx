@@ -324,7 +324,7 @@ export default function PendingPage() {
                 </>
               ) : (
                 <>
-                  Our team is reviewing your application and verifying your ID.
+                  Our team is reviewing your application.
                   You&apos;ll receive an update once a decision has been made — typically within{' '}
                   <strong className="text-white">24–48 hours</strong>.
                 </>
@@ -569,15 +569,6 @@ export default function PendingPage() {
                 </div>
                 <span className="text-sm text-white/70">Account created</span>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
-                  <svg className="w-3.5 h-3.5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <span className="text-sm text-white/70">Government ID uploaded</span>
-              </div>
-
               {isAdminApproved ? (
                 <>
                   <div className="flex items-center gap-3">

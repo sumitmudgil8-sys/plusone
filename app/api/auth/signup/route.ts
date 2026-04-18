@@ -93,7 +93,6 @@ export async function POST(request: NextRequest) {
       return u;
     });
 
-    // Issue JWT so user can proceed to ID upload without logging in
     const token = signJWT({
       id: user.id,
       email: user.email,
@@ -104,7 +103,7 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.json({
       success: true,
-      message: 'Account created. Please upload your government ID.',
+      message: 'Account created. Your application is under review.',
     });
 
     return setAuthCookie(response, token);

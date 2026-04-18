@@ -74,8 +74,8 @@ export default function SignupPage() {
         return;
       }
 
-      toast.success('Account created! Please upload your ID.');
-      router.push('/client/verify');
+      toast.success('Account created! Your application is under review.');
+      router.push('/client/pending');
     } catch {
       setError('Something went wrong. Please try again.');
       toast.error('Something went wrong. Please try again.');
