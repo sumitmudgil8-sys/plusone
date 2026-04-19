@@ -685,6 +685,7 @@ function AvatarReviewSection() {
 
 // ─── Companions Section ──────────────────────────────────────────
 function CompanionsSection() {
+  const toast = useToast();
   const [companions, setCompanions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -701,6 +702,9 @@ function CompanionsSection() {
     callRatePerMinute: 0,
   });
   const [creating, setCreating] = useState(false);
+  const [ratesTarget, setRatesTarget] = useState<{ id: string; name: string } | null>(null);
+  const [ratesForm, setRatesForm] = useState({ hourlyRate: 0, chatRatePerMinute: 0, callRatePerMinute: 0 });
+  const [savingRates, setSavingRates] = useState(false);
 
   useEffect(() => {
     fetchCompanions();
@@ -768,6 +772,40 @@ function CompanionsSection() {
       console.error('Error deleting companion:', error);
     } finally {
       setDeleteBusy(false);
+    }
+  };
+
+  const openRatesModal = (companion: any) => {
+    const p = companion.companionProfile;
+    setRatesForm({
+      hourlyRate: Math.round((p?.hourlyRate ?? 0) / 100),
+      chatRatePerMinute: Math.round((p?.chatRatePerMinute ?? 0) / 100),
+      callRatePerMinute: Math.round((p?.callRatePerMinute ?? 0) / 100),
+    });
+    setRatesTarget({ id: companion.id, name: p?.name ?? companion.email });
+  };
+
+  const handleSaveRates = async () => {
+    if (!ratesTarget) return;
+    setSavingRates(true);
+    try {
+      const res = await fetch('/api/admin/companions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ratesTarget.id, action: 'update_rates', ...ratesForm }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Rates updated');
+        setRatesTarget(null);
+        fetchCompanions();
+      } else {
+        toast.error(data.error ?? 'Failed to update rates');
+      }
+    } catch {
+      toast.error('Network error — please try again');
+    } finally {
+      setSavingRates(false);
     }
   };
 
@@ -862,6 +900,13 @@ function CompanionsSection() {
                           }
                         >
                           {companion.companionProfile?.isApproved ? 'Reject' : 'Approve'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openRatesModal(companion)}
+                        >
+                          Edit Rates
                         </Button>
                         <Button
                           size="sm"
@@ -964,6 +1009,57 @@ function CompanionsSection() {
           <Button onClick={() => setShowPasswordModal(false)} className="w-full">
             Done
           </Button>
+        </div>
+      </Modal>
+
+      {/* Edit Rates Modal */}
+      <Modal
+        isOpen={!!ratesTarget}
+        onClose={() => setRatesTarget(null)}
+        title={`Edit Rates — ${ratesTarget?.name ?? ''}`}
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-1.5">Booking (₹/hr)</label>
+              <input
+                type="number"
+                min={0}
+                value={ratesForm.hourlyRate}
+                onChange={(e) => setRatesForm({ ...ratesForm, hourlyRate: parseInt(e.target.value) || 0 })}
+                className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-1.5">Chat (₹/min)</label>
+              <input
+                type="number"
+                min={0}
+                value={ratesForm.chatRatePerMinute}
+                onChange={(e) => setRatesForm({ ...ratesForm, chatRatePerMinute: parseInt(e.target.value) || 0 })}
+                className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-1.5">Call (₹/min)</label>
+              <input
+                type="number"
+                min={0}
+                value={ratesForm.callRatePerMinute}
+                onChange={(e) => setRatesForm({ ...ratesForm, callRatePerMinute: parseInt(e.target.value) || 0 })}
+                className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg px-4 py-3"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-white/40">Enter rates in ₹. These are the client-facing rates — the companion earns 50% of chat/call rates and 70% of booking rates.</p>
+          <div className="flex gap-3">
+            <Button variant="ghost" className="flex-1" onClick={() => setRatesTarget(null)}>
+              Cancel
+            </Button>
+            <Button className="flex-1" isLoading={savingRates} onClick={handleSaveRates}>
+              Save Rates
+            </Button>
+          </div>
         </div>
       </Modal>
 

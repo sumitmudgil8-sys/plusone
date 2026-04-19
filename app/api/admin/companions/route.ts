@@ -175,16 +175,45 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH /api/admin/companions - Approve/reject companion
+// PATCH /api/admin/companions - Approve/reject companion, or update rates
 export async function PATCH(request: NextRequest) {
   const auth = requireAuth(request, ['ADMIN']);
   if (auth.user === null) return auth.response;
 
   try {
     const body = await request.json();
-    const { id, isApproved } = body;
+    const { id, isApproved, action, hourlyRate, chatRatePerMinute, callRatePerMinute } = body;
 
-    if (!id || isApproved === undefined) {
+    if (!id) {
+      return NextResponse.json({ error: 'Companion ID is required' }, { status: 400 });
+    }
+
+    // ── Rate update ──────────────────────────────────────────────────────────
+    if (action === 'update_rates') {
+      if (hourlyRate === undefined && chatRatePerMinute === undefined && callRatePerMinute === undefined) {
+        return NextResponse.json({ error: 'At least one rate field is required' }, { status: 400 });
+      }
+      const data: { hourlyRate?: number; chatRatePerMinute?: number; callRatePerMinute?: number } = {};
+      // Admin inputs in ₹; store in paise
+      if (typeof hourlyRate === 'number' && hourlyRate >= 0)       data.hourlyRate = hourlyRate * 100;
+      if (typeof chatRatePerMinute === 'number' && chatRatePerMinute >= 0) data.chatRatePerMinute = chatRatePerMinute * 100;
+      if (typeof callRatePerMinute === 'number' && callRatePerMinute >= 0) data.callRatePerMinute = callRatePerMinute * 100;
+
+      const companion = await prisma.companionProfile.update({ where: { userId: id }, data });
+
+      await recordAdminAction({
+        adminId: auth.user.id,
+        action: AdminAction.COMPANION_UPDATE,
+        targetType: 'CompanionProfile',
+        targetId: id,
+        metadata: data,
+      });
+
+      return NextResponse.json({ success: true, companion });
+    }
+
+    // ── Approve / reject ─────────────────────────────────────────────────────
+    if (isApproved === undefined) {
       return NextResponse.json(
         { error: 'Companion ID and isApproved status are required' },
         { status: 400 }
