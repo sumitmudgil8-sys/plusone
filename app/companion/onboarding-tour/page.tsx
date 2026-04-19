@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 // ─── Screen data ─────────────────────────────────────────────────────────────
@@ -19,28 +19,26 @@ interface SimOption {
 }
 
 const SIM_CONVERSATION: SimMessage[] = [
-  { from: 'client', text: 'Hey! I saw your profile. Are you available this Saturday?' },
-  { from: 'companion', text: 'Hi! Yes, I am. What event do you have in mind?' },
-  { from: 'client', text: 'It\'s a cocktail party at a rooftop lounge. Would love some company.' },
-  { from: 'companion', text: 'Sounds great! I\'d be happy to join. Can you share the time and venue details?' },
-  { from: 'client', text: 'Sure. 8 PM at Sky Lounge, Connaught Place. By the way, can we meet privately after?' },
+  { from: 'client', text: 'Hey! Loved your profile. Would be great to connect over coffee sometime.' },
+  { from: 'companion', text: 'Hi! Thanks for reaching out. You can book a session through the platform and we can plan it from there.' },
+  { from: 'client', text: 'Sure! One thing though — can I get your WhatsApp number? Would be much easier to coordinate directly.' },
 ];
 
 const SIM_OPTIONS: SimOption[] = [
   {
-    label: 'Sure, we can figure that out later!',
+    label: 'Of course! Let me share my number with you.',
     correct: false,
-    feedback: 'This implies you\'re open to non-social requests. Plus One is strictly for social companionship — events, dining, travel, and conversation only.',
+    feedback: 'Sharing personal contact info moves communication off-platform, which violates Plus One\'s guidelines and removes safety protections for both of you.',
   },
   {
-    label: 'I appreciate the invite! I\'m only available for the event itself. Looking forward to it!',
+    label: 'I keep all coordination through Plus One — it keeps things safe and simple for both of us! Go ahead and book and we\'ll sort out the details here.',
     correct: true,
-    feedback: 'Perfect! You maintained a professional and warm tone while clearly setting boundaries. This is exactly how to handle these situations.',
+    feedback: 'Perfect! You kept the tone warm and welcoming while staying on-platform. This protects both you and the client, and is exactly the right approach.',
   },
   {
-    label: 'That\'s against the rules. Don\'t message me again.',
+    label: 'I can\'t share personal details. Please don\'t ask again.',
     correct: false,
-    feedback: 'While the boundary is correct, this tone is unnecessarily harsh. A polite redirect keeps the client engaged for legitimate bookings.',
+    feedback: 'The boundary is correct, but the tone is needlessly cold. A friendly redirect keeps the client engaged for legitimate bookings without making them feel judged.',
   },
 ];
 
@@ -153,46 +151,50 @@ function WelcomeScreen() {
   );
 }
 
-function EarningsScreen() {
+function EarningsScreen({ chatRate, callRate, bookingRate }: {
+  chatRate: number;   // paise/min — companion's share (already 50% of billing rate)
+  callRate: number;   // paise/min — companion's share (already 50% of billing rate)
+  bookingRate: number; // paise/hr — companion's share (already 70% of booking rate)
+}) {
+  const fmtMin = (p: number) => `₹${(p / 100).toFixed(0)}/min`;
+  const fmtHr  = (p: number) => `₹${(p / 100).toLocaleString('en-IN')}/hr`;
+
+  const exampleMins = 20;
+  const exampleEarning = chatRate * exampleMins;
+
   return (
     <ScreenWrapper
       icon={<svg className="w-8 h-8 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
       title="How You Earn"
-      subtitle="Transparent, per-minute billing with no hidden fees."
+      subtitle="Clear, per-minute earnings — no hidden deductions."
     >
       <div className="space-y-4">
         <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-5 space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-sm text-white/50">Chat sessions</span>
-            <span className="text-sm text-white font-medium">Your set rate per minute</span>
+            <span className="text-sm text-gold font-semibold">{fmtMin(chatRate)}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-white/50">Voice calls</span>
-            <span className="text-sm text-white font-medium">Your set rate per minute</span>
+            <span className="text-sm text-gold font-semibold">{fmtMin(callRate)}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-white/50">In-person bookings</span>
-            <span className="text-sm text-white font-medium">Your hourly rate</span>
-          </div>
-          <div className="border-t border-white/[0.06] pt-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-white/50">Your share</span>
-              <span className="text-sm text-gold font-bold">40% of billed amount</span>
-            </div>
+            <span className="text-sm text-gold font-semibold">{fmtHr(bookingRate)}</span>
           </div>
         </div>
 
         <div className="bg-gold/[0.06] border border-gold/15 rounded-xl p-4">
           <p className="text-xs text-gold font-medium mb-2">Example</p>
           <p className="text-sm text-white/70">
-            If your chat rate is &#8377;20/min and a client chats for 30 minutes,
-            the total is &#8377;600. You earn <span className="text-gold font-semibold">&#8377;240</span> (40%).
+            A {exampleMins}-minute chat session earns you{' '}
+            <span className="text-gold font-semibold">₹{(exampleEarning / 100).toFixed(0)}</span> — credited to your wallet immediately after the session ends.
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <InfoCard label="Payouts" value="Weekly withdrawals" />
-          <InfoCard label="Minimum withdrawal" value="&#8377;500" />
+          <InfoCard label="Payouts" value="As and when requested" accent />
+          <InfoCard label="Minimum withdrawal" value="₹500" />
         </div>
       </div>
     </ScreenWrapper>
@@ -239,7 +241,7 @@ function RulesScreen() {
     >
       <div className="space-y-3">
         {[
-          { rule: 'Social companionship only', desc: 'Events, dining, travel, and conversation. No intimate, romantic, or sexual services — ever.' },
+          { rule: 'Social companionship only', desc: 'Events, dining, and conversation. No intimate, romantic, or sexual services — ever.' },
           { rule: 'Stay on platform', desc: 'All communication and payments must go through Plus One. Do not share personal phone numbers or social media.' },
           { rule: 'Respect and professionalism', desc: 'Treat every client with courtesy. Harassment, discrimination, or abusive behavior results in instant removal.' },
           { rule: 'Honest availability', desc: 'Only mark yourself as available when you can genuinely accept sessions. Don\'t ghost clients.' },
@@ -268,8 +270,8 @@ function HowItWorksScreen() {
         <StepItem number={2} text="You receive a notification. Accept or decline — no pressure." />
         <StepItem number={3} text="Once accepted, the billing timer starts. Chat, call, or schedule an in-person meetup." />
         <StepItem number={4} text="Either party can end the session. Billing stops immediately." />
-        <StepItem number={5} text="Your 40% share is credited to your companion wallet instantly." />
-        <StepItem number={6} text="Request withdrawals anytime — processed weekly." />
+        <StepItem number={5} text="Your earnings are credited to your wallet immediately." />
+        <StepItem number={6} text="Request a withdrawal anytime — payouts are processed on request." />
 
         <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 mt-4">
           <p className="text-xs text-white/40 mb-2">For in-person bookings:</p>
@@ -331,6 +333,9 @@ function SimulationScreen({
   const handleSelect = (idx: number) => {
     setSelectedOption(idx);
     setShowFeedback(true);
+    if (SIM_OPTIONS[idx].correct) {
+      onComplete();
+    }
   };
 
   const isCorrect = selectedOption !== null && SIM_OPTIONS[selectedOption].correct;
@@ -411,6 +416,11 @@ function SimulationScreen({
                 Got it, continue &rarr;
               </button>
             )}
+            {isCorrect && (
+              <p className="mt-3 text-sm text-emerald-400/70 font-medium">
+                Tap Next to continue &rarr;
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -429,7 +439,7 @@ function ActivationScreen({ onActivate, loading }: { onActivate: () => void; loa
       <h2 className="text-2xl font-bold text-white mb-2">You&apos;re Ready!</h2>
       <p className="text-white/50 text-sm mb-8 max-w-sm">
         You&apos;ve completed the onboarding tour. You now understand how Plus One works,
-        what clients expect, and how to earn. Time to go live!
+        what clients expect, and how to earn. Head to your dashboard to get started.
       </p>
 
       <div className="w-full space-y-4">
@@ -446,7 +456,7 @@ function ActivationScreen({ onActivate, loading }: { onActivate: () => void; loa
           disabled={loading}
           className="w-full py-3.5 rounded-xl bg-gold hover:bg-gold-hover text-black font-bold text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {loading ? 'Activating...' : 'Go Online \u2192'}
+          {loading ? 'Completing...' : 'Complete Tour \u2192'}
         </button>
       </div>
     </div>
@@ -455,12 +465,34 @@ function ActivationScreen({ onActivate, loading }: { onActivate: () => void; loa
 
 // ─── Main onboarding tour page ───────────────────────────────────────────────
 
+// Default rates (paise) — 50% of billing rate for chat/call, 70% for booking
+const DEFAULT_CHAT_RATE  = 1000; // ₹10/min (50% of ₹20/min default)
+const DEFAULT_CALL_RATE  = 1600; // ₹16/min (50% of ₹32/min default)
+const DEFAULT_BOOKING_RATE = 140000; // ₹1400/hr (70% of ₹2000/hr default)
+
 export default function OnboardingTourPage() {
   const router = useRouter();
   const [screen, setScreen] = useState(0);
   const [simCompleted, setSimCompleted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [skipWarning, setSkipWarning] = useState(false);
+  const [chatRate, setChatRate]       = useState(DEFAULT_CHAT_RATE);
+  const [callRate, setCallRate]       = useState(DEFAULT_CALL_RATE);
+  const [bookingRate, setBookingRate] = useState(DEFAULT_BOOKING_RATE);
+
+  useEffect(() => {
+    fetch('/api/companion/onboarding')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.data) {
+          const p = d.data;
+          if (p.chatRatePerMinute)  setChatRate(Math.round(p.chatRatePerMinute * 0.5));
+          if (p.callRatePerMinute)  setCallRate(Math.round(p.callRatePerMinute * 0.5));
+          if (p.hourlyRate)         setBookingRate(Math.round(p.hourlyRate * 0.7));
+        }
+      })
+      .catch(() => { /* keep defaults */ });
+  }, []);
 
   const canGoNext = () => {
     // On simulation screen, must complete it first
@@ -520,7 +552,7 @@ export default function OnboardingTourPage() {
   const renderScreen = () => {
     switch (screen) {
       case 0: return <WelcomeScreen />;
-      case 1: return <EarningsScreen />;
+      case 1: return <EarningsScreen chatRate={chatRate} callRate={callRate} bookingRate={bookingRate} />;
       case 2: return <ExpectationsScreen />;
       case 3: return <RulesScreen />;
       case 4: return <HowItWorksScreen />;

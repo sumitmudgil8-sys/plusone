@@ -628,13 +628,11 @@ export default function CompanionDashboard() {
         <div className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              availableNow
-                ? 'bg-green-500/15 border border-green-500/30'
-                : isAvailabilitySet
-                  ? 'bg-amber-500/10 border border-amber-500/20'
-                  : 'bg-white/[0.04] border border-white/[0.06]'
+              isAvailabilitySet
+                ? 'bg-amber-500/10 border border-amber-500/20'
+                : 'bg-white/[0.04] border border-white/[0.06]'
             }`}>
-              <svg className={`w-5 h-5 ${availableNow ? 'text-green-400' : isAvailabilitySet ? 'text-amber-400' : 'text-white/30'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className={`w-5 h-5 ${isAvailabilitySet ? 'text-amber-400' : 'text-white/30'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -655,25 +653,6 @@ export default function CompanionDashboard() {
               {isAvailabilitySet ? 'Edit' : 'Set up'}
             </button>
           )}
-        </div>
-
-        {/* Available Now toggle row */}
-        <div className="px-4 pb-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm text-white/80">Available right now</p>
-            <p className="text-xs text-white/35">Override schedule — appear available instantly</p>
-          </div>
-          <button
-            onClick={handleToggleAvailableNow}
-            disabled={togglingAvailableNow}
-            className={`relative w-12 h-7 rounded-full transition-colors duration-200 ${
-              availableNow ? 'bg-green-500' : 'bg-white/[0.12]'
-            } ${togglingAvailableNow ? 'opacity-50' : ''}`}
-          >
-            <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform duration-200 ${
-              availableNow ? 'translate-x-5' : 'translate-x-0'
-            }`} />
-          </button>
         </div>
 
         {/* No availability warning */}
