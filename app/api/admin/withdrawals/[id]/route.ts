@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { debitWallet } from '@/lib/wallet';
 import { sendPushToUser } from '@/lib/push';
 import { recordAdminAction, AdminAction } from '@/lib/admin-audit';
 
@@ -58,6 +59,22 @@ export async function PATCH(
     where: { id: params.id },
     data: updateData,
   });
+
+  // Debit companion wallet when payout is confirmed so wallet.balance stays
+  // in sync with what has actually been disbursed.
+  if (action === 'mark_paid') {
+    try {
+      await debitWallet(
+        withdrawal.companionId,
+        withdrawal.amount,
+        `Withdrawal payout — ₹${Math.round(withdrawal.amount / 100)}`,
+        { withdrawalId: params.id },
+        'PAYOUT'
+      );
+    } catch (err) {
+      console.error('Wallet debit on payout failed (non-fatal):', err);
+    }
+  }
 
   const auditAction =
     action === 'approve'

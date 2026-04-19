@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
     recentBillingSessions,
     recentBookingRecords,
     activeSessions,
+    wallet,
   ] = await Promise.all([
     prisma.billingSession.aggregate({
       where: { companionId, status: 'ENDED', type: 'CHAT' },
@@ -127,6 +128,7 @@ export async function GET(request: NextRequest) {
       where: { companionId, status: 'ACTIVE' },
       include: { client: { include: { clientProfile: { select: { name: true } } } } },
     }),
+    prisma.wallet.findUnique({ where: { userId: companionId } }),
   ]);
 
   // Compute totals — billing sessions use companionShare (companion cut of totalCharged)
@@ -135,17 +137,15 @@ export async function GET(request: NextRequest) {
   const fromBookings = allBookings._sum.totalAmount ?? 0;
   const totalEarned = fromChats + fromCalls + fromBookings;
 
-  const paidOut = withdrawals
-    .filter((w) => w.status === 'PAID')
-    .reduce((sum, w) => sum + w.amount, 0);
   const pendingWithdrawal = withdrawals
     .filter((w) => w.status === 'PENDING' || w.status === 'APPROVED')
     .reduce((sum, w) => sum + w.amount, 0);
-  // Available = earned − already-paid − held-for-payout. Non-terminal
-  // withdrawal requests (PENDING + APPROVED) must be held, otherwise
-  // companions see inflated "available" figures and hit unexpected
-  // insufficient-balance errors on the withdrawal POST.
-  const availableBalance = totalEarned - paidOut - pendingWithdrawal;
+  // Available = wallet balance − held-for-payout (PENDING/APPROVED requests).
+  // The wallet is the live source of truth: it is credited on every billing tick
+  // and debited when admin marks a withdrawal as PAID. Using wallet.balance
+  // ensures manual credits and all earning sources are correctly reflected.
+  const walletBalance = wallet?.balance ?? 0;
+  const availableBalance = Math.max(0, walletBalance - pendingWithdrawal);
 
   // Period breakdowns — all billing figures use companionShare (companion cut)
   const periods = {

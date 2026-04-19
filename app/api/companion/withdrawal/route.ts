@@ -28,40 +28,20 @@ export async function POST(request: NextRequest) {
   const companionId = auth.user.id;
 
   // Compute available balance.
-  //
-  // IMPORTANT: billing sessions must use `companionShare` (net, after the
-  // 20% platform commission), NOT `totalCharged` (gross). Using totalCharged
-  // would let companions withdraw the platform's cut too.
-  //
-  // This must match the calculation in /api/companion/earnings.
-  const [chatAgg, callAgg, bookingAgg, heldWithdrawals] = await Promise.all([
-    prisma.billingSession.aggregate({
-      where: { companionId, status: 'ENDED', type: 'CHAT' },
-      _sum: { companionShare: true },
-    }),
-    prisma.billingSession.aggregate({
-      where: { companionId, status: 'ENDED', type: 'VOICE' },
-      _sum: { companionShare: true },
-    }),
-    prisma.booking.aggregate({
-      where: { companionId, status: 'COMPLETED' },
-      _sum: { totalAmount: true },
-    }),
-    // Deduct both PAID and non-terminal requests (PENDING + APPROVED) so
-    // companions cannot double-withdraw while an admin is processing payout.
-    // REJECTED is terminal and does NOT deduct.
+  // The wallet is the live source of truth (credited on every billing tick,
+  // debited when admin marks a withdrawal PAID). Subtract PENDING/APPROVED
+  // withdrawal requests so companions cannot double-request in-flight amounts.
+  const [wallet, heldWithdrawals] = await Promise.all([
+    prisma.wallet.findUnique({ where: { userId: companionId } }),
     prisma.withdrawalRequest.aggregate({
-      where: { companionId, status: { in: ['PENDING', 'APPROVED', 'PAID'] } },
+      where: { companionId, status: { in: ['PENDING', 'APPROVED'] } },
       _sum: { amount: true },
     }),
   ]);
 
-  const totalEarned =
-    (chatAgg._sum.companionShare ?? 0) +
-    (callAgg._sum.companionShare ?? 0) +
-    (bookingAgg._sum.totalAmount ?? 0);
-  const heldOrPaidOut = heldWithdrawals._sum.amount ?? 0;
-  const availableBalance = totalEarned - heldOrPaidOut;
+  const walletBalance = wallet?.balance ?? 0;
+  const heldAmount = heldWithdrawals._sum.amount ?? 0;
+  const availableBalance = Math.max(0, walletBalance - heldAmount);
 
   if (amount > availableBalance) {
     return NextResponse.json(
