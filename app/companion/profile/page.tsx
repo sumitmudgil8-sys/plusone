@@ -395,9 +395,13 @@ export default function CompanionProfilePage() {
         </div>
       </div>
 
+      {/* Hidden file inputs — outside tab conditional so card buttons always work */}
+      <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageUpload} />
+      <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarChange} />
+
       {/* ── TINDER-STYLE PREVIEW CARD ───────────────────────────────── */}
       <div className="relative rounded-3xl overflow-hidden bg-[#0f0f1a] mb-6 shadow-2xl">
-        {/* Image carousel */}
+        {/* Image area */}
         <div className="relative aspect-[3/4]">
           {allImages.length > 0 ? (
             <img
@@ -407,15 +411,24 @@ export default function CompanionProfilePage() {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-amber-500/20 to-amber-400/10">
-              <div className="text-center">
-                <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-10 h-10 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="text-center group"
+              >
+                <div className="w-20 h-20 rounded-full bg-white/10 group-hover:bg-amber-500/20 border-2 border-dashed border-white/20 group-hover:border-amber-500/50 flex items-center justify-center mx-auto mb-3 transition-all">
+                  {uploading ? (
+                    <div className="animate-spin w-7 h-7 border-2 border-amber-500 border-t-transparent rounded-full" />
+                  ) : (
+                    <svg className="w-9 h-9 text-white/40 group-hover:text-amber-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  )}
                 </div>
-                <p className="text-white/40 text-sm">Add photos to preview your card</p>
-              </div>
+                <p className="text-amber-400/80 text-sm font-medium group-hover:text-amber-400 transition-colors">Tap to add photos</p>
+                <p className="text-white/25 text-xs mt-1">JPG, PNG, WebP · Max 5 MB</p>
+              </button>
             </div>
           )}
 
@@ -439,6 +452,57 @@ export default function CompanionProfilePage() {
               <button className="absolute right-0 top-0 bottom-0 w-1/3" onClick={() => setPreviewIdx(p => Math.min(allImages.length - 1, p + 1))} />
             </>
           )}
+
+          {/* Upload button — always visible top-right */}
+          {allImages.length > 0 && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="absolute top-3 right-3 z-20 w-10 h-10 rounded-full bg-black/55 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-black/75 active:scale-90 transition-all shadow-lg"
+            >
+              {uploading ? (
+                <div className="animate-spin w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full" />
+              ) : (
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              )}
+            </button>
+          )}
+
+          {/* Main photo badge / Set as Main button — top-left */}
+          {allImages.length > 0 && (() => {
+            const cur = allImages[previewIdx % allImages.length];
+            if (!cur) return null;
+            if (cur.isPrimary) {
+              return (
+                <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/90 backdrop-blur-sm shadow-lg">
+                  <svg className="w-3 h-3 text-black" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  <span className="text-[11px] font-bold text-black">Main photo</span>
+                </div>
+              );
+            }
+            if (cur.id !== 'avatar') {
+              return (
+                <button
+                  onClick={() => handleSetPrimary(cur.id)}
+                  disabled={settingPrimary === cur.id}
+                  className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/55 backdrop-blur-sm border border-white/20 hover:bg-amber-500/80 hover:border-transparent active:scale-95 transition-all shadow-lg group disabled:opacity-60"
+                >
+                  <svg className="w-3 h-3 text-white/60 group-hover:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  <span className="text-[11px] font-medium text-white/70 group-hover:text-black">
+                    {settingPrimary === cur.id ? 'Setting…' : 'Set as main'}
+                  </span>
+                </button>
+              );
+            }
+            return null;
+          })()}
 
           {/* Dark gradient */}
           <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none" />
@@ -478,9 +542,51 @@ export default function CompanionProfilePage() {
                 ))}
               </div>
             )}
-
           </div>
         </div>
+
+        {/* Photo strip — thumbnails + add button */}
+        <div className="flex items-center gap-2 px-3 py-3 overflow-x-auto"
+          style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+          {allImages.map((img, i) => (
+            <button
+              key={img.id}
+              onClick={() => setPreviewIdx(i)}
+              className={`relative shrink-0 w-[52px] h-[52px] rounded-xl overflow-hidden transition-all active:scale-90 ${
+                i === previewIdx % allImages.length
+                  ? 'ring-2 ring-amber-500 ring-offset-1 ring-offset-[#0f0f1a] opacity-100'
+                  : 'opacity-50 hover:opacity-75'
+              }`}
+            >
+              <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
+              {img.isPrimary && (
+                <div className="absolute bottom-0 right-0 w-4 h-4 bg-amber-500 rounded-tl-lg flex items-center justify-center">
+                  <svg className="w-2.5 h-2.5 text-black" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                </div>
+              )}
+            </button>
+          ))}
+          {/* Add photo button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="shrink-0 w-[52px] h-[52px] rounded-xl border-2 border-dashed border-white/15 flex items-center justify-center hover:border-amber-500/50 hover:bg-amber-500/5 active:scale-90 transition-all disabled:opacity-40"
+          >
+            {uploading ? (
+              <div className="animate-spin w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full" />
+            ) : (
+              <svg className="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            )}
+          </button>
+        </div>
+
+        {uploadError && (
+          <p className="text-xs text-red-400 px-4 pb-3 -mt-1">{uploadError}</p>
+        )}
 
         {/* Bio below card */}
         {section1.bio && (
@@ -551,42 +657,6 @@ export default function CompanionProfilePage() {
       ) : (
         /* ── EDIT TAB ─────────────────────────────────────────────────── */
         <div className="space-y-5">
-
-          {/* Avatar */}
-          <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
-            <h3 className="text-sm font-semibold text-white/80 mb-4">Profile Photo</h3>
-            <div className="flex items-center gap-4">
-              <div
-                className="relative w-20 h-20 rounded-full overflow-hidden bg-white/5 cursor-pointer group shrink-0"
-                onClick={() => avatarInputRef.current?.click()}
-              >
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <svg className="w-8 h-8 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  </svg>
-                </div>
-                {uploadingAvatar && (
-                  <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
-                    <div className="animate-spin w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full" />
-                  </div>
-                )}
-              </div>
-              <div>
-                <p className="text-sm text-white/60">Tap to change avatar</p>
-                <p className="text-xs text-white/30 mt-0.5">JPG, PNG, WebP · Max 5 MB</p>
-              </div>
-            </div>
-            <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarChange} />
-          </div>
 
           {/* Basic Info */}
           <div className="bg-[#0f0f1a] rounded-2xl border border-white/5 p-5">
@@ -696,7 +766,6 @@ export default function CompanionProfilePage() {
                 className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-400 text-black text-xs font-semibold shadow-md shadow-amber-500/20 disabled:opacity-50">
                 {uploading ? '...' : '+ Upload'}
               </button>
-              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageUpload} />
             </div>
             {uploadError && <p className="text-xs text-red-400 mb-3">{uploadError}</p>}
             {images.length === 0 ? (
