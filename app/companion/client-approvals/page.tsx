@@ -95,24 +95,10 @@ function SwipeCard({
     }
   }, [client.clientId, onApprove, onReject]);
 
-  // Touch handlers
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
-    handleStart(e.touches[0].clientX);
-  }, [handleStart]);
-
-  const onTouchMove = useCallback((e: React.TouchEvent) => {
-    handleMove(e.touches[0].clientX);
-  }, [handleMove]);
-
-  const onTouchEnd = useCallback(() => {
-    handleEnd();
-  }, [handleEnd]);
-
-  // Mouse handlers
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    handleStart(e.clientX);
-  }, [handleStart]);
+  const onTouchStart = useCallback((e: React.TouchEvent) => { handleStart(e.touches[0].clientX); }, [handleStart]);
+  const onTouchMove  = useCallback((e: React.TouchEvent) => { handleMove(e.touches[0].clientX); }, [handleMove]);
+  const onTouchEnd   = useCallback(() => { handleEnd(); }, [handleEnd]);
+  const onMouseDown  = useCallback((e: React.MouseEvent) => { e.preventDefault(); handleStart(e.clientX); }, [handleStart]);
 
   useEffect(() => {
     if (!isTop) return;
@@ -126,38 +112,26 @@ function SwipeCard({
     };
   }, [isTop, handleMove, handleEnd]);
 
-  const rotation = dragX * 0.08;
-  const opacity = Math.max(0, 1 - Math.abs(dragX) / 400);
+  const rotation     = dragX * 0.08;
+  const opacity      = Math.max(0, 1 - Math.abs(dragX) / 400);
   const approveOpacity = Math.min(1, Math.max(0, dragX / 100));
-  const rejectOpacity = Math.min(1, Math.max(0, -dragX / 100));
+  const rejectOpacity  = Math.min(1, Math.max(0, -dragX / 100));
 
-  let transform = `translateX(${dragX}px) rotate(${rotation}deg)`;
+  let transform    = `translateX(${dragX}px) rotate(${rotation}deg)`;
   let transitionVal = isDraggingRef.current ? 'none' : 'transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s ease';
 
   if (exiting === 'right') {
-    transform = 'translateX(120vw) rotate(30deg)';
+    transform    = 'translateX(120vw) rotate(30deg)';
     transitionVal = 'transform 0.4s ease-in, opacity 0.3s ease';
   } else if (exiting === 'left') {
-    transform = 'translateX(-120vw) rotate(-30deg)';
+    transform    = 'translateX(-120vw) rotate(-30deg)';
     transitionVal = 'transform 0.4s ease-in, opacity 0.3s ease';
   }
 
   if (!isTop) {
-    transform = 'scale(0.95) translateY(12px)';
+    transform    = 'scale(0.95) translateY(12px)';
     transitionVal = 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1)';
   }
-
-  const handleButtonApprove = () => {
-    if (exiting) return;
-    setExiting('right');
-    setTimeout(() => onApprove(client.clientId), 300);
-  };
-
-  const handleButtonReject = () => {
-    if (exiting) return;
-    setExiting('left');
-    setTimeout(() => onReject(client.clientId), 300);
-  };
 
   return (
     <div
@@ -176,124 +150,96 @@ function SwipeCard({
       onTouchEnd={onTouchEnd}
       onMouseDown={isTop ? onMouseDown : undefined}
     >
-      <div className="relative w-full h-full rounded-3xl overflow-hidden border border-white/[0.08] bg-gradient-to-br from-[#161620] via-[#111118] to-[#0d0d14] shadow-2xl">
-        {/* Background glow */}
-        <div className="absolute -top-20 -right-20 w-56 h-56 rounded-full bg-amber-500/[0.06] blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-16 -left-16 w-48 h-48 rounded-full bg-purple-500/[0.04] blur-3xl pointer-events-none" />
+      <div className="relative w-full h-full rounded-3xl overflow-hidden shadow-2xl">
 
-        {/* APPROVE overlay stamp */}
+        {/* ── Full-bleed photo / fallback ── */}
+        {client.avatarUrl ? (
+          <img
+            src={client.avatarUrl}
+            alt={client.name}
+            className="absolute inset-0 w-full h-full object-cover"
+            draggable={false}
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-[#1e1830] via-[#12121d] to-[#0d0d18] flex items-center justify-center">
+            <span className="text-[120px] font-black text-white/10 select-none">
+              {client.name.charAt(0).toUpperCase()}
+            </span>
+          </div>
+        )}
+
+        {/* ── Gradient overlays ── */}
+        {/* top fade for stamps */}
+        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/60 to-transparent pointer-events-none" />
+        {/* bottom fade for info */}
+        <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/95 via-black/70 to-transparent pointer-events-none" />
+
+        {/* ── NEW badge ── */}
+        <div className="absolute top-4 right-4 z-10">
+          <span className="bg-amber-500 text-black text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg shadow-amber-500/40 uppercase tracking-wide">
+            New
+          </span>
+        </div>
+
+        {/* ── APPROVE stamp ── */}
         <div
-          className="absolute top-8 left-6 z-20 pointer-events-none"
+          className="absolute top-10 left-5 z-20 pointer-events-none"
           style={{ opacity: approveOpacity }}
         >
-          <div className="border-[3px] border-green-400 rounded-xl px-4 py-2 -rotate-12">
-            <span className="text-green-400 font-black text-2xl tracking-wider uppercase">Approve</span>
+          <div className="border-[3px] border-green-400 rounded-xl px-4 py-2 -rotate-12 backdrop-blur-sm">
+            <span className="text-green-400 font-black text-2xl tracking-wider uppercase drop-shadow-lg">Approve</span>
           </div>
         </div>
 
-        {/* REJECT overlay stamp */}
+        {/* ── REJECT stamp ── */}
         <div
-          className="absolute top-8 right-6 z-20 pointer-events-none"
+          className="absolute top-10 right-5 z-20 pointer-events-none"
           style={{ opacity: rejectOpacity }}
         >
-          <div className="border-[3px] border-red-400 rounded-xl px-4 py-2 rotate-12">
-            <span className="text-red-400 font-black text-2xl tracking-wider uppercase">Reject</span>
+          <div className="border-[3px] border-red-400 rounded-xl px-4 py-2 rotate-12 backdrop-blur-sm">
+            <span className="text-red-400 font-black text-2xl tracking-wider uppercase drop-shadow-lg">Reject</span>
           </div>
         </div>
 
-        {/* Card content */}
-        <div className="relative flex flex-col items-center justify-center h-full px-6 py-8">
-          {/* Avatar */}
-          <div className="relative mb-6">
-            <div className="w-28 h-28 rounded-full ring-4 ring-amber-500/20 overflow-hidden bg-white/[0.04]">
-              {client.avatarUrl ? (
-                <img src={client.avatarUrl} alt={client.name} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-amber-500/20 to-purple-500/20">
-                  <span className="text-4xl font-bold text-white/60">
-                    {client.name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              )}
-            </div>
-            {/* New badge */}
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-amber-500 text-black text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-lg shadow-amber-500/30">
-              NEW
-            </div>
-          </div>
-
-          {/* Name + Age */}
-          <h3 className="text-2xl font-bold text-white mb-1">
-            {client.name}{age ? <span className="text-white/40 font-normal">, {age}</span> : ''}
+        {/* ── Bottom info overlay ── */}
+        <div className="absolute bottom-0 inset-x-0 z-10 px-5 pb-5 pt-2">
+          {/* Name + age */}
+          <h3 className="text-[26px] font-black text-white leading-tight drop-shadow-lg">
+            {client.name}
+            {age && <span className="text-white/70 font-semibold text-2xl">, {age}</span>}
           </h3>
 
-          {/* City & Occupation */}
-          <div className="flex items-center gap-2 text-sm text-white/45 mb-4">
-            {client.city && (
-              <span className="flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                {client.city}
-              </span>
-            )}
-            {client.city && client.occupation && <span className="text-white/20">|</span>}
-            {client.occupation && (
-              <span className="flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                {client.occupation}
-              </span>
-            )}
-          </div>
+          {/* City & occupation */}
+          {(client.city || client.occupation) && (
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              {client.city && (
+                <span className="flex items-center gap-1 text-sm text-white/80">
+                  <svg className="w-3.5 h-3.5 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {client.city}
+                </span>
+              )}
+              {client.city && client.occupation && <span className="text-white/30 text-xs">·</span>}
+              {client.occupation && (
+                <span className="text-sm text-white/80">{client.occupation}</span>
+              )}
+            </div>
+          )}
 
           {/* Bio */}
           {client.bio && (
-            <div className="w-full max-w-xs mb-6">
-              <p className="text-sm text-white/50 text-center leading-relaxed line-clamp-3">
-                &ldquo;{client.bio}&rdquo;
-              </p>
-            </div>
+            <p className="mt-2 text-sm text-white/60 leading-relaxed line-clamp-2">
+              {client.bio}
+            </p>
           )}
 
-          {/* Joined date */}
-          <div className="flex items-center gap-1.5 text-xs text-white/25 mb-8">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          {/* Joined */}
+          <p className="mt-1.5 text-xs text-white/35">
             Joined {timeAgo(client.joinedAt)}
-          </div>
-
-          {/* Action buttons */}
-          {isTop && (
-            <div className="flex items-center gap-5">
-              {/* Reject button */}
-              <button
-                onClick={handleButtonReject}
-                className="group w-16 h-16 rounded-full border-2 border-red-500/30 bg-red-500/[0.08] flex items-center justify-center hover:bg-red-500/20 hover:border-red-500/50 hover:scale-110 active:scale-95 transition-all duration-200 shadow-lg shadow-red-500/10"
-              >
-                <svg className="w-7 h-7 text-red-400 group-hover:text-red-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-
-              {/* Approve button */}
-              <button
-                onClick={handleButtonApprove}
-                className="group w-20 h-20 rounded-full border-2 border-green-500/30 bg-green-500/[0.08] flex items-center justify-center hover:bg-green-500/20 hover:border-green-500/50 hover:scale-110 active:scale-95 transition-all duration-200 shadow-lg shadow-green-500/10"
-              >
-                <svg className="w-9 h-9 text-green-400 group-hover:text-green-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              </button>
-            </div>
-          )}
+          </p>
         </div>
-
-        {/* Bottom gradient */}
-        <div className="absolute bottom-0 inset-x-0 h-24 bg-gradient-to-t from-[#0d0d14] to-transparent pointer-events-none" />
       </div>
     </div>
   );
@@ -524,7 +470,7 @@ export default function ClientApprovalsPage() {
               </div>
 
               {/* Card stack */}
-              <div className="relative w-full" style={{ height: '460px' }}>
+              <div className="relative w-full" style={{ height: '500px' }}>
                 {clients.slice(0, 3).map((client, index) => (
                   <SwipeCard
                     key={client.clientId}
@@ -534,6 +480,26 @@ export default function ClientApprovalsPage() {
                     isTop={index === 0}
                   />
                 ))}
+              </div>
+
+              {/* Action buttons — outside the card so they stay fixed */}
+              <div className="flex items-center justify-center gap-8 pt-1">
+                <button
+                  onClick={() => handleReject(clients[0].clientId)}
+                  className="group w-16 h-16 rounded-full border-2 border-red-500/30 bg-red-500/[0.08] flex items-center justify-center hover:bg-red-500/20 hover:border-red-500/50 hover:scale-110 active:scale-95 transition-all duration-200 shadow-lg shadow-red-500/10"
+                >
+                  <svg className="w-7 h-7 text-red-400 group-hover:text-red-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => handleApprove(clients[0].clientId)}
+                  className="group w-20 h-20 rounded-full border-2 border-green-500/30 bg-green-500/[0.08] flex items-center justify-center hover:bg-green-500/20 hover:border-green-500/50 hover:scale-110 active:scale-95 transition-all duration-200 shadow-lg shadow-green-500/10"
+                >
+                  <svg className="w-9 h-9 text-green-400 group-hover:text-green-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </button>
               </div>
 
               {/* Counter */}
