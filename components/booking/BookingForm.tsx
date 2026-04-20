@@ -414,14 +414,14 @@ export function BookingForm({
               <input
                 type="range"
                 min="1"
-                max="8"
+                max="3"
                 value={duration}
                 onChange={(e) => setDuration(parseInt(e.target.value))}
                 className="w-full h-2 bg-white/[0.08] rounded-lg appearance-none cursor-pointer accent-gold"
               />
               <div className="flex justify-between text-xs text-white/50 mt-1">
                 <span>1 hour</span>
-                <span>8 hours</span>
+                <span>3 hours</span>
               </div>
             </div>
 
