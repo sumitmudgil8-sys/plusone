@@ -45,10 +45,7 @@ export async function GET(
 
     // Only approved profiles are visible to clients. Pending/rejected
     // profiles return 404 to prevent guessing IDs from the public browse.
-    // Exception: specific users with an approval override can view all profiles.
-    const approvalOverrideUserIds = ['cmn8jy4lx0000hmlr99t66p6t'];
-    const hasApprovalOverride = approvalOverrideUserIds.includes(user.id);
-    if (!companion || !companion.companionProfile || (!companion.companionProfile.isApproved && !hasApprovalOverride)) {
+    if (!companion || !companion.companionProfile || !companion.companionProfile.isApproved) {
       return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
     }
 
