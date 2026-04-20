@@ -66,7 +66,27 @@ export default function BrowsePage() {
   const [locationToast, setLocationToast] = useState('');
   const [filterAvailableNow, setFilterAvailableNow] = useState(false);
   const [filterDay, setFilterDay] = useState<DayKey | ''>('');
+  const [previewMode, setPreviewMode] = useState(false);
   const ablyRef = useRef<import('ably').Realtime | null>(null);
+
+  // On mount: check if PENDING_REVIEW client has uploaded a photo
+  useEffect(() => {
+    fetch('/api/users/me', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => {
+        const me = data?.user;
+        if (me?.clientStatus === 'PENDING_REVIEW') {
+          const avatarStatus = me?.clientProfile?.avatarStatus ?? 'NONE';
+          if (avatarStatus === 'NONE') {
+            // No photo yet — send back to pending page
+            router.replace('/client/pending');
+          } else {
+            setPreviewMode(true);
+          }
+        }
+      })
+      .catch(() => {/* non-fatal */});
+  }, []);
 
   // On mount: silently fetch location if already granted
   useEffect(() => {
@@ -231,6 +251,21 @@ export default function BrowsePage() {
 
   return (
     <div className="space-y-6">
+      {/* Preview mode banner for PENDING_REVIEW clients */}
+      {previewMode && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+          <svg className="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          <p className="text-sm text-amber-300/90">
+            <span className="font-semibold">Preview mode</span> — you can browse companions now. Full access and chat unlock once your profile is approved.
+          </p>
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Social Companions</h1>

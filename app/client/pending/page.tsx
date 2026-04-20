@@ -631,6 +631,32 @@ export default function PendingPage() {
             </div>
           )}
 
+          {/* Browse companions early access */}
+          {avatarStatus !== 'NONE' && !accessGranted && (
+            <div className="border-t border-charcoal-border pt-5 space-y-3">
+              <div className="flex items-start gap-3 bg-green-500/5 border border-green-500/15 rounded-xl p-4">
+                <svg className="w-5 h-5 text-green-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <div className="flex-1 space-y-2">
+                  <p className="text-sm font-semibold text-green-300">Start browsing while you wait</p>
+                  <p className="text-xs text-white/50">
+                    Your profile picture has been received. You can explore companions now — chat and booking unlock once your profile is approved.
+                  </p>
+                  <Link
+                    href="/client/browse"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-green-400 hover:text-green-300 transition-colors"
+                  >
+                    Browse Companions
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Footer */}
           <div className="text-center space-y-2">
             <p className="text-xs text-white/30">

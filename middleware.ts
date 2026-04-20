@@ -26,6 +26,7 @@ const clientStatusExempt = [
   '/client/pending',
   '/client/rejected',
   '/client/verify',      // /client/verify and /client/verify/callback
+  '/client/browse',      // PENDING_REVIEW clients who have uploaded a photo can preview companions
 ];
 
 export function middleware(request: NextRequest) {
