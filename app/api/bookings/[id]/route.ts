@@ -17,14 +17,7 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { status } = body;
-
-    if (!status) {
-      return NextResponse.json(
-        { error: 'Status is required' },
-        { status: 400 }
-      );
-    }
+    const { status, action, lat, lng } = body;
 
     // Get the booking
     const booking = await prisma.booking.findUnique({
@@ -46,6 +39,41 @@ export async function PATCH(
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }
+      );
+    }
+
+    // ── Mark Arrived action ───────────────────────────────────────────────────
+    if (action === 'arrived') {
+      if (!isCompanion) {
+        return NextResponse.json({ error: 'Only the companion can mark arrival' }, { status: 403 });
+      }
+      if (booking.status !== 'CONFIRMED') {
+        return NextResponse.json({ error: 'Booking must be confirmed to mark arrival' }, { status: 400 });
+      }
+      const now = new Date();
+      if (now < booking.date) {
+        return NextResponse.json({ error: 'Meeting has not started yet' }, { status: 400 });
+      }
+      const updatedBooking = await prisma.booking.update({
+        where: { id },
+        data: {
+          arrivedAt: now,
+          ...(typeof lat === 'number' && typeof lng === 'number' && lat !== 0 && lng !== 0
+            ? { arrivedLat: lat, arrivedLng: lng }
+            : {}),
+        },
+        include: {
+          companion: { include: { companionProfile: true } },
+          client: { include: { clientProfile: true } },
+        },
+      });
+      return NextResponse.json({ booking: updatedBooking });
+    }
+
+    if (!status) {
+      return NextResponse.json(
+        { error: 'Status or action is required' },
+        { status: 400 }
       );
     }
 
@@ -91,6 +119,17 @@ export async function PATCH(
       );
     }
 
+    // ── Time gate: COMPLETED only after meeting has ended ────────────────────
+    if (status === 'COMPLETED') {
+      const meetingEndMs = new Date(booking.date).getTime() + booking.duration * 60 * 60 * 1000;
+      if (Date.now() < meetingEndMs) {
+        return NextResponse.json(
+          { error: 'Cannot mark complete before the meeting ends' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Atomic update guarded on the current status — prevents TOCTOU where
     // two concurrent requests both see PENDING and both try to transition.
     // If the transition refunds the booking deposit, do it in the same
@@ -100,12 +139,17 @@ export async function PATCH(
       booking.depositAmount > 0 &&
       booking.holdTransactionId !== null;
 
+    // When confirming, open a 20-minute free coordination chat window
+    const confirmationData = status === 'CONFIRMED'
+      ? { freeChatExpiresAt: new Date(Date.now() + 20 * 60 * 1000) }
+      : {};
+
     const updateCount = await prisma.$transaction(async (tx) => {
       const result = await tx.booking.updateMany({
         where: { id, status: booking.status },
         data: refundsDeposit
-          ? { status, holdTransactionId: null }
-          : { status },
+          ? { status, holdTransactionId: null, ...confirmationData }
+          : { status, ...confirmationData },
       });
 
       if (result.count === 0) return 0;

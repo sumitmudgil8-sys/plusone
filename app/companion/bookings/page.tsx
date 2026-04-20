@@ -42,6 +42,19 @@ export default function CompanionBookingsPage() {
     }
   };
 
+  const handleArrive = async (bookingId: string, lat: number, lng: number) => {
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'arrived', lat, lng }),
+      });
+      if (res.ok) fetchBookings();
+    } catch (error) {
+      console.error('Error marking arrival:', error);
+    }
+  };
+
   const filteredBookings = bookings.filter((b) => {
     if (activeTab === 'PENDING') return b.status === 'PENDING';
     if (activeTab === 'CONFIRMED') return b.status === 'CONFIRMED';
@@ -93,6 +106,7 @@ export default function CompanionBookingsPage() {
             booking={booking}
             role="COMPANION"
             onStatusChange={handleStatusChange}
+            onArrive={handleArrive}
           />
         ))}
       </div>

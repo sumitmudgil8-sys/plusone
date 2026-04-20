@@ -76,6 +76,10 @@ function CompanionInboxContent() {
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionStartedAtMsRef = useRef<number | null>(null);
 
+  // Coordination chat state
+  const [coordinationSecondsLeft, setCoordinationSecondsLeft] = useState(0);
+  const coordinationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // ── Voice call (from layout context — persists across navigation) ─────────
   const companionCall = useCompanionCall();
   const voiceSessionId = searchParams.get('voiceSessionId');
@@ -219,6 +223,35 @@ function CompanionInboxContent() {
       setChatRatePerMinute(0);
     }
   }, [activeClientId, urlSessionId]);
+
+  // ── Check coordination chat window when switching clients ────────────────
+  useEffect(() => {
+    if (coordinationTimerRef.current) clearInterval(coordinationTimerRef.current);
+    setCoordinationSecondsLeft(0);
+    if (!activeClientId || !currentUserId) return;
+
+    fetch(`/api/bookings/coordination?withUserId=${activeClientId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.active && d.data.remainingSeconds > 0) {
+          setCoordinationSecondsLeft(d.data.remainingSeconds);
+          coordinationTimerRef.current = setInterval(() => {
+            setCoordinationSecondsLeft(prev => {
+              if (prev <= 1) {
+                clearInterval(coordinationTimerRef.current!);
+                coordinationTimerRef.current = null;
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      if (coordinationTimerRef.current) clearInterval(coordinationTimerRef.current);
+    };
+  }, [activeClientId, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Poll for active / pending billing session ────────────────────────────
   //
@@ -489,6 +522,7 @@ function CompanionInboxContent() {
             sessionEnded={sessionEnded}
             sessionSeconds={sessionSeconds}
             ratePerMinute={chatRatePerMinute}
+            coordinationSecondsLeft={coordinationSecondsLeft}
             onEndSession={handleEndSession}
             onBack={() => setShowMobileChat(false)}
             onOwnMessage={handleOwnMessage}
@@ -559,6 +593,7 @@ interface CompanionChatPanelProps {
   sessionEnded: boolean;
   sessionSeconds: number;
   ratePerMinute: number;
+  coordinationSecondsLeft: number;
   onEndSession: () => Promise<void>;
   onBack: () => void;
   onOwnMessage: (content: string, createdAt: string) => void;
@@ -572,6 +607,7 @@ interface CompanionChatPanelProps {
 function CompanionChatPanel({
   currentUserId, clientId, clientName, clientAvatar,
   chatSessionActive, sessionEnded, sessionSeconds, ratePerMinute,
+  coordinationSecondsLeft,
   onEndSession, onBack, onOwnMessage, onFirstMessage,
   publishToRoom, publishRoomTyping,
   roomMessages, isOtherTyping,
@@ -761,6 +797,13 @@ function CompanionChatPanel({
             </div>
           ) : sessionEnded ? (
             <p className="text-xs text-white/30 leading-tight">Session ended</p>
+          ) : coordinationSecondsLeft > 0 ? (
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+              <span className="text-xs text-green-400 tabular-nums">
+                Free chat · {formatDuration(coordinationSecondsLeft)} left
+              </span>
+            </div>
           ) : (
             <p className="text-xs text-white/30 leading-tight">Client</p>
           )}
@@ -773,6 +816,17 @@ function CompanionChatPanel({
           </button>
         )}
       </div>
+
+      {/* Coordination chat banner */}
+      {coordinationSecondsLeft > 0 && !chatSessionActive && (
+        <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-green-500/10 border-b border-green-500/20">
+          <svg className="w-3.5 h-3.5 text-green-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-xs text-green-300">Complimentary coordination chat for this booking</span>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="relative flex-1 min-h-0">

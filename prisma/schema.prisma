@@ -254,11 +254,15 @@ model Booking {
   location      String?
   venueName     String?
   venueAddress  String?
-  venueLat      Float?
-  venueLng      Float?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  review        Review?
+  venueLat          Float?
+  venueLng          Float?
+  arrivedAt         DateTime?
+  arrivedLat        Float?
+  arrivedLng        Float?
+  freeChatExpiresAt DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  review            Review?
 }
 
 model Favorite {

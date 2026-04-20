@@ -13,7 +13,7 @@ import { ActiveCallBanner } from '@/components/ActiveCallBanner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SessionState = 'LOADING' | 'NO_SESSION' | 'PENDING' | 'ACTIVE' | 'ENDED';
+type SessionState = 'LOADING' | 'NO_SESSION' | 'PENDING' | 'ACTIVE' | 'ENDED' | 'FREE_CHAT';
 
 interface LocalMessage {
   id: string;
@@ -75,6 +75,8 @@ export default function ClientInboxPage() {
   const sessionIdRef = useRef<string | null>(null);
 
   const [billingStarted, setBillingStarted] = useState(false);
+  const [coordinationSecondsLeft, setCoordinationSecondsLeft] = useState(0);
+  const coordinationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { sessionStateRef.current = sessionState; }, [sessionState]);
   useEffect(() => { sessionIdRef.current = session?.sessionId ?? null; }, [session?.sessionId]);
@@ -159,6 +161,32 @@ export default function ClientInboxPage() {
     if (!userId) return;
     checkSession();
   }, [userId, checkSession]);
+
+  // Check for active coordination (free) chat when there's no billing session
+  useEffect(() => {
+    if (sessionState !== 'NO_SESSION' || !userId) return;
+    if (coordinationTimerRef.current) clearInterval(coordinationTimerRef.current);
+    fetch(`/api/bookings/coordination?withUserId=${companionId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.active && d.data.remainingSeconds > 0) {
+          setCoordinationSecondsLeft(d.data.remainingSeconds);
+          setSessionState('FREE_CHAT');
+          coordinationTimerRef.current = setInterval(() => {
+            setCoordinationSecondsLeft(prev => {
+              if (prev <= 1) {
+                clearInterval(coordinationTimerRef.current!);
+                coordinationTimerRef.current = null;
+                setSessionState('NO_SESSION');
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+        }
+      })
+      .catch(() => {});
+  }, [sessionState, userId, companionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll while PENDING — fires immediately then every 2s for fast transition.
   useEffect(() => {
@@ -381,6 +409,7 @@ export default function ClientInboxPage() {
     return () => {
       if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
       if (liveTimerRef.current) clearInterval(liveTimerRef.current);
+      if (coordinationTimerRef.current) clearInterval(coordinationTimerRef.current);
     };
   }, []);
 
@@ -549,6 +578,28 @@ export default function ClientInboxPage() {
     );
   }
 
+  // ── FREE CHAT (coordination window) ──────────────────────────────────────
+  if (sessionState === 'FREE_CHAT' && userId) {
+    return (
+      <ClientChatView
+        userId={userId}
+        companionId={companionId}
+        companionName={companionName}
+        companionAvatar={companionAvatar}
+        liveSeconds={0}
+        balanceLow={false}
+        onEndSession={async () => {}}
+        onFirstMessage={() => {}}
+        publishToRoom={publishToRoom}
+        publishRoomTyping={publishRoomTyping}
+        roomMessages={roomMessages}
+        isOtherTyping={isOtherTyping}
+        isCoordination={true}
+        coordinationSecondsLeft={coordinationSecondsLeft}
+      />
+    );
+  }
+
   // ── ACTIVE ────────────────────────────────────────────────────────────────
   if (!userId || !session) {
     return (
@@ -608,6 +659,8 @@ interface ClientChatViewProps {
   publishRoomTyping: (isTyping: boolean) => void;
   roomMessages: RoomMessage[];   // direct state from parent hook
   isOtherTyping: boolean;        // direct state from parent hook
+  isCoordination?: boolean;
+  coordinationSecondsLeft?: number;
 }
 
 function ClientChatView({
@@ -623,6 +676,8 @@ function ClientChatView({
   publishRoomTyping,
   roomMessages,
   isOtherTyping,
+  isCoordination = false,
+  coordinationSecondsLeft = 0,
 }: ClientChatViewProps) {
   // History: messages loaded from DB on mount
   const [history, setHistory] = useState<LocalMessage[]>([]);
@@ -791,7 +846,7 @@ function ClientChatView({
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center gap-3 px-4 bg-[#0C0C14] border-b border-white/[0.06]"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 14px)', paddingBottom: '12px' }}>
-        <Link href="/client/browse"
+        <Link href={isCoordination ? '/client/bookings' : '/client/browse'}
           className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/[0.06] text-white/50 hover:text-white transition-colors shrink-0">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -807,17 +862,39 @@ function ClientChatView({
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white leading-tight truncate">{companionName}</p>
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse shrink-0" />
-            <span className="text-xs text-white/50 tabular-nums">{formatDuration(liveSeconds)}</span>
-          </div>
+          {isCoordination ? (
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+              <span className="text-xs text-green-400 tabular-nums">
+                Free chat · {formatDuration(coordinationSecondsLeft)} left
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse shrink-0" />
+              <span className="text-xs text-white/50 tabular-nums">{formatDuration(liveSeconds)}</span>
+            </div>
+          )}
         </div>
-        <button
-          onClick={onEndSession}
-          className="shrink-0 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/20 active:scale-95 transition-all">
-          End
-        </button>
+        {!isCoordination && (
+          <button
+            onClick={onEndSession}
+            className="shrink-0 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/20 active:scale-95 transition-all">
+            End
+          </button>
+        )}
       </div>
+
+      {/* ── Coordination chat banner ─────────────────────────────────────── */}
+      {isCoordination && (
+        <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-green-500/10 border-b border-green-500/20">
+          <svg className="w-3.5 h-3.5 text-green-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-xs text-green-300">Complimentary coordination chat — coordinate venue &amp; details</span>
+        </div>
+      )}
 
       {/* ── Low balance banner ──────────────────────────────────────────── */}
       {balanceLow && (

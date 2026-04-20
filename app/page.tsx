@@ -11,7 +11,11 @@ export default function HomePage() {
   if (token) {
     const user = verifyJWT(token);
     if (user) {
-      if (user.role === 'CLIENT') redirect('/client/dashboard');
+      if (user.role === 'CLIENT') {
+        if (user.clientStatus === 'PENDING_REVIEW') redirect('/client/pending');
+        else if (user.clientStatus === 'REJECTED') redirect('/client/rejected');
+        else redirect('/client/dashboard');
+      }
       if (user.role === 'COMPANION') redirect('/companion/dashboard');
       if (user.role === 'ADMIN') redirect('/admin/dashboard');
     }

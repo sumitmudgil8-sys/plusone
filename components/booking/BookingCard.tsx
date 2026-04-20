@@ -21,6 +21,8 @@ interface BookingCardProps {
     venueAddress?: string | null;
     venueLat?: number | null;
     venueLng?: number | null;
+    arrivedAt?: string | null;
+    freeChatExpiresAt?: string | null;
     client?: {
       clientProfile?: {
         name: string;
@@ -28,6 +30,7 @@ interface BookingCardProps {
       };
     };
     companion?: {
+      id?: string;
       companionProfile?: {
         name: string;
         avatarUrl?: string;
@@ -36,12 +39,14 @@ interface BookingCardProps {
   };
   role: 'CLIENT' | 'COMPANION';
   onStatusChange?: (id: string, status: string) => void;
+  onArrive?: (id: string, lat: number, lng: number) => void;
 }
 
-export function BookingCard({ booking, role, onStatusChange }: BookingCardProps) {
+export function BookingCard({ booking, role, onStatusChange, onArrive }: BookingCardProps) {
   const person = role === 'CLIENT' ? booking.companion : booking.client;
   const profile = (person as any)?.companionProfile || (person as any)?.clientProfile;
   const [confirmAction, setConfirmAction] = useState<null | 'CANCELLED' | 'REJECTED'>(null);
+  const [arrivingLoading, setArrivingLoading] = useState(false);
 
   const statusColors: Record<string, string> = {
     PENDING: 'warning',
@@ -51,9 +56,43 @@ export function BookingCard({ booking, role, onStatusChange }: BookingCardProps)
     CANCELLED: 'outline',
   };
 
+  const now = new Date();
+  const meetingStart = new Date(booking.date);
+  const meetingEnd = new Date(meetingStart.getTime() + booking.duration * 60 * 60 * 1000);
+
   const canConfirm = role === 'COMPANION' && booking.status === 'PENDING';
   const canReject = role === 'COMPANION' && booking.status === 'PENDING';
   const canCancel = role === 'CLIENT' && ['PENDING', 'CONFIRMED'].includes(booking.status);
+  const canMarkArrived = role === 'COMPANION' && booking.status === 'CONFIRMED' && now >= meetingStart && !booking.arrivedAt;
+  const canMarkComplete = role === 'COMPANION' && booking.status === 'CONFIRMED' && now >= meetingEnd;
+
+  // Free coordination chat: active when confirmed and window hasn't expired
+  const freeChatActive = booking.status === 'CONFIRMED' && booking.freeChatExpiresAt
+    ? new Date(booking.freeChatExpiresAt) > now
+    : false;
+
+  const handleArrive = () => {
+    setArrivingLoading(true);
+    if (!navigator.geolocation) {
+      onArrive?.(booking.id, 0, 0);
+      setArrivingLoading(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        onArrive?.(booking.id, pos.coords.latitude, pos.coords.longitude);
+        setArrivingLoading(false);
+      },
+      () => {
+        onArrive?.(booking.id, 0, 0);
+        setArrivingLoading(false);
+      },
+      { timeout: 8000 }
+    );
+  };
+
+  // Link to companion's profile for coordination chat (client side)
+  const companionId = (booking.companion as any)?.id;
 
   return (
     <Card className="space-y-4">
@@ -89,6 +128,12 @@ export function BookingCard({ booking, role, onStatusChange }: BookingCardProps)
           <span className="text-white/60">Total</span>
           <span className="text-gold font-medium">{formatCurrency(booking.totalAmount)}</span>
         </div>
+        {booking.arrivedAt && (
+          <div className="flex items-center gap-1.5 pt-1">
+            <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+            <span className="text-xs text-green-400">Companion arrived</span>
+          </div>
+        )}
         {booking.venueName && (
           <div className="pt-2 border-t border-charcoal-border">
             <div className="flex items-start gap-2">
@@ -112,7 +157,31 @@ export function BookingCard({ booking, role, onStatusChange }: BookingCardProps)
         )}
       </div>
 
-      <div className="flex gap-2 pt-2">
+      {/* Free coordination chat banner */}
+      {freeChatActive && role === 'CLIENT' && companionId && (
+        <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+          <div className="flex items-center gap-2">
+            <svg className="w-3.5 h-3.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <span className="text-xs text-amber-300 font-medium">Free coordination chat</span>
+          </div>
+          <Link
+            href={`/client/inbox/${companionId}?coord=1`}
+            className="text-xs text-amber-400 font-semibold underline underline-offset-2"
+          >
+            Open
+          </Link>
+        </div>
+      )}
+      {freeChatActive && role === 'COMPANION' && (
+        <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+          <p className="text-xs text-amber-300 font-medium">Free coordination chat window active — check inbox</p>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-2 flex-wrap">
         {canConfirm && (
           <Button
             size="sm"
@@ -143,7 +212,18 @@ export function BookingCard({ booking, role, onStatusChange }: BookingCardProps)
             Cancel
           </Button>
         )}
-        {booking.status === 'CONFIRMED' && role === 'COMPANION' && (
+        {canMarkArrived && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1"
+            onClick={handleArrive}
+            disabled={arrivingLoading}
+          >
+            {arrivingLoading ? 'Locating…' : 'Mark Arrived'}
+          </Button>
+        )}
+        {canMarkComplete && (
           <Button
             size="sm"
             variant="primary"
@@ -152,6 +232,11 @@ export function BookingCard({ booking, role, onStatusChange }: BookingCardProps)
           >
             Mark Completed
           </Button>
+        )}
+        {booking.status === 'CONFIRMED' && role === 'COMPANION' && !canMarkComplete && (
+          <p className="w-full text-center text-xs text-white/30 pt-1">
+            Can mark complete after {meetingEnd.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+          </p>
         )}
       </div>
       <ConfirmDialog

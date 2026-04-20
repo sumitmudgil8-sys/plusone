@@ -89,7 +89,10 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.json({
     success: true,
     refreshToken: newRefreshToken,
-    user: { role: user.role },
+    user: {
+      role: user.role,
+      ...(user.role === 'CLIENT' && { clientStatus: user.clientStatus }),
+    },
   });
   setAuthCookie(response, newToken);
   return response;
