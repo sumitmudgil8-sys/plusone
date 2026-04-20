@@ -89,14 +89,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Privacy gate: hide companions who have explicitly REJECTED this client.
-    // Push rejection filter into the DB query (avoids extra round-trip + client-side filter).
-    const rejectedByCompanionIds = await prisma.clientVisibility.findMany({
-      where: { clientId: user.id, status: 'REJECTED' },
-      select: { companionId: true },
-    });
-    const rejectedIds = rejectedByCompanionIds.map((r) => r.companionId);
-    if (rejectedIds.length > 0) {
-      whereClause.id = { notIn: rejectedIds };
+    // Some users have a visibility override that bypasses companion rejections.
+    const visibilityOverrideUserIds = ['cmn8jy4lx0000hmlr99t66p6t'];
+    if (!visibilityOverrideUserIds.includes(user.id)) {
+      const rejectedByCompanionIds = await prisma.clientVisibility.findMany({
+        where: { clientId: user.id, status: 'REJECTED' },
+        select: { companionId: true },
+      });
+      const rejectedIds = rejectedByCompanionIds.map((r) => r.companionId);
+      if (rejectedIds.length > 0) {
+        whereClause.id = { notIn: rejectedIds };
+      }
     }
 
     const companions = await prisma.user.findMany({
