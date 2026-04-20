@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth';
 import { getAblyClient, getUserChannelName, getChatRoomChannelName } from '@/lib/ably';
 import { sendPushToUser } from '@/lib/push';
 import { requireApprovedAvatar } from '@/lib/avatar-guard';
+import { FREE_CHAT_LIMIT } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
@@ -89,6 +90,27 @@ export async function POST(request: NextRequest) {
       where: { id: thread.id },
       data: { messageCount: user.id === clientUserId ? { increment: 1 } : undefined },
     });
+
+    // If there's a confirmed booking with messages remaining, increment the free chat counter.
+    // We do this best-effort (non-fatal) to avoid blocking the send path.
+    try {
+      const coordBooking = await prisma.booking.findFirst({
+        where: {
+          clientId: clientUserId,
+          companionId: companionUserId,
+          status: 'CONFIRMED',
+          freeChatMsgCount: { lt: FREE_CHAT_LIMIT },
+        },
+        select: { id: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (coordBooking) {
+        await prisma.booking.update({
+          where: { id: coordBooking.id },
+          data: { freeChatMsgCount: { increment: 1 } },
+        });
+      }
+    } catch { /* non-fatal */ }
 
     const senderName =
       message.sender.clientProfile?.name ??

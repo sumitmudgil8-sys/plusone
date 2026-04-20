@@ -139,17 +139,12 @@ export async function PATCH(
       booking.depositAmount > 0 &&
       booking.holdTransactionId !== null;
 
-    // When confirming, open a 20-minute free coordination chat window
-    const confirmationData = status === 'CONFIRMED'
-      ? { freeChatExpiresAt: new Date(Date.now() + 20 * 60 * 1000) }
-      : {};
-
     const updateCount = await prisma.$transaction(async (tx) => {
       const result = await tx.booking.updateMany({
         where: { id, status: booking.status },
         data: refundsDeposit
-          ? { status, holdTransactionId: null, ...confirmationData }
-          : { status, ...confirmationData },
+          ? { status, holdTransactionId: null }
+          : { status },
       });
 
       if (result.count === 0) return 0;

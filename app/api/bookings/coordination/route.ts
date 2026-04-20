@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { FREE_CHAT_LIMIT } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
@@ -25,41 +26,35 @@ export async function GET(request: NextRequest) {
   const clientId = user.role === 'CLIENT' ? user.id : withUserId;
   const companionId = user.role === 'COMPANION' ? user.id : withUserId;
 
-  const now = new Date();
-
   const booking = await prisma.booking.findFirst({
     where: {
       clientId,
       companionId,
       status: 'CONFIRMED',
-      freeChatExpiresAt: { gt: now },
+      freeChatMsgCount: { lt: FREE_CHAT_LIMIT },
     },
     select: {
       id: true,
-      freeChatExpiresAt: true,
+      freeChatMsgCount: true,
     },
-    orderBy: { freeChatExpiresAt: 'desc' },
+    orderBy: { createdAt: 'desc' },
   });
 
-  if (!booking || !booking.freeChatExpiresAt) {
+  if (!booking) {
     return NextResponse.json({
       success: true,
-      data: { active: false, bookingId: null, expiresAt: null, remainingSeconds: 0 },
+      data: { active: false, bookingId: null, msgsLeft: 0 },
     });
   }
 
-  const remainingSeconds = Math.max(
-    0,
-    Math.floor((booking.freeChatExpiresAt.getTime() - now.getTime()) / 1000)
-  );
+  const msgsLeft = FREE_CHAT_LIMIT - booking.freeChatMsgCount;
 
   return NextResponse.json({
     success: true,
     data: {
       active: true,
       bookingId: booking.id,
-      expiresAt: booking.freeChatExpiresAt.toISOString(),
-      remainingSeconds,
+      msgsLeft,
     },
   });
 }

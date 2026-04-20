@@ -90,6 +90,10 @@ export default function BookingPage() {
   const [avatarStatus, setAvatarStatus] = useState<string>('NONE');
   const avatarApproved = avatarStatus === 'APPROVED';
 
+  // Free coordination chat
+  const [coordMsgsLeft, setCoordMsgsLeft] = useState(0);
+  const [coordBookingId, setCoordBookingId] = useState<string | null>(null);
+
   // Fetch current user ID for Ably socket + avatar status
   useEffect(() => {
     fetch('/api/users/me')
@@ -100,6 +104,20 @@ export default function BookingPage() {
       })
       .catch(() => {});
   }, []);
+
+  // Check for active coordination chat window with this companion
+  useEffect(() => {
+    if (!companionId) return;
+    fetch(`/api/bookings/coordination?withUserId=${companionId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.active) {
+          setCoordMsgsLeft(d.data.msgsLeft);
+          setCoordBookingId(d.data.bookingId);
+        }
+      })
+      .catch(() => {});
+  }, [companionId]);
 
   useEffect(() => {
     if (companionId) fetchCompanion();
@@ -398,6 +416,28 @@ export default function BookingPage() {
       </div>
 
       <div id="booking-form" className="space-y-6">
+        {/* Free coordination chat banner — shown when there's a confirmed booking */}
+        {coordMsgsLeft > 0 && coordBookingId && (
+          <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/20">
+            <div className="flex items-start gap-3">
+              <svg className="w-4 h-4 text-green-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <div>
+                <p className="text-sm font-semibold text-green-300">Free coordination chat</p>
+                <p className="text-xs text-green-400/70 mt-0.5">{coordMsgsLeft} messages left · Coordinate venue &amp; details</p>
+              </div>
+            </div>
+            <Link
+              href={`/client/inbox/${companionId}?coord=1`}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/30 text-green-300 text-xs font-semibold hover:bg-green-500/30 transition-colors"
+            >
+              Open Chat
+            </Link>
+          </div>
+        )}
+
         {/* Schedule a Chat — shown FIRST when companion is offline */}
         {companion.accessible && avatarApproved && (
           <Card id="schedule-form">

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { FREE_CHAT_LIMIT } from '@/lib/constants';
 
 interface BookingCardProps {
   booking: {
@@ -22,7 +23,7 @@ interface BookingCardProps {
     venueLat?: number | null;
     venueLng?: number | null;
     arrivedAt?: string | null;
-    freeChatExpiresAt?: string | null;
+    freeChatMsgCount?: number | null;
     client?: {
       clientProfile?: {
         name: string;
@@ -66,10 +67,9 @@ export function BookingCard({ booking, role, onStatusChange, onArrive }: Booking
   const canMarkArrived = role === 'COMPANION' && booking.status === 'CONFIRMED' && now >= meetingStart && !booking.arrivedAt;
   const canMarkComplete = role === 'COMPANION' && booking.status === 'CONFIRMED' && now >= meetingEnd;
 
-  // Free coordination chat: active when confirmed and window hasn't expired
-  const freeChatActive = booking.status === 'CONFIRMED' && booking.freeChatExpiresAt
-    ? new Date(booking.freeChatExpiresAt) > now
-    : false;
+  // Free coordination chat: active when confirmed and messages remain
+  const msgsLeft = FREE_CHAT_LIMIT - (booking.freeChatMsgCount ?? 0);
+  const freeChatActive = booking.status === 'CONFIRMED' && msgsLeft > 0;
 
   const handleArrive = () => {
     setArrivingLoading(true);
@@ -165,7 +165,7 @@ export function BookingCard({ booking, role, onStatusChange, onArrive }: Booking
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <span className="text-xs text-amber-300 font-medium">Free coordination chat</span>
+            <span className="text-xs text-amber-300 font-medium">Free chat · {msgsLeft} msgs left</span>
           </div>
           <Link
             href={`/client/inbox/${companionId}?coord=1`}

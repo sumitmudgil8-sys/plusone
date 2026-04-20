@@ -1,4 +1,5 @@
-// MESSAGE_LIMIT removed — chat is now per-minute billed (paid-only, no free message cap)
+// Free coordination chat unlocked on confirmed bookings
+export const FREE_CHAT_LIMIT = 50; // messages per booking (both sides combined)
 
 export const UPLOAD_MAX_IMAGE_BYTES = 5 * 1024 * 1024;    // 5 MB
 export const UPLOAD_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024; // 10 MB

@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
           id: true, date: true, duration: true, status: true, totalAmount: true,
           depositAmount: true, paymentStatus: true, notes: true, createdAt: true,
           venueName: true, venueAddress: true, venueLat: true, venueLng: true,
+          arrivedAt: true, freeChatMsgCount: true,
           companion: {
             select: { id: true, companionProfile: { select: { name: true, avatarUrl: true, city: true } } },
           },
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
           id: true, date: true, duration: true, status: true, totalAmount: true,
           depositAmount: true, paymentStatus: true, notes: true, createdAt: true,
           venueName: true, venueAddress: true, venueLat: true, venueLng: true,
+          arrivedAt: true, freeChatMsgCount: true,
           client: {
             select: { id: true, clientProfile: { select: { name: true, avatarUrl: true, city: true } } },
           },

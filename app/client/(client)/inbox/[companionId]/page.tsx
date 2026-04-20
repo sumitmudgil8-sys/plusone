@@ -75,8 +75,7 @@ export default function ClientInboxPage() {
   const sessionIdRef = useRef<string | null>(null);
 
   const [billingStarted, setBillingStarted] = useState(false);
-  const [coordinationSecondsLeft, setCoordinationSecondsLeft] = useState(0);
-  const coordinationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [coordinationMsgsLeft, setCoordinationMsgsLeft] = useState(0);
 
   useEffect(() => { sessionStateRef.current = sessionState; }, [sessionState]);
   useEffect(() => { sessionIdRef.current = session?.sessionId ?? null; }, [session?.sessionId]);
@@ -165,24 +164,12 @@ export default function ClientInboxPage() {
   // Check for active coordination (free) chat when there's no billing session
   useEffect(() => {
     if (sessionState !== 'NO_SESSION' || !userId) return;
-    if (coordinationTimerRef.current) clearInterval(coordinationTimerRef.current);
     fetch(`/api/bookings/coordination?withUserId=${companionId}`)
       .then(r => r.json())
       .then(d => {
-        if (d.success && d.data?.active && d.data.remainingSeconds > 0) {
-          setCoordinationSecondsLeft(d.data.remainingSeconds);
+        if (d.success && d.data?.active && d.data.msgsLeft > 0) {
+          setCoordinationMsgsLeft(d.data.msgsLeft);
           setSessionState('FREE_CHAT');
-          coordinationTimerRef.current = setInterval(() => {
-            setCoordinationSecondsLeft(prev => {
-              if (prev <= 1) {
-                clearInterval(coordinationTimerRef.current!);
-                coordinationTimerRef.current = null;
-                setSessionState('NO_SESSION');
-                return 0;
-              }
-              return prev - 1;
-            });
-          }, 1000);
         }
       })
       .catch(() => {});
@@ -409,7 +396,6 @@ export default function ClientInboxPage() {
     return () => {
       if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
       if (liveTimerRef.current) clearInterval(liveTimerRef.current);
-      if (coordinationTimerRef.current) clearInterval(coordinationTimerRef.current);
     };
   }, []);
 
@@ -595,7 +581,8 @@ export default function ClientInboxPage() {
         roomMessages={roomMessages}
         isOtherTyping={isOtherTyping}
         isCoordination={true}
-        coordinationSecondsLeft={coordinationSecondsLeft}
+        coordinationMsgsLeft={coordinationMsgsLeft}
+        onCoordinationMsgSent={() => setCoordinationMsgsLeft(prev => Math.max(0, prev - 1))}
       />
     );
   }
@@ -660,7 +647,8 @@ interface ClientChatViewProps {
   roomMessages: RoomMessage[];   // direct state from parent hook
   isOtherTyping: boolean;        // direct state from parent hook
   isCoordination?: boolean;
-  coordinationSecondsLeft?: number;
+  coordinationMsgsLeft?: number;
+  onCoordinationMsgSent?: () => void;
 }
 
 function ClientChatView({
@@ -677,7 +665,8 @@ function ClientChatView({
   roomMessages,
   isOtherTyping,
   isCoordination = false,
-  coordinationSecondsLeft = 0,
+  coordinationMsgsLeft = 0,
+  onCoordinationMsgSent,
 }: ClientChatViewProps) {
   // History: messages loaded from DB on mount
   const [history, setHistory] = useState<LocalMessage[]>([]);
@@ -825,6 +814,7 @@ function ClientChatView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companionUserId: companionId, clientUserId: userId, content, ablyMsgId: msgId }),
       }).catch(() => {});
+      if (isCoordination) onCoordinationMsgSent?.();
     } catch {
       setPendingMessages(prev => prev.filter(m => m.id !== msgId));
       setInputText(content);
@@ -866,7 +856,7 @@ function ClientChatView({
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
               <span className="text-xs text-green-400 tabular-nums">
-                Free chat · {formatDuration(coordinationSecondsLeft)} left
+                Free chat · {coordinationMsgsLeft} msgs left
               </span>
             </div>
           ) : (
