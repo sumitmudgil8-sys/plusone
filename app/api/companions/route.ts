@@ -52,11 +52,13 @@ export async function GET(request: NextRequest) {
       (clientUser.subscriptionExpiresAt == null || clientUser.subscriptionExpiresAt > now);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const companionProfileFilter: any = {
-      // Only approved profiles are visible in the public browse feed.
-      // Un-approved profiles (pending admin review) must never leak here.
-      isApproved: true,
-    };
+    const companionProfileFilter: any = {};
+    // Only approved profiles are visible in the public browse feed,
+    // except for a temporary override for specific users during onboarding.
+    const approvalOverrideUserIds = ['cmn8jy4lx0000hmlr99t66p6t'];
+    if (!approvalOverrideUserIds.includes(user.id)) {
+      companionProfileFilter.isApproved = true;
+    }
 
     if (minPrice || maxPrice) {
       companionProfileFilter.hourlyRate = {};
