@@ -193,12 +193,10 @@ export function BookingForm({
         setVenueResults(data.data ?? []);
       } else {
         const errMap: Record<string, string> = {
-          REQUEST_DENIED: 'Venue search is not available right now.',
-          INVALID_REQUEST: 'Invalid search query.',
           not_configured: 'Venue search is not configured.',
           network_error: 'Network error — please try again.',
         };
-        setVenueError(errMap[data.error] ?? 'Venue search unavailable. Please enter the venue manually.');
+        setVenueError(errMap[data.error] ?? 'Venue search unavailable. Please enter the venue name manually.');
       }
     } catch {
       setVenueError('Network error — please try again.');
