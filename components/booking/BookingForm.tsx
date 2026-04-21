@@ -145,6 +145,7 @@ export function BookingForm({
   const [locationQuery, setLocationQuery] = useState('');
   const [venueResults, setVenueResults] = useState<VenueResult[]>([]);
   const [venueLoading, setVenueLoading] = useState(false);
+  const [venueError, setVenueError] = useState('');
   const [selectedVenue, setSelectedVenue] = useState<SelectedVenue | null>(null);
   const [venueSearched, setVenueSearched] = useState(false);
   const venueWrapperRef = useRef<HTMLDivElement>(null);
@@ -182,15 +183,25 @@ export function BookingForm({
     if (locationQuery.length < 2) return;
     setVenueLoading(true);
     setVenueSearched(false);
+    setVenueError('');
     setSelectedVenue(null);
+    setVenueResults([]);
     try {
       const res = await fetch(`/api/venues/search?location=${encodeURIComponent(locationQuery)}`);
       const data = await res.json();
       if (data.success) {
         setVenueResults(data.data ?? []);
+      } else {
+        const errMap: Record<string, string> = {
+          REQUEST_DENIED: 'Venue search is not available right now.',
+          INVALID_REQUEST: 'Invalid search query.',
+          not_configured: 'Venue search is not configured.',
+          network_error: 'Network error — please try again.',
+        };
+        setVenueError(errMap[data.error] ?? 'Venue search unavailable. Please enter the venue manually.');
       }
     } catch {
-      // non-fatal
+      setVenueError('Network error — please try again.');
     } finally {
       setVenueLoading(false);
       setVenueSearched(true);
@@ -444,7 +455,7 @@ export function BookingForm({
                   <input
                     type="text"
                     value={locationQuery}
-                    onChange={(e) => { setLocationQuery(e.target.value); setVenueSearched(false); }}
+                    onChange={(e) => { setLocationQuery(e.target.value); setVenueSearched(false); setVenueError(''); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); searchNearbyVenues(); } }}
                     placeholder="e.g. Connaught Place, Delhi"
                     className="w-full bg-charcoal border border-charcoal-border text-white rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gold placeholder:text-white/30"
@@ -502,8 +513,15 @@ export function BookingForm({
                 </div>
               )}
 
+              {/* Error */}
+              {venueSearched && venueError && !selectedVenue && (
+                <div className="mt-3 bg-red-500/[0.06] border border-red-500/20 rounded-xl p-4 text-center">
+                  <p className="text-xs text-red-400">{venueError}</p>
+                </div>
+              )}
+
               {/* No results */}
-              {venueSearched && venueResults.length === 0 && !selectedVenue && (
+              {venueSearched && !venueError && venueResults.length === 0 && !selectedVenue && (
                 <div className="mt-3 bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
                   <p className="text-xs text-white/40">No restaurants found near this location</p>
                   <p className="text-[10px] text-white/25 mt-1">Try a different area or landmark</p>
@@ -522,7 +540,7 @@ export function BookingForm({
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setSelectedVenue(null); setVenueResults([]); setVenueSearched(false); }}
+                    onClick={() => { setSelectedVenue(null); setVenueResults([]); setVenueSearched(false); setVenueError(''); }}
                     className="text-white/40 hover:text-white/60 shrink-0"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

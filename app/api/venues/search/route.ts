@@ -36,26 +36,35 @@ export async function GET(request: NextRequest) {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) {
     return NextResponse.json({
-      success: true,
+      success: false,
+      error: 'not_configured',
       data: [],
-      message: 'Venue search is not configured. Add GOOGLE_PLACES_API_KEY to enable.',
     });
   }
 
   try {
-    // Text Search automatically geocodes the location and finds nearby places
+    // Text Search automatically geocodes the location and finds nearby places.
+    // cache: 'no-store' prevents stale error responses from being served.
     const url = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
     url.searchParams.set('query', `restaurants and cafes near ${location}`);
     url.searchParams.set('type', 'restaurant');
     url.searchParams.set('key', apiKey);
     url.searchParams.set('region', 'in');
 
-    const res = await fetch(url.toString(), { next: { revalidate: 300 } });
+    const res = await fetch(url.toString(), { cache: 'no-store' });
     const data = await res.json();
 
-    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-      console.error('Google Places API error:', data.status, data.error_message);
+    if (data.status === 'ZERO_RESULTS') {
       return NextResponse.json({ success: true, data: [] });
+    }
+
+    if (data.status !== 'OK') {
+      console.error('Google Places API error:', data.status, data.error_message);
+      return NextResponse.json({
+        success: false,
+        error: data.status ?? 'api_error',
+        data: [],
+      });
     }
 
     const places: PlaceResult[] = (data.results ?? []).slice(0, 8).map((p: Record<string, unknown>) => ({
@@ -71,6 +80,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data: places });
   } catch (error) {
     console.error('Venue search error:', error);
-    return NextResponse.json({ success: true, data: [] });
+    return NextResponse.json({ success: false, error: 'network_error', data: [] });
   }
 }
