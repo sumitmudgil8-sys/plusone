@@ -69,14 +69,13 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* ── CONTENT — remaining 44%, flex column, no overflow ── */}
-        <div
-          className="flex-1 min-h-0 flex flex-col justify-between bg-black px-6 pt-5 pb-8"
-        >
+        {/* ── CONTENT — remaining 44%, flex column ── */}
+        <div className="flex-1 min-h-0 flex flex-col justify-between bg-black px-6 pt-5 pb-8">
+
           {/* Headline + subtext */}
-          <div>
+          <div className="space-y-3">
             <h1
-              className="font-bold leading-[1.08] tracking-tight text-white mb-3"
+              className="font-bold leading-[1.08] tracking-tight text-white"
               style={{
                 fontFamily: "'Cormorant Garamond', Georgia, serif",
                 fontStyle: 'italic',
@@ -86,29 +85,29 @@ export default function HomePage() {
               Find your<br />
               <span style={{ color: '#C9A84C' }}>perfect plus one.</span>
             </h1>
-            <p className="text-white/55 leading-relaxed mb-3" style={{ fontSize: '0.875rem' }}>
-              India&apos;s most curated network of verified social companions — for fine dining, corporate events, travel, and every moment that deserves exceptional company.
+
+            <p className="text-white/50 leading-snug" style={{ fontSize: '0.82rem' }}>
+              India&apos;s curated network of verified companions for fine dining, corporate events, and travel.
             </p>
-            {/* Trust proof points */}
-            <div className="flex flex-col gap-1.5">
-              {[
-                { icon: '✦', text: 'Verified professionals, not strangers' },
-                { icon: '✦', text: 'Chat before you book — zero commitment' },
-                { icon: '✦', text: 'Pay only for the time you spend together' },
-              ].map(({ icon, text }) => (
-                <div key={text} className="flex items-center gap-2">
-                  <span style={{ color: '#C9A84C', fontSize: '0.5rem' }}>{icon}</span>
-                  <span className="text-white/40" style={{ fontSize: '0.75rem' }}>{text}</span>
-                </div>
+
+            {/* Trust chips — single horizontal row */}
+            <div className="flex items-center gap-0 flex-wrap">
+              {['Verified profiles', 'Chat before booking', 'Pay per minute'].map((item, i, arr) => (
+                <span key={item} className="flex items-center">
+                  <span className="text-white/35" style={{ fontSize: '0.7rem' }}>{item}</span>
+                  {i < arr.length - 1 && (
+                    <span className="mx-1.5" style={{ color: '#C9A84C', fontSize: '0.4rem' }}>✦</span>
+                  )}
+                </span>
               ))}
             </div>
           </div>
 
           {/* CTAs */}
-          <div className="flex flex-col gap-3">
-            <Link href="/signup" className="w-full">
+          <div className="space-y-3">
+            <Link href="/signup" className="block w-full">
               <button
-                className="w-full py-4 rounded-2xl text-black font-semibold tracking-wide transition-all duration-200 active:scale-95"
+                className="w-full py-[14px] rounded-2xl text-black font-semibold tracking-wide transition-all duration-200 active:scale-95"
                 style={{
                   fontSize: '0.95rem',
                   background: 'linear-gradient(135deg, #D4A84B 0%, #C9973A 100%)',
@@ -119,23 +118,22 @@ export default function HomePage() {
               </button>
             </Link>
 
-            <Link href="/login" className="w-full">
-              <button
-                className="w-full py-4 rounded-2xl text-white/75 font-medium tracking-wide transition-all duration-200 active:scale-95 border border-white/10 hover:border-white/20 hover:text-white"
-                style={{
-                  fontSize: '0.95rem',
-                  background: 'rgba(255,255,255,0.04)',
-                  backdropFilter: 'blur(12px)',
-                }}
+            <p className="text-center" style={{ fontSize: '0.8rem' }}>
+              <span className="text-white/30">Already a member?</span>{' '}
+              <Link
+                href="/login"
+                className="font-medium transition-colors"
+                style={{ color: '#C9A84C' }}
               >
-                Sign In
-              </button>
-            </Link>
+                Sign in →
+              </Link>
+            </p>
 
-            <p className="text-center text-white/20 tracking-widest mt-1" style={{ fontSize: '0.65rem' }}>
+            <p className="text-center text-white/15 tracking-widest" style={{ fontSize: '0.6rem' }}>
               MEMBERS-ONLY · VERIFIED · DISCREET
             </p>
           </div>
+
         </div>
 
       </div>
