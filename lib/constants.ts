@@ -18,6 +18,11 @@ export const WALLET_MIN_RECHARGE = 10000;   // ₹100
 export const WALLET_MAX_RECHARGE = 5000000; // ₹50,000
 export const WALLET_RECHARGE_PRESETS = [10000, 20000, 50000, 100000, 200000]; // ₹100/200/500/1000/2000
 
+// Feature flag: companion-side client approval flow.
+// When false, all admin-approved clients can see all companions regardless
+// of whether companions have reviewed them. Set to true to re-enable.
+export const CLIENT_APPROVAL_ENABLED = false;
+
 export const MAX_FREE_COMPANIONS = 10;          // free tier sees first 10 cards; rest are blurred
 export const SUBSCRIPTION_PRICE_PAISE = 499900; // ₹4,999/month (GOLD tier)
 export const DEPOSIT_PERCENTAGE = 100; // full amount held on booking

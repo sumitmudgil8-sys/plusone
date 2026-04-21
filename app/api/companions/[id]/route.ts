@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { calculateDistance } from '@/lib/utils';
+import { CLIENT_APPROVAL_ENABLED } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
@@ -50,15 +51,16 @@ export async function GET(
     }
 
     // Privacy gate: if this companion explicitly rejected this client, hide.
-    // No row (not reviewed yet) or APPROVED = visible.
-    // Some users have a visibility override that bypasses companion rejections.
-    const visibilityOverrideUserIds = ['cmn8jy4lx0000hmlr99t66p6t'];
-    if (!visibilityOverrideUserIds.includes(user.id)) {
-      const visibility = await prisma.clientVisibility.findUnique({
-        where: { companionId_clientId: { companionId: id, clientId: user.id } },
-      });
-      if (visibility?.status === 'REJECTED') {
-        return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
+    // Only active when CLIENT_APPROVAL_ENABLED is true.
+    if (CLIENT_APPROVAL_ENABLED) {
+      const visibilityOverrideUserIds = ['cmn8jy4lx0000hmlr99t66p6t'];
+      if (!visibilityOverrideUserIds.includes(user.id)) {
+        const visibility = await prisma.clientVisibility.findUnique({
+          where: { companionId_clientId: { companionId: id, clientId: user.id } },
+        });
+        if (visibility?.status === 'REJECTED') {
+          return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
+        }
       }
     }
 

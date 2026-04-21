@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { calculateDistance } from '@/lib/utils';
-import { MAX_FREE_COMPANIONS } from '@/lib/constants';
+import { MAX_FREE_COMPANIONS, CLIENT_APPROVAL_ENABLED } from '@/lib/constants';
 import { markStaleCompanionsOffline } from '@/lib/auto-offline';
 
 export const runtime = 'nodejs';
@@ -90,16 +90,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Privacy gate: hide companions who have explicitly REJECTED this client.
-    // Some users have a visibility override that bypasses companion rejections.
-    const visibilityOverrideUserIds = ['cmn8jy4lx0000hmlr99t66p6t'];
-    if (!visibilityOverrideUserIds.includes(user.id)) {
-      const rejectedByCompanionIds = await prisma.clientVisibility.findMany({
-        where: { clientId: user.id, status: 'REJECTED' },
-        select: { companionId: true },
-      });
-      const rejectedIds = rejectedByCompanionIds.map((r) => r.companionId);
-      if (rejectedIds.length > 0) {
-        whereClause.id = { notIn: rejectedIds };
+    // Disabled when CLIENT_APPROVAL_ENABLED is false — all approved clients see all companions.
+    if (CLIENT_APPROVAL_ENABLED) {
+      const visibilityOverrideUserIds = ['cmn8jy4lx0000hmlr99t66p6t'];
+      if (!visibilityOverrideUserIds.includes(user.id)) {
+        const rejectedByCompanionIds = await prisma.clientVisibility.findMany({
+          where: { clientId: user.id, status: 'REJECTED' },
+          select: { companionId: true },
+        });
+        const rejectedIds = rejectedByCompanionIds.map((r) => r.companionId);
+        if (rejectedIds.length > 0) {
+          whereClause.id = { notIn: rejectedIds };
+        }
       }
     }
 

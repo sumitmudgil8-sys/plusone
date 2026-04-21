@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { calculateDistance } from '@/lib/utils';
-import { MAX_FREE_COMPANIONS } from '@/lib/constants';
+import { MAX_FREE_COMPANIONS, CLIENT_APPROVAL_ENABLED } from '@/lib/constants';
 import { markStaleCompanionsOffline } from '@/lib/auto-offline';
 
 export const runtime = 'nodejs';
@@ -117,10 +117,13 @@ export async function GET(request: NextRequest) {
         where: { clientId: user.id },
         select: { companionId: true },
       }),
-      prisma.clientVisibility.findMany({
-        where: { clientId: user.id, status: 'REJECTED' },
-        select: { companionId: true },
-      }),
+      // Only fetch rejected companions when the approval flow is active
+      CLIENT_APPROVAL_ENABLED
+        ? prisma.clientVisibility.findMany({
+            where: { clientId: user.id, status: 'REJECTED' },
+            select: { companionId: true },
+          })
+        : Promise.resolve([]),
     ]);
 
     const clientLat = userLat ?? clientProfile?.lat ?? 28.6139;
@@ -139,7 +142,8 @@ export async function GET(request: NextRequest) {
       isBanned: false,
       companionProfile: { isApproved: true },
       companionImages: { some: { isPrimary: true } },
-      id: rejectedSet.size > 0 ? { notIn: Array.from(rejectedSet) } : undefined,
+      // Only apply rejection filter when CLIENT_APPROVAL_ENABLED is true
+      id: CLIENT_APPROVAL_ENABLED && rejectedSet.size > 0 ? { notIn: Array.from(rejectedSet) } : undefined,
     };
 
     // Fetch all five sections in parallel
