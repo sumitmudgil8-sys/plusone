@@ -204,10 +204,6 @@ export default function WalletPage() {
       setPayment(p);
       setStep('pay');
 
-      // Auto-open UPI intent after a brief moment so the user sees the screen
-      setTimeout(() => {
-        try { window.location.href = p.upiUrl; } catch { /* ignore */ }
-      }, 600);
     } catch {
       const msg = 'Network error. Please check your connection and try again.';
       setRechargeError(msg);
@@ -215,11 +211,6 @@ export default function WalletPage() {
     } finally {
       setRecharging(false);
     }
-  };
-
-  const handleOpenUpi = () => {
-    if (!payment) return;
-    window.location.href = payment.upiUrl;
   };
 
   const handleIvePaid = () => {
@@ -446,31 +437,20 @@ export default function WalletPage() {
                 </button>
               </div>
 
-              {/* Pay Now button — opens UPI intent */}
-              <button
-                onClick={handleOpenUpi}
-                className="w-full bg-gold text-black text-sm font-semibold py-3.5 rounded-xl hover:bg-gold-hover transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-                Pay {fmtExact(payment.uniqueAmount)} via UPI
-              </button>
-
-              {/* Manual instructions */}
+              {/* How to pay */}
               <div className="bg-white/[0.03] rounded-xl p-3 space-y-1.5">
-                <p className="text-[10px] text-white/40 uppercase tracking-wider font-medium">Or pay manually</p>
-                <p className="text-xs text-white/50">
-                  Open any UPI app (PhonePe, GPay, Paytm, etc.) → Send Money → Enter UPI ID above → Enter exact amount → Pay
+                <p className="text-[10px] text-white/40 uppercase tracking-wider font-medium">How to pay</p>
+                <p className="text-xs text-white/50 leading-relaxed">
+                  Open any UPI app (PhonePe, GPay, Paytm, etc.) → Send Money → enter the UPI ID above → enter the exact amount → Pay
                 </p>
               </div>
 
-              {/* I've paid */}
+              {/* I've paid — primary CTA */}
               <button
                 onClick={handleIvePaid}
-                className="w-full border border-white/10 text-white text-sm py-3 rounded-xl hover:border-gold/30 hover:text-gold transition-colors font-medium"
+                className="w-full bg-gold text-black text-sm font-semibold py-3.5 rounded-xl hover:bg-gold-hover transition-colors"
               >
-                I&apos;ve completed the payment
+                I have made the payment
               </button>
 
               <p className="text-center text-xs text-white/20">
