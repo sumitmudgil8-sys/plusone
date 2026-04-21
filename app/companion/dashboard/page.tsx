@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { BookingCard } from '@/components/booking/BookingCard';
 import { useToast } from '@/components/ui/Toast';
 import { formatDateTime } from '@/lib/utils';
+import { CLIENT_APPROVAL_ENABLED } from '@/lib/constants';
 
 interface TodayBreakdown {
   chats: number;
@@ -511,25 +512,27 @@ export default function CompanionDashboard() {
         </Link>
       )}
 
-      {/* ── Client Approvals CTA ────────────────────────────────────── */}
-      <Link
-        href="/companion/client-approvals"
-        className="group relative flex items-center gap-4 p-4 rounded-2xl border border-purple-500/20 bg-gradient-to-r from-purple-500/[0.08] via-[#12121d] to-amber-500/[0.06] hover:border-purple-500/30 transition-all overflow-hidden"
-      >
-        <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-purple-500/[0.08] blur-3xl pointer-events-none" />
-        <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-purple-500/20 to-amber-500/15 border border-purple-500/25 flex items-center justify-center shrink-0">
-          <svg className="w-5 h-5 text-purple-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+      {/* ── Client Approvals CTA — only shown when approval flow is enabled ── */}
+      {CLIENT_APPROVAL_ENABLED && (
+        <Link
+          href="/companion/client-approvals"
+          className="group relative flex items-center gap-4 p-4 rounded-2xl border border-purple-500/20 bg-gradient-to-r from-purple-500/[0.08] via-[#12121d] to-amber-500/[0.06] hover:border-purple-500/30 transition-all overflow-hidden"
+        >
+          <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-purple-500/[0.08] blur-3xl pointer-events-none" />
+          <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-purple-500/20 to-amber-500/15 border border-purple-500/25 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-purple-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <div className="relative flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">Client Approvals</p>
+            <p className="text-xs text-white/40 mt-0.5">Review new clients — only approved ones see your profile</p>
+          </div>
+          <svg className="w-4 h-4 text-white/25 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
-        </div>
-        <div className="relative flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white">Client Approvals</p>
-          <p className="text-xs text-white/40 mt-0.5">Review new clients — only approved ones see your profile</p>
-        </div>
-        <svg className="w-4 h-4 text-white/25 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </Link>
+        </Link>
+      )}
 
       {/* ── Badges & Ranking ──────────────────────────────────────────── */}
       <div className="rounded-2xl border border-white/[0.06] bg-[#0f0f1a] overflow-hidden">
