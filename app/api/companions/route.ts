@@ -79,6 +79,7 @@ export async function GET(request: NextRequest) {
       isActive: true,
       isBanned: false,
       companionProfile: companionProfileFilter,
+      companionImages: { some: { isPrimary: true } },
     };
 
     if (search) {

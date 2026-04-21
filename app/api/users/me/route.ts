@@ -16,6 +16,11 @@ export async function GET(request: NextRequest) {
       include: {
         clientProfile: true,
         companionProfile: true,
+        companionImages: {
+          where: { isPrimary: true },
+          take: 1,
+          select: { id: true },
+        },
       },
     });
 

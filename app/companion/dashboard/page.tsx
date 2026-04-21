@@ -122,7 +122,7 @@ const BADGE_DEFS = [
 
 export default function CompanionDashboard() {
   const toast = useToast();
-  const [user, setUser] = useState<{ isOnline?: boolean; hasCompletedOnboarding?: boolean; companionProfile?: { name?: string } } | null>(null);
+  const [user, setUser] = useState<{ isOnline?: boolean; hasCompletedOnboarding?: boolean; companionProfile?: { name?: string }; companionImages?: { id: string }[] } | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [bookings, setBookings] = useState<any[]>([]);
   const [today, setToday] = useState<TodayBreakdown | null>(null);
@@ -484,6 +484,28 @@ export default function CompanionDashboard() {
             <p className="text-xs text-white/40 mt-0.5">Required before you can go online and accept sessions</p>
           </div>
           <svg className="w-4 h-4 text-white/25 group-hover:text-gold group-hover:translate-x-0.5 transition-all shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+      )}
+
+      {/* ── No Primary Image Warning ─────────────────────────────────── */}
+      {user && user.companionImages !== undefined && user.companionImages.length === 0 && (
+        <Link
+          href="/companion/profile"
+          className="group relative flex items-center gap-4 p-4 rounded-2xl border border-red-500/30 bg-gradient-to-r from-red-500/[0.10] via-[#1a1010] to-red-500/[0.05] hover:border-red-500/50 transition-all overflow-hidden animate-fade-in"
+        >
+          <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-red-500/[0.08] blur-3xl pointer-events-none" />
+          <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/10 border border-red-500/30 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div className="relative flex-1 min-w-0">
+            <p className="text-sm font-semibold text-red-400">Profile not visible to clients</p>
+            <p className="text-xs text-white/40 mt-0.5">Upload at least one photo and set it as your main profile picture to appear in search results</p>
+          </div>
+          <svg className="w-4 h-4 text-white/25 group-hover:text-red-400 group-hover:translate-x-0.5 transition-all shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
         </Link>

@@ -138,6 +138,7 @@ export async function GET(request: NextRequest) {
       isActive: true,
       isBanned: false,
       companionProfile: { isApproved: true },
+      companionImages: { some: { isPrimary: true } },
       id: rejectedSet.size > 0 ? { notIn: Array.from(rejectedSet) } : undefined,
     };
 
