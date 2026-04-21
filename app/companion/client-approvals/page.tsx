@@ -23,7 +23,7 @@ interface Counts {
   rejected: number;
 }
 
-type Tab = 'PENDING' | 'APPROVED' | 'REJECTED';
+type Tab = 'PENDING' | 'REJECTED';
 
 function getAge(dob: string | null): number | null {
   if (!dob) return null;
@@ -35,16 +35,6 @@ function getAge(dob: string | null): number | null {
   return age;
 }
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return `${Math.floor(days / 30)}mo ago`;
-}
 
 // ─── Swipeable Card ──────────────────────────────────────────────────────────
 function SwipeCard({
@@ -235,10 +225,6 @@ function SwipeCard({
             </p>
           )}
 
-          {/* Joined */}
-          <p className="mt-1.5 text-xs text-white/35">
-            Joined {timeAgo(client.joinedAt)}
-          </p>
         </div>
       </div>
     </div>
@@ -338,8 +324,7 @@ export default function ClientApprovalsPage() {
     setClients((prev) => prev.filter((c) => c.clientId !== clientId));
     setCounts((prev) => ({
       ...prev,
-      pending: Math.max(0, prev.pending - (activeTab === 'PENDING' ? 1 : 0)),
-      approved: prev.approved + (action === 'APPROVED' ? 1 : 0) - (activeTab === 'APPROVED' ? 1 : 0),
+      pending:  Math.max(0, prev.pending  - (activeTab === 'PENDING'  ? 1 : 0)),
       rejected: prev.rejected + (action === 'REJECTED' ? 1 : 0) - (activeTab === 'REJECTED' ? 1 : 0),
     }));
 
@@ -370,8 +355,7 @@ export default function ClientApprovalsPage() {
   }, [handleAction, activeTab, fetchClients]);
 
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: 'PENDING', label: 'New', count: counts.pending },
-    { key: 'APPROVED', label: 'Approved', count: counts.approved },
+    { key: 'PENDING',  label: 'New',    count: counts.pending },
     { key: 'REJECTED', label: 'Hidden', count: counts.rejected },
   ];
 
@@ -522,7 +506,7 @@ export default function ClientApprovalsPage() {
                 </svg>
               </div>
               <p className="text-sm text-white/40">
-                No {activeTab === 'APPROVED' ? 'approved' : 'hidden'} clients yet
+                No hidden clients yet
               </p>
             </div>
           ) : (
