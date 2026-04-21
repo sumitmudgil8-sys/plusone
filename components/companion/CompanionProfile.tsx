@@ -281,7 +281,7 @@ export function CompanionProfile({
           </div>
           {bookingRate && (
             <div className="text-right shrink-0">
-              <p className="text-xs text-white/40">Meeting rate</p>
+              <p className="text-xs text-white/40">Session fee</p>
               <p className="text-lg font-bold text-gold">{bookingRate}</p>
             </div>
           )}

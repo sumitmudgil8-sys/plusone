@@ -177,7 +177,7 @@ export const CompanionCard = React.memo(function CompanionCard({
               </div>
               {accessible && bookingRateDisplay && (
                 <div className="text-right shrink-0 ml-2">
-                  <p className="text-xs text-white/60">Booking rate</p>
+                  <p className="text-xs text-white/60">Session fee</p>
                   <p className="text-sm font-semibold text-white">{bookingRateDisplay}</p>
                 </div>
               )}
