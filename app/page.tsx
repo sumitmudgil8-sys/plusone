@@ -76,7 +76,7 @@ export default function HomePage() {
           {/* Headline + subtext */}
           <div>
             <h1
-              className="font-bold leading-[1.08] tracking-tight text-white mb-2.5"
+              className="font-bold leading-[1.08] tracking-tight text-white mb-3"
               style={{
                 fontFamily: "'Cormorant Garamond', Georgia, serif",
                 fontStyle: 'italic',
@@ -86,11 +86,22 @@ export default function HomePage() {
               Find your<br />
               <span style={{ color: '#C9A84C' }}>perfect plus one.</span>
             </h1>
-            <p className="text-white/45 leading-relaxed" style={{ fontSize: '0.875rem' }}>
-              Verified social companions for dinners,
-              events, travel, and every occasion that
-              needs great company.
+            <p className="text-white/55 leading-relaxed mb-3" style={{ fontSize: '0.875rem' }}>
+              India&apos;s most curated network of verified social companions — for fine dining, corporate events, travel, and every moment that deserves exceptional company.
             </p>
+            {/* Trust proof points */}
+            <div className="flex flex-col gap-1.5">
+              {[
+                { icon: '✦', text: 'Verified professionals, not strangers' },
+                { icon: '✦', text: 'Chat before you book — zero commitment' },
+                { icon: '✦', text: 'Pay only for the time you spend together' },
+              ].map(({ icon, text }) => (
+                <div key={text} className="flex items-center gap-2">
+                  <span style={{ color: '#C9A84C', fontSize: '0.5rem' }}>{icon}</span>
+                  <span className="text-white/40" style={{ fontSize: '0.75rem' }}>{text}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* CTAs */}
@@ -104,7 +115,7 @@ export default function HomePage() {
                   boxShadow: '0 4px 28px rgba(201,152,58,0.32)',
                 }}
               >
-                Get Started
+                Request Access
               </button>
             </Link>
 
@@ -122,7 +133,7 @@ export default function HomePage() {
             </Link>
 
             <p className="text-center text-white/20 tracking-widest mt-1" style={{ fontSize: '0.65rem' }}>
-              VERIFIED · TRUSTED · PROFESSIONAL
+              MEMBERS-ONLY · VERIFIED · DISCREET
             </p>
           </div>
         </div>

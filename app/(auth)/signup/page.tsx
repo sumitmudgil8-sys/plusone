@@ -134,21 +134,29 @@ export default function SignupPage() {
               required
             />
 
-            <Input
-              label="LinkedIn Profile URL"
-              type="url"
-              value={form.linkedInUrl}
-              onChange={(e) => {
-                let val = e.target.value.trim();
-                // Auto-prepend https:// when user pastes a linkedin URL without protocol
-                if (val && !val.startsWith('http://') && !val.startsWith('https://') && val.includes('linkedin.com')) {
-                  val = 'https://' + val;
-                }
-                setForm((prev) => ({ ...prev, linkedInUrl: val }));
-              }}
-              placeholder="https://linkedin.com/in/yourprofile"
-              required
-            />
+            <div>
+              <Input
+                label="LinkedIn Profile URL"
+                type="url"
+                value={form.linkedInUrl}
+                onChange={(e) => {
+                  let val = e.target.value.trim();
+                  // Auto-prepend https:// when user pastes a linkedin URL without protocol
+                  if (val && !val.startsWith('http://') && !val.startsWith('https://') && val.includes('linkedin.com')) {
+                    val = 'https://' + val;
+                  }
+                  setForm((prev) => ({ ...prev, linkedInUrl: val }));
+                }}
+                placeholder="https://linkedin.com/in/yourprofile"
+                required
+              />
+              <p className="mt-2 text-xs text-white/35 leading-relaxed flex items-start gap-1.5">
+                <svg className="w-3 h-3 text-gold/50 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                LinkedIn is used solely for identity verification to maintain the exclusivity and safety of our network. Your profile details are never shared with companions or any third party.
+              </p>
+            </div>
 
             <div>
               <Input
