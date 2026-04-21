@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { calculateDistance } from '@/lib/utils';
-import { CLIENT_APPROVAL_ENABLED } from '@/lib/constants';
+import { CLIENT_APPROVAL_ENABLED, ADMIN_HIDDEN_PAIRS } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
@@ -47,6 +47,12 @@ export async function GET(
     // Only approved profiles with a primary image are visible to clients.
     const hasPrimaryImage = companion?.companionImages.some((img) => img.isPrimary);
     if (!companion || !companion.companionProfile || !companion.companionProfile.isApproved || !hasPrimaryImage) {
+      return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
+    }
+
+    // Admin-forced hide — always applied regardless of CLIENT_APPROVAL_ENABLED
+    const isAdminHidden = ADMIN_HIDDEN_PAIRS.some((p) => p.companionId === id && p.clientId === user.id);
+    if (isAdminHidden) {
       return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
     }
 

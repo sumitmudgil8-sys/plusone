@@ -18,6 +18,13 @@ export const WALLET_MIN_RECHARGE = 10000;   // ₹100
 export const WALLET_MAX_RECHARGE = 5000000; // ₹50,000
 export const WALLET_RECHARGE_PRESETS = [10000, 20000, 50000, 100000, 200000]; // ₹100/200/500/1000/2000
 
+// Admin-forced hides: specific companion–client pairs that are always hidden,
+// regardless of CLIENT_APPROVAL_ENABLED. Add { companionId, clientId } to hide
+// a companion from a specific client permanently.
+export const ADMIN_HIDDEN_PAIRS: Array<{ companionId: string; clientId: string }> = [
+  { companionId: 'cmo8dtrh70000vw3ska0dfum3', clientId: 'cmn8jy4lx0000hmlr99t66p6t' }, // Jennifer hidden from Kahan
+];
+
 // Feature flag: companion-side client approval flow.
 // When false, all admin-approved clients can see all companions regardless
 // of whether companions have reviewed them. Set to true to re-enable.

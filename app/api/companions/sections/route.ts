@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { calculateDistance } from '@/lib/utils';
-import { MAX_FREE_COMPANIONS, CLIENT_APPROVAL_ENABLED } from '@/lib/constants';
+import { MAX_FREE_COMPANIONS, CLIENT_APPROVAL_ENABLED, ADMIN_HIDDEN_PAIRS } from '@/lib/constants';
 import { markStaleCompanionsOffline } from '@/lib/auto-offline';
 
 export const runtime = 'nodejs';
@@ -136,14 +136,19 @@ export async function GET(request: NextRequest) {
     const favoriteSet = new Set(favorites.map((f) => f.companionId));
     const rejectedSet = new Set(rejectedIds.map((r) => r.companionId));
 
+    // Admin-forced hides — always applied regardless of CLIENT_APPROVAL_ENABLED
+    const adminHiddenIds = ADMIN_HIDDEN_PAIRS
+      .filter((p) => p.clientId === user.id)
+      .map((p) => p.companionId);
+    adminHiddenIds.forEach((id) => rejectedSet.add(id));
+
     const baseWhere = {
       role: 'COMPANION' as const,
       isActive: true,
       isBanned: false,
       companionProfile: { isApproved: true },
       companionImages: { some: { isPrimary: true } },
-      // Only apply rejection filter when CLIENT_APPROVAL_ENABLED is true
-      id: CLIENT_APPROVAL_ENABLED && rejectedSet.size > 0 ? { notIn: Array.from(rejectedSet) } : undefined,
+      id: rejectedSet.size > 0 ? { notIn: Array.from(rejectedSet) } : undefined,
     };
 
     // Fetch all five sections in parallel
