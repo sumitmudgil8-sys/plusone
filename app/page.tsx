@@ -82,25 +82,17 @@ export default function HomePage() {
                 fontSize: 'clamp(2rem, 8vw, 2.6rem)',
               }}
             >
-              Find your<br />
-              <span style={{ color: '#C9A84C' }}>perfect plus one.</span>
+              Find the right<br />
+              <span style={{ color: '#C9A84C' }}>company. Effortlessly.</span>
             </h1>
 
-            <p className="text-white/50 leading-snug" style={{ fontSize: '0.82rem' }}>
-              India&apos;s curated network of verified companions for fine dining, corporate events, and travel.
+            <p className="text-white/50 leading-snug" style={{ fontSize: '0.85rem' }}>
+              A private network of verified companions for dinners, events, and travel.
             </p>
 
-            {/* Trust chips — single horizontal row */}
-            <div className="flex items-center gap-0 flex-wrap">
-              {['Verified profiles', 'Chat before booking', 'Pay per minute'].map((item, i, arr) => (
-                <span key={item} className="flex items-center">
-                  <span className="text-white/35" style={{ fontSize: '0.7rem' }}>{item}</span>
-                  {i < arr.length - 1 && (
-                    <span className="mx-1.5" style={{ color: '#C9A84C', fontSize: '0.4rem' }}>✦</span>
-                  )}
-                </span>
-              ))}
-            </div>
+            <p className="text-white/30" style={{ fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+              Verified&nbsp;&nbsp;•&nbsp;&nbsp;Pre-chat&nbsp;&nbsp;•&nbsp;&nbsp;Pay for time
+            </p>
           </div>
 
           {/* CTAs */}
@@ -118,19 +110,15 @@ export default function HomePage() {
               </button>
             </Link>
 
-            <p className="text-center" style={{ fontSize: '0.8rem' }}>
-              <span className="text-white/30">Already a member?</span>{' '}
-              <Link
-                href="/login"
-                className="font-medium transition-colors"
-                style={{ color: '#C9A84C' }}
-              >
-                Sign in →
-              </Link>
+            <p className="text-center text-white/25" style={{ fontSize: '0.75rem', letterSpacing: '0.04em' }}>
+              Members only. Curated. Discreet.
             </p>
 
-            <p className="text-center text-white/15 tracking-widest" style={{ fontSize: '0.6rem' }}>
-              MEMBERS-ONLY · VERIFIED · DISCREET
+            <p className="text-center" style={{ fontSize: '0.8rem' }}>
+              <span className="text-white/30">Already a member?</span>{' '}
+              <Link href="/login" className="font-medium transition-colors" style={{ color: '#C9A84C' }}>
+                Sign in →
+              </Link>
             </p>
           </div>
 
