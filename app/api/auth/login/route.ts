@@ -65,6 +65,9 @@ export async function POST(request: NextRequest) {
 
     const token = signJWT(jwtPayload);
 
+    // Record login timestamp (fire-and-forget)
+    prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
+
     const name =
       user.clientProfile?.name ?? user.companionProfile?.name ?? 'User';
 

@@ -56,6 +56,7 @@ model User {
   subscriptionPlan      String?            // e.g. "MONTHLY_2999"
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
+  lastLoginAt      DateTime?
 
   // Client onboarding fields
   clientStatus     ClientStatus          @default(APPROVED)
