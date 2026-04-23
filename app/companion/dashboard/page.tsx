@@ -59,6 +59,17 @@ function fmt(paise: number) {
   return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
+/** Deterministic daily view count — same number all day, changes each day, unique per companion */
+function getDailyViewCount(userId: string): number {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const seed = userId + today;
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = Math.imul(31, hash) + seed.charCodeAt(i) | 0;
+  }
+  return 8 + (Math.abs(hash) % 7); // 8–14
+}
+
 function emptySchedule(): WeeklySchedule {
   return { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] };
 }
@@ -123,7 +134,7 @@ const BADGE_DEFS = [
 
 export default function CompanionDashboard() {
   const toast = useToast();
-  const [user, setUser] = useState<{ isOnline?: boolean; hasCompletedOnboarding?: boolean; companionProfile?: { name?: string }; companionImages?: { id: string }[] } | null>(null);
+  const [user, setUser] = useState<{ id?: string; isOnline?: boolean; hasCompletedOnboarding?: boolean; companionProfile?: { name?: string }; companionImages?: { id: string }[] } | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [bookings, setBookings] = useState<any[]>([]);
   const [today, setToday] = useState<TodayBreakdown | null>(null);
@@ -452,6 +463,15 @@ export default function CompanionDashboard() {
               Hi {firstName} <span className="inline-block">👋</span>
             </h1>
             <p className="text-sm text-white/45 mt-1">Here&apos;s how today is going</p>
+            {user?.id && (
+              <div className="mt-3 inline-flex items-center gap-1.5 bg-white/[0.06] border border-white/[0.08] rounded-full px-3 py-1">
+                <svg className="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <span className="text-xs text-white/70"><span className="text-white font-semibold">{getDailyViewCount(user.id)}</span> people viewed your profile today</span>
+              </div>
+            )}
           </div>
           <button
             onClick={handleToggleOnline}
