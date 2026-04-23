@@ -59,15 +59,38 @@ function fmt(paise: number) {
   return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-/** Deterministic daily view count — same number all day, changes each day, unique per companion */
-function getDailyViewCount(userId: string): number {
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  const seed = userId + today;
+/** Seeded integer in [min, max] inclusive — deterministic for same seed */
+function seededInt(seed: string, min: number, max: number): number {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash = Math.imul(31, hash) + seed.charCodeAt(i) | 0;
   }
-  return 8 + (Math.abs(hash) % 7); // 8–14
+  return min + (Math.abs(hash) % (max - min + 1));
+}
+
+/**
+ * Incremental daily profile views — counts build throughout the day.
+ * Morning → Afternoon → Evening, each step adds more views.
+ * Numbers are seeded by userId+date so they differ each day but are
+ * stable on refresh.
+ */
+function getDailyViews(userId: string): { count: number; label: string; morning: number; afternoon: number; evening: number } {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+  const hour = now.getHours();
+
+  const morning   = seededInt(userId + today + 'M', 3, 6);
+  const afternoon = morning   + seededInt(userId + today + 'A', 3, 5);
+  const evening   = afternoon + seededInt(userId + today + 'E', 4, 7);
+
+  let count: number;
+  let label: string;
+  if (hour < 6)       { count = seededInt(userId + today + 'N', 1, 2); label = 'so far today'; }
+  else if (hour < 12) { count = morning;   label = 'this morning'; }
+  else if (hour < 18) { count = afternoon; label = 'so far today'; }
+  else                { count = evening;   label = 'today'; }
+
+  return { count, label, morning, afternoon, evening };
 }
 
 function emptySchedule(): WeeklySchedule {
@@ -463,15 +486,6 @@ export default function CompanionDashboard() {
               Hi {firstName} <span className="inline-block">👋</span>
             </h1>
             <p className="text-sm text-white/45 mt-1">Here&apos;s how today is going</p>
-            {user?.id && (
-              <div className="mt-3 inline-flex items-center gap-1.5 bg-white/[0.06] border border-white/[0.08] rounded-full px-3 py-1">
-                <svg className="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                <span className="text-xs text-white/70"><span className="text-white font-semibold">{getDailyViewCount(user.id)}</span> people viewed your profile today</span>
-              </div>
-            )}
           </div>
           <button
             onClick={handleToggleOnline}
@@ -487,6 +501,53 @@ export default function CompanionDashboard() {
           </button>
         </div>
       </div>
+
+      {/* ── Profile Views ────────────────────────────────────────────── */}
+      {user?.id && (() => {
+        const views = getDailyViews(user.id!);
+        const max = views.evening;
+        const steps = [
+          { label: 'Morning', value: views.morning },
+          { label: 'Afternoon', value: views.afternoon },
+          { label: 'Evening', value: views.evening },
+        ];
+        return (
+          <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/[0.08] via-[#0d0d1a] to-[#0d0d1a] p-5">
+            <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full bg-blue-500/[0.10] blur-3xl pointer-events-none" />
+            <div className="relative flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-blue-400/80 font-bold">Profile Views</p>
+                <div className="flex items-end gap-2 mt-1">
+                  <span className="text-4xl font-bold text-white leading-none">{views.count}</span>
+                  <span className="text-sm text-white/40 mb-1">{views.label}</span>
+                </div>
+              </div>
+              <div className="w-11 h-11 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </div>
+            </div>
+            {/* Day progression bar */}
+            <div className="relative mt-4 flex items-end gap-2">
+              {steps.map((s) => (
+                <div key={s.label} className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full rounded-t-md" style={{
+                    height: `${Math.round(24 * s.value / max)}px`,
+                    minHeight: '4px',
+                    background: s.value <= views.count
+                      ? 'linear-gradient(to top, #3b82f6, #60a5fa)'
+                      : 'rgba(255,255,255,0.07)',
+                  }} />
+                  <span className="text-[9px] text-white/30 font-medium">{s.label}</span>
+                  <span className="text-[10px] text-white/50 font-semibold">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Onboarding Tour Banner ───────────────────────────────────── */}
       {user && !user.hasCompletedOnboarding && (
