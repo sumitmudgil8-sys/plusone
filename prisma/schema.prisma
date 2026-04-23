@@ -113,6 +113,7 @@ model User {
   clientVisibility         ClientVisibility[]    @relation("ClientVisibility")
   clientScheduledSessions     ScheduledSession[]    @relation("ClientScheduledSessions")
   companionScheduledSessions  ScheduledSession[]    @relation("CompanionScheduledSessions")
+  loginHistory             LoginHistory[]
 
   @@index([role, isActive, isBanned])
   @@index([isOnline])                     // auto-offline checks, presence queries
@@ -626,4 +627,15 @@ model AdminAuditLog {
   @@index([adminId, createdAt])
   @@index([targetType, targetId])
   @@index([action, createdAt])
+}
+
+model LoginHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
