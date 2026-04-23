@@ -69,28 +69,29 @@ function seededInt(seed: string, min: number, max: number): number {
 }
 
 /**
- * Incremental daily profile views — counts build throughout the day.
- * Morning → Afternoon → Evening, each step adds more views.
- * Numbers are seeded by userId+date so they differ each day but are
- * stable on refresh.
+ * Incremental daily profile views — count builds throughout the day.
+ * Seeded by userId + date + hour-bucket so it's stable within a time
+ * window but ticks up naturally as the day progresses.
  */
-function getDailyViews(userId: string): { count: number; label: string; morning: number; afternoon: number; evening: number } {
+function getDailyViews(userId: string): number {
   const now = new Date();
   const today = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
   const hour = now.getHours();
 
-  const morning   = seededInt(userId + today + 'M', 3, 6);
-  const afternoon = morning   + seededInt(userId + today + 'A', 3, 5);
-  const evening   = afternoon + seededInt(userId + today + 'E', 4, 7);
+  // Cumulative: each bucket adds views on top of the previous
+  const s1 = seededInt(userId + today + '1', 1, 3);  // midnight–6am
+  const s2 = seededInt(userId + today + '2', 2, 4);  // 6am–12pm
+  const s3 = seededInt(userId + today + '3', 3, 5);  // 12pm–3pm
+  const s4 = seededInt(userId + today + '4', 2, 4);  // 3pm–6pm
+  const s5 = seededInt(userId + today + '5', 3, 5);  // 6pm–9pm
+  const s6 = seededInt(userId + today + '6', 1, 3);  // 9pm–midnight
 
-  let count: number;
-  let label: string;
-  if (hour < 6)       { count = seededInt(userId + today + 'N', 1, 2); label = 'so far today'; }
-  else if (hour < 12) { count = morning;   label = 'this morning'; }
-  else if (hour < 18) { count = afternoon; label = 'so far today'; }
-  else                { count = evening;   label = 'today'; }
-
-  return { count, label, morning, afternoon, evening };
+  if (hour < 6)  return s1;
+  if (hour < 12) return s1 + s2;
+  if (hour < 15) return s1 + s2 + s3;
+  if (hour < 18) return s1 + s2 + s3 + s4;
+  if (hour < 21) return s1 + s2 + s3 + s4 + s5;
+  return s1 + s2 + s3 + s4 + s5 + s6;
 }
 
 function emptySchedule(): WeeklySchedule {
@@ -503,51 +504,26 @@ export default function CompanionDashboard() {
       </div>
 
       {/* ── Profile Views ────────────────────────────────────────────── */}
-      {user?.id && (() => {
-        const views = getDailyViews(user.id!);
-        const max = views.evening;
-        const steps = [
-          { label: 'Morning', value: views.morning },
-          { label: 'Afternoon', value: views.afternoon },
-          { label: 'Evening', value: views.evening },
-        ];
-        return (
-          <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/[0.08] via-[#0d0d1a] to-[#0d0d1a] p-5">
-            <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full bg-blue-500/[0.10] blur-3xl pointer-events-none" />
-            <div className="relative flex items-center justify-between gap-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-blue-400/80 font-bold">Profile Views</p>
-                <div className="flex items-end gap-2 mt-1">
-                  <span className="text-4xl font-bold text-white leading-none">{views.count}</span>
-                  <span className="text-sm text-white/40 mb-1">{views.label}</span>
-                </div>
-              </div>
-              <div className="w-11 h-11 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
+      {user?.id && (
+        <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/[0.08] via-[#0d0d1a] to-[#0d0d1a] p-5">
+          <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full bg-blue-500/[0.10] blur-3xl pointer-events-none" />
+          <div className="relative flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-blue-400/80 font-bold">Profile Views Today</p>
+              <div className="flex items-end gap-2 mt-1.5">
+                <span className="text-5xl font-bold text-white leading-none">{getDailyViews(user.id!)}</span>
+                <span className="text-sm text-white/40 mb-1.5">people viewed your profile</span>
               </div>
             </div>
-            {/* Day progression bar */}
-            <div className="relative mt-4 flex items-end gap-2">
-              {steps.map((s) => (
-                <div key={s.label} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full rounded-t-md" style={{
-                    height: `${Math.round(24 * s.value / max)}px`,
-                    minHeight: '4px',
-                    background: s.value <= views.count
-                      ? 'linear-gradient(to top, #3b82f6, #60a5fa)'
-                      : 'rgba(255,255,255,0.07)',
-                  }} />
-                  <span className="text-[9px] text-white/30 font-medium">{s.label}</span>
-                  <span className="text-[10px] text-white/50 font-semibold">{s.value}</span>
-                </div>
-              ))}
+            <div className="w-12 h-12 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center shrink-0">
+              <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* ── Onboarding Tour Banner ───────────────────────────────────── */}
       {user && !user.hasCompletedOnboarding && (
