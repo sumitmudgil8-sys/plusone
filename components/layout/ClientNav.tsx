@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/client/dashboard', label: 'Home', icon: HomeIcon },
-  { href: '/client/browse', label: 'Explore', icon: SearchIcon },
+  { href: '/client/experiences', label: 'Explore', icon: CompassIcon },
   { href: '/client/inbox', label: 'Chats', icon: ChatIcon },
   { href: '/client/bookings', label: 'Bookings', icon: CalendarIcon },
   { href: '/client/profile', label: 'Profile', icon: UserIcon },
@@ -18,11 +18,18 @@ export function ClientNav() {
   const isFullScreenChat = /^\/client\/inbox\/.+/.test(pathname);
   if (isFullScreenChat) return null;
 
+  const getIsActive = (href: string) => {
+    if (href === '/client/experiences') {
+      return pathname === href || pathname.startsWith('/client/experiences/');
+    }
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 glass-strong border-t border-white/[0.06] safe-area-bottom">
       <ul className="flex items-stretch justify-around max-w-lg mx-auto pb-[max(0.25rem,env(safe-area-inset-bottom))]">
         {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const isActive = getIsActive(item.href);
 
           return (
             <li key={item.href} className="flex-1">
@@ -62,10 +69,10 @@ function HomeIcon({ className }: { className?: string }) {
   );
 }
 
-function SearchIcon({ className }: { className?: string }) {
+function CompassIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
     </svg>
   );
 }

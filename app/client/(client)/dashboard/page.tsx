@@ -1,27 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CompanionCard } from '@/components/CompanionCard';
-import type { CompanionCardData } from '@/components/CompanionCard';
-
-interface SectionCompanion extends CompanionCardData {
-  distance: number;
-  isFavorited: boolean;
-  rankingScore: number;
-  audioIntroUrl: string | null;
-  badges: string[];
-}
-
-interface SectionsData {
-  availableNow: SectionCompanion[];
-  recentlyActive: SectionCompanion[];
-  topRated: SectionCompanion[];
-  newCompanions: SectionCompanion[];
-  allCompanions: SectionCompanion[];
-}
-
-type QuickFilter = 'all' | 'online' | 'new' | 'top';
+import { EXPERIENCE_CATEGORIES } from '@/lib/experiences';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -32,10 +13,8 @@ function getGreeting() {
 
 export default function ClientHome() {
   const [user, setUser] = useState<{ clientProfile?: { name?: string }; subscriptionStatus?: string } | null>(null);
-  const [sections, setSections] = useState<SectionsData | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<QuickFilter>('all');
   const [scheduledSessions, setScheduledSessions] = useState<Array<{
     id: string; duration: number; scheduledAt: string; status: string;
     companionName: string; companionAvatar: string | null; holdAmount: number; estimatedTotal: number;
@@ -44,19 +23,14 @@ export default function ClientHome() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [userRes, sectionsRes, walletRes, schedRes] = await Promise.all([
+        const [userRes, walletRes, schedRes] = await Promise.all([
           fetch('/api/users/me'),
-          fetch('/api/companions/sections'),
           fetch('/api/wallet'),
           fetch('/api/scheduled-sessions?status=BOOKED'),
         ]);
         if (userRes.ok) {
           const userData = await userRes.json();
           setUser(userData.user);
-        }
-        if (sectionsRes.ok) {
-          const data = await sectionsRes.json();
-          if (data.success) setSections(data.data);
         }
         if (walletRes.ok) {
           const walletData = await walletRes.json();
@@ -75,97 +49,45 @@ export default function ClientHome() {
     fetchData();
   }, []);
 
-  const isSubscribed = user?.subscriptionStatus === 'ACTIVE';
-
-  // Quick filter logic — filters the availableNow section
-  const getFilteredCompanions = useCallback((): SectionCompanion[] => {
-    if (!sections) return [];
-    const all = [
-      ...sections.availableNow,
-      ...sections.recentlyActive,
-      ...sections.topRated,
-      ...sections.newCompanions,
-      ...sections.allCompanions,
-    ];
-    // Deduplicate
-    const seen = new Set<string>();
-    const unique = all.filter((c) => {
-      if (seen.has(c.id)) return false;
-      seen.add(c.id);
-      return true;
-    });
-
-    switch (activeFilter) {
-      case 'online':
-        return unique.filter((c) => c.availabilityStatus === 'AVAILABLE');
-      case 'new':
-        return sections.newCompanions;
-      case 'top':
-        return [...unique].sort((a, b) => b.averageRating - a.averageRating).slice(0, 20);
-      default:
-        return unique;
-    }
-  }, [sections, activeFilter]);
-
   if (loading) {
     return (
       <div className="space-y-8 pb-6 animate-pulse">
-        {/* Hero skeleton */}
-        <div className="rounded-2xl bg-white/[0.03] h-48" />
-        {/* Filter chips skeleton */}
-        <div className="flex gap-2">
+        <div className="rounded-2xl bg-white/[0.03] h-52" />
+        <div className="grid grid-cols-2 gap-3">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-9 w-20 rounded-full bg-white/[0.06]" />
+            <div key={i} className="h-28 rounded-2xl bg-white/[0.04]" />
           ))}
         </div>
-        {/* Wallet skeleton */}
         <div className="rounded-2xl bg-white/[0.03] h-20" />
-        {/* Section skeleton */}
-        <div className="space-y-3">
-          <div className="h-5 w-32 bg-white/[0.06] rounded" />
-          <div className="flex gap-3 overflow-hidden">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="shrink-0 w-44 h-56 rounded-xl bg-white/[0.04]" />
-            ))}
-          </div>
-        </div>
-        {/* Another section */}
-        <div className="space-y-3">
-          <div className="h-5 w-36 bg-white/[0.06] rounded" />
-          <div className="flex gap-3 overflow-hidden">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="shrink-0 w-44 h-56 rounded-xl bg-white/[0.04]" />
-            ))}
-          </div>
-        </div>
       </div>
     );
   }
 
   const firstName = user?.clientProfile?.name?.split(' ')[0] || 'there';
-  const hasAvailableNow = (sections?.availableNow.length ?? 0) > 0;
 
   return (
     <div className="space-y-8 pb-6">
+
       {/* Hero */}
       <div className="relative rounded-2xl overflow-hidden">
         <div className="absolute inset-0 bg-gold-subtle" />
-        <div className="absolute top-0 right-0 w-48 h-48 bg-gold/[0.05] rounded-full blur-3xl -translate-y-1/3 translate-x-1/4" />
+        <div className="absolute top-0 right-0 w-56 h-56 bg-gold/[0.06] rounded-full blur-3xl -translate-y-1/3 translate-x-1/4" />
+        <div className="absolute bottom-0 left-0 w-40 h-40 bg-gold/[0.04] rounded-full blur-2xl translate-y-1/3 -translate-x-1/4" />
 
         <div className="relative px-5 pt-8 pb-6">
           <p className="text-white/35 text-sm font-medium tracking-wide">{getGreeting()}, {firstName}</p>
-          <h1 className="text-[26px] font-bold text-white mt-1.5 leading-[1.2]">
-            Find your perfect<br />
-            <span className="text-gold-gradient">companion</span> tonight
+          <h1 className="text-[26px] font-bold text-white mt-2 leading-[1.2]">
+            Want to go out but<br />
+            <span className="text-gold-gradient">no one to join you?</span>
           </h1>
-          <p className="text-white/25 text-[13px] mt-3 leading-relaxed max-w-[280px]">
-            Verified profiles, real connections. Browse and connect instantly.
+          <p className="text-white/30 text-[13px] mt-3 leading-relaxed max-w-[280px]">
+            Pick an experience. We&apos;ll find a verified partner to go with you.
           </p>
           <Link
-            href="/client/browse"
+            href="/client/experiences"
             className="inline-flex items-center gap-2 mt-5 bg-gold text-charcoal text-[13px] font-bold px-6 py-3 rounded-full hover:bg-gold-hover active:scale-[0.97] transition-all shadow-gold-md"
           >
-            Explore All
+            Explore Experiences
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
             </svg>
@@ -173,30 +95,39 @@ export default function ClientHome() {
         </div>
       </div>
 
-      {/* Quick Filters */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-        {[
-          { key: 'all' as const, label: 'All' },
-          { key: 'online' as const, label: 'Online Now', dot: true },
-          { key: 'new' as const, label: 'New' },
-          { key: 'top' as const, label: 'Top Rated' },
-        ].map(({ key, label, dot }) => (
-          <button
-            key={key}
-            onClick={() => setActiveFilter(key)}
-            className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium transition-all ${
-              activeFilter === key
-                ? 'bg-gold text-black'
-                : 'bg-white/[0.06] text-white/50 hover:text-white/70 hover:bg-white/[0.1]'
-            }`}
-          >
-            {dot && (
-              <span className={`w-1.5 h-1.5 rounded-full ${activeFilter === key ? 'bg-black/40' : 'bg-emerald-400'}`} />
-            )}
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Experience Categories */}
+      <section className="space-y-4">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-white font-semibold text-[15px]">What do you want to do?</h2>
+          <Link href="/client/experiences" className="text-gold/70 hover:text-gold text-xs font-medium transition-colors">
+            See all &rarr;
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {EXPERIENCE_CATEGORIES.map((cat) => (
+            <Link
+              key={cat.id}
+              href={`/client/experiences/${cat.id}`}
+              className="group relative rounded-2xl p-4 border transition-all active:scale-[0.97] hover:brightness-110"
+              style={{
+                background: cat.color,
+                borderColor: cat.borderColor,
+              }}
+            >
+              <span className="text-3xl leading-none block mb-2.5">{cat.emoji}</span>
+              <p className="text-white font-semibold text-[13px] leading-tight">{cat.label}</p>
+              <p className="text-white/40 text-[11px] mt-1 leading-tight line-clamp-2">{cat.tagline}</p>
+              <svg
+                className="absolute bottom-3.5 right-3.5 w-3.5 h-3.5 opacity-30 group-hover:opacity-60 transition-opacity"
+                style={{ color: cat.textColor }}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {/* Wallet balance widget */}
       {walletBalance !== null && (
@@ -266,159 +197,36 @@ export default function ClientHome() {
         </section>
       )}
 
-      {/* Filtered results (when a quick filter is active other than 'all') */}
-      {activeFilter !== 'all' && (
-        <section>
-          <SectionHeader
-            title={activeFilter === 'online' ? 'Online Now' : activeFilter === 'new' ? 'New Companions' : 'Top Rated'}
-            href="/client/browse"
-          />
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
-            {getFilteredCompanions().map((c) => (
-              <CompanionCard key={c.id} companion={c} />
-            ))}
-          </div>
-          {getFilteredCompanions().length === 0 && (
-            <p className="text-white/30 text-sm text-center py-8">No companions match this filter right now</p>
-          )}
-        </section>
-      )}
-
-      {/* Sections (show when 'all' filter is active) */}
-      {activeFilter === 'all' && (
-        <>
-          {/* Available Now */}
-          {hasAvailableNow && (
-            <section>
-              <div className="flex items-center justify-between mb-3.5">
-                <div className="flex items-center gap-2.5">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success-fg opacity-60" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-success-fg" />
-                  </span>
-                  <h2 className="text-white font-semibold text-[15px]">Available Now</h2>
-                </div>
-                <span className="text-white/20 text-xs">{sections!.availableNow.length} online</span>
+      {/* How it works */}
+      <section className="rounded-2xl bg-charcoal-surface border border-white/[0.06] p-5 space-y-4">
+        <h2 className="text-white font-semibold text-[14px]">How Plus One works</h2>
+        <div className="space-y-3">
+          {[
+            { step: '1', title: 'Pick an experience', desc: 'Choose from dining, art, music, outdoor and more' },
+            { step: '2', title: 'Select a Plus One', desc: 'Browse verified partners available for your activity' },
+            { step: '3', title: 'Go & enjoy', desc: 'Meet up and have a great time — pay per minute' },
+          ].map((item) => (
+            <div key={item.step} className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-full bg-gold/15 border border-gold/25 flex items-center justify-center shrink-0 mt-0.5">
+                <span className="text-gold text-[11px] font-bold">{item.step}</span>
               </div>
-              <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
-                {sections!.availableNow.map((c) => (
-                  <CompanionCard key={c.id} companion={c} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Recently Active */}
-          {(sections?.recentlyActive.length ?? 0) > 0 && (
-            <section>
-              <SectionHeader title="Recently Active" href="/client/browse" />
-              <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
-                {sections!.recentlyActive.map((c) => (
-                  <CompanionCard key={c.id} companion={c} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Top Rated (GOLD only) */}
-          {(sections?.topRated.length ?? 0) > 0 && (
-            <section>
-              <SectionHeader title="Top Rated" href="/client/browse?sortBy=rating" />
-              <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
-                {sections!.topRated.map((c) => (
-                  <CompanionCard key={c.id} companion={c} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* New Companions (GOLD only) */}
-          {(sections?.newCompanions.length ?? 0) > 0 && (
-            <section>
-              <SectionHeader title="New Companions" />
-              <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
-                {sections!.newCompanions.map((c) => (
-                  <CompanionCard key={c.id} companion={c} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* All Companions — fallback section for offline companions */}
-          {(sections?.allCompanions.length ?? 0) > 0 && (
-            <section>
-              <SectionHeader title="All Companions" href="/client/browse" />
-              <div className="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth scrollbar-hide">
-                {sections!.allCompanions.map((c) => (
-                  <CompanionCard key={c.id} companion={c} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Empty state — no one online */}
-          {!hasAvailableNow && (sections?.recentlyActive.length ?? 0) === 0 && (sections?.allCompanions.length ?? 0) === 0 && (
-            <section className="text-center py-10">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-white/[0.04] flex items-center justify-center">
-                <svg className="w-7 h-7 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <p className="text-white/40 text-sm">No companions available right now</p>
-              <p className="text-white/20 text-xs mt-1">Check back soon or browse all profiles</p>
-              <Link
-                href="/client/browse"
-                className="inline-block mt-4 text-gold text-sm font-medium hover:text-gold-hover transition-colors"
-              >
-                Browse All Companions
-              </Link>
-            </section>
-          )}
-        </>
-      )}
-
-      {/* GOLD CTA */}
-      {!isSubscribed && (
-        <section>
-          <div className="relative rounded-2xl overflow-hidden border border-gold/10 gold-border-glow">
-            <div className="absolute inset-0 bg-gold-subtle" />
-            <div className="relative flex items-center justify-between gap-4 p-5">
               <div>
-                <p className="text-sm font-bold text-white">Unlock all social companions</p>
-                <p className="text-[11px] text-white/30 mt-0.5">GOLD — full access for events, dining & travel</p>
+                <p className="text-white text-[13px] font-medium">{item.title}</p>
+                <p className="text-white/40 text-[11px] mt-0.5">{item.desc}</p>
               </div>
-              <Link
-                href="/client/subscription"
-                className="shrink-0 bg-gold text-charcoal text-[11px] font-bold px-4 py-2.5 rounded-full hover:bg-gold-hover active:scale-[0.96] transition-all shadow-gold-sm"
-              >
-                Upgrade
-              </Link>
             </div>
-          </div>
-        </section>
-      )}
+          ))}
+        </div>
+      </section>
 
       {/* Trust strip */}
       <section className="pt-2">
         <div className="flex items-center justify-center gap-8 py-5 border-t border-white/[0.04]">
-          <TrustItem icon="shield" label="Verified Profiles" />
+          <TrustItem icon="shield" label="Verified Partners" />
           <TrustItem icon="lock" label="Secure Payments" />
           <TrustItem icon="support" label="24/7 Support" />
         </div>
       </section>
-    </div>
-  );
-}
-
-function SectionHeader({ title, href }: { title: string; href?: string }) {
-  return (
-    <div className="flex items-baseline justify-between mb-3.5">
-      <h2 className="text-white font-semibold text-[15px]">{title}</h2>
-      {href && (
-        <Link href={href} className="text-gold/70 hover:text-gold text-xs font-medium transition-colors">
-          See all &rarr;
-        </Link>
-      )}
     </div>
   );
 }
